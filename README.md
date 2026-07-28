@@ -160,6 +160,60 @@ To change a single field of a catalogue model, use `modelOverrides`, not a
 `models` entry. And whatever else you do, avoid `deepseek/deepseek-v4-flash` for
 this work: the catalogue caps its output at 4.1K.
 
+### Using another provider
+
+Both `models.json` copies also carry a `litellm` provider, switched off by
+default. It points at a LiteLLM gateway — or at anything else speaking the OpenAI
+protocol, `api: "openai-completions"` being the same wire format OpenRouter uses
+— and it is there mostly as a worked example of what a provider Pi does *not*
+ship needs.
+
+Which is the part worth reading before copying it. The advice above inverts here.
+`openrouter` is in Pi's catalogue, so omitting `models` inherits real metadata.
+`litellm` is not, so there is nothing to inherit and the fallback applies instead:
+128K context, 16,384 max output, no reasoning — the same truncation trap, reached
+from the opposite direction. Hence the explicit entry, and hence `modelOverrides`
+being no use here: it patches ids Pi already knows and ignores the rest silently.
+
+To switch to it:
+
+1. Put your gateway's URL in `baseUrl`, replacing the `litellm.example.com`
+   placeholder, and the model you want in `models` — `gemini-3.1-pro-preview` is
+   there as an example. Each runtime keeps its own copy, so edit both.
+2. Point `settings.json` at it: `"defaultProvider": "litellm"` and
+   `"defaultModel": "<your model id>"`. Both copies again.
+3. Export `LITELLM_API_KEY`. The container runtime still fails fast on
+   `OPENROUTER_API_KEY`, so give that one any value until you drop the check.
+4. For the sandbox, add the gateway's host to `caps.network.allow` in
+   `pi/sandbox/spec.yaml` and give it a `credentials` entry mirroring the
+   OpenRouter one — `header: Authorization`, `format: "Bearer %s"`, which is how
+   LiteLLM authenticates too — then register the secret:
+
+```bash
+echo "$LITELLM_API_KEY" | sbx secret set -g litellm
+sbx secret set-custom pi-kit --host <your-gateway-host> \
+  --env LITELLM_API_KEY --value "$LITELLM_API_KEY"
+```
+
+Two fields in the example entry are estimates rather than measured facts. `cost`
+feeds usage tracking only and says nothing about what a gateway charges. And
+`thinkingLevelMap` folds Pi's seven thinking levels onto `low`, `medium` and
+`high`, those being what a reasoning-effort field reliably accepts through an
+OpenAI-compatible shim; if yours rejects a level, correct it there or set
+`"reasoning": false` to stop Pi sending one at all.
+
+A gateway on a private network can be allowed by `caps.network` and still be
+unreachable — that lifts sbx's own policy without giving the microVM a route to
+it. Check from inside the runtime rather than from your shell:
+
+```bash
+sbx exec pi-kit -- curl -sS -o /dev/null -w '%{http_code}\n' \
+  https://<your-gateway-host>/v1/models
+```
+
+`200` or `401` means the network path works, `401` being a credential problem
+rather than a routing one. A hang or a DNS failure means it does not.
+
 ## Linting the wiki
 
 [okf-lint](https://github.com/thisismydesign/okf-lint) checks the wiki against

@@ -7,9 +7,12 @@ services:
 
     # OPENROUTER_API_KEY must be exported in the shell environment; compose
     # fails fast if it is unset. HOME points Pi at /home/node/.pi/agent.
+    # LITELLM_API_KEY is optional and passed through empty unless set — it is
+    # only read when settings.json selects the litellm provider (see the README).
     environment:
       HOME: /home/node
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set in the shell environment}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
 
     # Security hardening.
     network_mode: bridge
