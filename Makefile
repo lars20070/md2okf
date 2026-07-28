@@ -27,6 +27,7 @@ HADOLINT ?= hadolint
 lint:
 	$(MARKDOWNLINT) \
 		"README.md" \
+		"pdf2md/README.md" \
 		"AGENTS.md" \
 		"pi/container/agent/**/*.md" \
 		"pi/sandbox/files/home/.pi/agent/**/*.md"
