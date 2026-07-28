@@ -1,6 +1,6 @@
 # md2okf
 
-Drop a folder of Markdown files into `md/`, run `make wiki-sandbox`, and the Pi
+Drop some Markdown files into `md/`, run `make wiki-sandbox`, and the Pi
 coding agent writes you an OKF knowledge base in `okf/`. It takes one source
 document per run and folds it into the wiki: a page per topic, an index in every
 directory, links between them and a log of what each run changed.
