@@ -93,8 +93,8 @@ Every content page carries YAML frontmatter:
 ```yaml
 ---
 type: Chapter # one of: Chapter | GlossaryTerm | Section
-title: Some Title
-description: A concise summary, at most ~200 characters.
+title: "Some Title"
+description: "A concise summary, at most ~200 characters."
 tags:
   - example-tag
   - another-tag
@@ -102,9 +102,16 @@ tags:
 ```
 
 - `type` — one of `Chapter`, `GlossaryTerm`, or `Section`.
-- `title` — human-readable page title.
-- `description` — a concise summary, **at most ~200 characters**.
+- `title` — human-readable page title, **double-quoted**.
+- `description` — a concise summary, **at most ~200 characters**, **double-quoted**.
 - `tags` — a YAML list of kebab-case tags.
+
+**Always double-quote `title` and `description`**, whatever they contain, and
+escape any double quote inside the value as `\"`. Headings in source documents
+routinely carry a colon — `1. Old and short: words` — and an unquoted colon
+followed by a space is a YAML mapping, so the frontmatter stops parsing and the
+whole page is invalid. Quote the value; do **not** reword the title to avoid the
+colon, because the wording belongs to the source.
 
 ### Update log
 
