@@ -1,0 +1,162 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for md2okf.
+# Anything not listed here uses CodeRabbit's own default.
+language: en-US
+tone_instructions: "Be concise and focus on critical issues only. Do not comment on trivial matters, nitpicks, or stylistic preferences. Only flag issues that could cause bugs, security vulnerabilities, or significant maintainability problems."
+early_access: false
+enable_free_tier: true
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: false
+  review_status: true
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: true
+  auto_assign_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  abort_on_close: true
+  # Generated, gitignored, or manually maintained content that is not reviewed:
+  # the wiki's input and output, the lockfile, and the optional PDF step.
+  path_filters:
+    - "!uv.lock"
+    - "!md/**"
+    - "!okf/**/*.md"
+    - "!pdf2md/**"
+  path_instructions:
+    - path: "**/*.sh"
+      instructions: |
+        Apply robust Bash practices: strict error handling, quoted expansions,
+        arrays over constructed command strings, and no silently masked
+        failures. Resolve paths independently of the caller's working
+        directory, validate prerequisites early and exit non-zero with a clear
+        message on stderr, clean up temporary resources with traps, keep
+        secrets out of arguments and logs, and require ShellCheck-clean code.
+    - path: "**/Dockerfile"
+      instructions: |
+        Apply Dockerfile best practices: pin base images and dependencies, use
+        minimal images and multi-stage builds where useful, optimize layers and
+        remove package-manager caches, run as a non-root user, copy only needed
+        files, and never place secrets in build arguments, environment
+        variables, or layers. Keep the image compatible with read-only and
+        least-privilege runtime settings, and address Hadolint findings.
+    - path: "**/compose.yaml"
+      instructions: |
+        Apply Compose best practices: least privilege, non-root users, dropped
+        capabilities, no-new-privileges, read-only filesystems and mounts where
+        possible, explicit resource limits, and health checks when useful. Keep
+        secrets outside the file, fail fast on required variables, pin images,
+        and verify that relative paths resolve from the compose file's own
+        directory rather than the invoking directory.
+    - path: "**/spec.yaml"
+      instructions: |
+        For Docker Sandbox Kit specs, treat schema conformance as load-bearing:
+        flag renamed or restructured keys that a schema check would reject, and
+        say so rather than asserting the spec is valid. Keep capabilities
+        least-privilege and network access default-deny with a stated reason
+        for every allowed host, keep credentials proxy-managed and real secrets
+        out of the file, pin installed versions, make setup commands
+        idempotent, and bound retries and timeouts.
+    - path: ".github/workflows/**"
+      instructions: |
+        Apply GitHub Actions best practices: pin third-party actions and
+        downloaded binaries to a version, keep workflow permissions
+        least-privilege, avoid running untrusted input with elevated
+        privileges, fail loudly on download and script errors, and never echo
+        secrets into logs. Keep duplicated trigger configuration in sync.
+    - path: "**/*.md"
+      instructions: |
+        Review documentation against the rest of the diff rather than for prose
+        style: flag commands, paths, options, and examples that this change has
+        made wrong or stale, and instructions that contradict each other. Do
+        not raise wording, grammar, or line-length nitpicks.
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "DO NOT REVIEW"
+      - "WIP"
+    drafts: false
+  # No source package and no test suite to generate these for.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: "Start with an imperative verb, name the area touched, and keep it under 72 characters."
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+  # Only deliberate overrides are listed. Every other tool is left at its
+  # default so it starts working on its own if this repo grows that language.
+  tools:
+    shellcheck:
+      enabled: true
+    hadolint:
+      enabled: true
+    checkmake:
+      enabled: true
+    yamllint:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    # Secret, dependency, and infrastructure scanning: this repo handles an API
+    # key and builds a container image.
+    gitleaks:
+      enabled: true
+    checkov:
+      enabled: true
+    semgrep:
+      enabled: true
+    osvScanner:
+      enabled: true
+    # Grammar and style findings are exactly what tone_instructions above tells
+    # the reviewer not to raise, so leave this off rather than filtering it.
+    languagetool:
+      enabled: false
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+    ruff:
+      enabled: true
+      config_file: "pyproject.toml"
+chat:
+  art: false
+  auto_reply: true
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: true

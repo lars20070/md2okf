@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Agents
+.claude/settings.json
+
+# Python
+.venv/
+
+# md input folder
+md/*
+
+# okf output folder
+okf/*
+!okf/
+!okf/.okflintrc.json

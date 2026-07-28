@@ -1,0 +1,6 @@
+config:
+  MD013: false # line-length: disable line length checks
+  MD026: false # Trailing punctuation in heading: disable trailing punctuation checks
+
+ignores:
+  - "SPEC.md"
