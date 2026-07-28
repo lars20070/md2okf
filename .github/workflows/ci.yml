@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    # Anchored so the push and pull_request filters can never drift apart.
+    paths: &paths
+      - "pi/**"
+      - "scripts/**"
+      - "Makefile"
+      - "AGENTS.md"
+      - "README.md"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".markdownlint-cli2.yaml"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths: *paths
+
+# The jobs only read the checked-out tree.
+permissions:
+  contents: read
+
+# Cancel superseded runs
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint Markdown, shell, and Python. Reuses `make lint` so the lint definition
+  # lives in one place (the Makefile). markdownlint runs via npx (no global
+  # install) and ruff runs from the dev group only, so this job never installs
+  # the heavy project deps (marker-pdf / torch). shellcheck is pre-installed on
+  # ubuntu-latest; hadolint is downloaded as a pinned binary (step below).
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # hadolint is not pre-installed on ubuntu-latest. Download a pinned binary
+      # to PATH so `make lint`'s default `hadolint` launcher works unchanged.
+      - name: Install hadolint
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/hadolint \
+            https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-Linux-x86_64
+          sudo chmod +x /usr/local/bin/hadolint
+          hadolint --version
+
+      - name: Lint (markdownlint, shellcheck, ruff, hadolint)
+        run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2' RUFF='uv run --only-group dev ruff'
+
+  # Sandbox-only: validate pi/sandbox/spec.yaml against the current Sandbox Kit
+  # schema. Static check — no Docker or login; only the CLI download needs the
+  # network.
+  validate-kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install the latest sbx CLI. "latest" is intentional: the schema is
+      # bundled in the binary, so this surfaces schema drift as soon as it ships.
+      # Install steps mirror docker/sbx-kits-contrib .github/workflows/tck.yml.
+      - name: Install sbx CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://github.com/docker/sbx-releases/releases/latest/download/DockerSandboxes-linux.tar.gz" \
+            -o /tmp/DockerSandboxes-linux.tar.gz
+          tar xzf /tmp/DockerSandboxes-linux.tar.gz -C /tmp
+          sudo PREFIX="${HOME}/.docker/sbx" /tmp/docker-sbx/install.sh
+          echo "${HOME}/.docker/sbx/bin" >> "$GITHUB_PATH"
+
+      - name: Verify sbx
+        run: sbx version
+
+      - name: Validate Pi kit spec
+        run: make validate

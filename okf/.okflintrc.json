@@ -1,0 +1,9 @@
+{
+  "rules": {
+    "recommended-description": "warning",
+    "recommended-log": "warning",
+    "recommended-timestamp": "off",
+    "valid-links": "error",
+    "okf-version-declared": "error"
+  }
+}

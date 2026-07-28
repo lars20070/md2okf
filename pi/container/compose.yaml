@@ -1,0 +1,57 @@
+services:
+  pi:
+    build:
+      context: ../..
+      dockerfile: pi/container/Dockerfile
+    image: pi-container
+
+    # OPENROUTER_API_KEY must be exported in the shell environment; compose
+    # fails fast if it is unset. HOME points Pi at /home/node/.pi/agent.
+    environment:
+      HOME: /home/node
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set in the shell environment}
+
+    # Security hardening.
+    network_mode: bridge
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    read_only: true
+    user: "1000:1000"
+
+    # Resource limits.
+    pids_limit: 512
+    mem_limit: 4g
+    cpus: 2
+
+    # Writable scratch space on the read-only rootfs.
+    tmpfs:
+      - /tmp
+      - /run
+      - /home/node
+
+    # All relative paths resolve against this compose file's directory
+    # (pi/container/), so `docker compose -f pi/container/compose.yaml ...`
+    # works from any CWD.
+    volumes:
+      # Persistent, writable Pi session/state store — the base for the agent
+      # config dir under the read-only rootfs. The config files below overlay it
+      # read-only (Docker mounts a parent path before its children regardless of
+      # list order, so the volume mounts first and the file binds sit on top).
+      - pi-agent-home:/home/node/.pi/agent
+      # This runtime's OWN Pi config (an independent copy — keep it aligned with
+      # the sandbox copy in pi/sandbox/files/home/.pi/agent/ by hand). Overlaid
+      # read-only; editing a file here takes effect on the next run, no rebuild.
+      - ./agent/settings.json:/home/node/.pi/agent/settings.json:ro
+      - ./agent/models.json:/home/node/.pi/agent/models.json:ro
+      - ./agent/AGENTS.md:/home/node/.pi/agent/AGENTS.md:ro
+      - ./agent/skills:/home/node/.pi/agent/skills:ro
+      # Workspace: source md/ (read-only) + okf/ output (read-write), sourced
+      # from the repo root two levels up (fixes the old relative-mount bug that
+      # resolved these against pi-container/).
+      - ../../md:/workspace/md:ro
+      - ../../okf:/workspace/okf:rw
+
+volumes:
+  pi-agent-home:
