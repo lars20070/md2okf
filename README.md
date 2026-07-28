@@ -164,84 +164,96 @@ this work: the catalogue caps its output at 4.1K.
 
 ### Using another provider
 
-Both `models.json` copies also carry a `litellm` provider, switched off by
-default. It points at a LiteLLM gateway — or at anything else speaking the OpenAI
-protocol, `api: "openai-completions"` being the same wire format OpenRouter uses
-— and it is there mostly as a worked example of what a provider Pi does *not*
-ship needs.
+Both `models.json` copies carry a second provider, `litellm`, switched off by
+default. It points at a LiteLLM gateway, or at anything else that speaks the
+OpenAI protocol: `api: "openai-completions"` is the wire format OpenRouter uses
+too. The example model is `gemini-3.1-pro-preview`.
 
-Which is the part worth reading before copying it. The advice above inverts here.
-`openrouter` is in Pi's catalogue, so omitting `models` inherits real metadata.
-`litellm` is not, so there is nothing to inherit and the fallback applies instead:
-128K context, 16,384 max output, no reasoning — the same truncation trap, reached
-from the opposite direction. Hence the explicit entry, and hence `modelOverrides`
-being no use here: it patches ids Pi already knows and ignores the rest silently.
+Switching the sandbox to it takes four steps.
 
-To switch to it:
-
-1. Put your gateway's URL in `baseUrl`, replacing the `litellm.example.com`
-   placeholder, and the model you want in `models` — `gemini-3.1-pro-preview` is
-   there as an example. Each runtime keeps its own copy, so edit both.
-2. Point `settings.json` at it: `"defaultProvider": "litellm"` and
-   `"defaultModel": "<your model id>"`. Both copies again.
-3. Export `LITELLM_API_KEY`. The container runtime still fails fast on
-   `OPENROUTER_API_KEY`, so give that one any value until you drop the check.
-4. For the sandbox, add the gateway's host to `caps.network.allow` in
-   `pi/sandbox/spec.yaml` and give it a `credentials` entry mirroring the
-   OpenRouter one — `header: Authorization`, `format: "Bearer %s"`, which is how
-   LiteLLM authenticates too — then register the secret:
+1. **Name the gateway.** In `pi/sandbox/files/home/.pi/agent/models.json`, put
+   your gateway's URL in `baseUrl` in place of the `litellm.example.com`
+   placeholder, and the model you want in `models`.
+2. **Choose it.** In `pi/sandbox/files/home/.pi/agent/settings.json`, set
+   `"defaultProvider": "litellm"` and `"defaultModel"` to the model id. Pi needs
+   both, and both must match an entry in `models.json`.
+3. **Open the road.** Add the gateway's host to `caps.network.allow` in
+   `pi/sandbox/spec.yaml`, and give it a `credentials` entry like the OpenRouter
+   one: `header: Authorization`, `format: "Bearer %s"`, which is how LiteLLM
+   authenticates too.
+4. **Hand over the key**, then run `make wiki-sandbox`, which builds a fresh kit
+   and copies the config in.
 
 ```bash
 sbx secret set-custom pi-kit --host <your-gateway-host> \
   --env LITELLM_API_KEY --value "$LITELLM_API_KEY"
 ```
 
-Only `set-custom` here, and no `sbx secret set -g` line to go with it: `set`
-knows a fixed list of built-in services — `openrouter` is on it, a gateway is
-not — and `set-custom` is what covers everything else. It has no stdin form
-either, so the value is visible to anything that can list processes for as long
-as the command runs; sbx labels `--value` "less secure" for that reason. Reading
-it from an exported variable, as above, keeps it out of shell history at least.
+Only `set-custom` here. Plain `set` knows a fixed list of built-in services;
+OpenRouter is on it, a gateway is not. Note that sbx still marks `set-custom`
+experimental. It has no stdin form either, so the key is visible to anything
+that can list processes for as long as the command runs. Reading it from an
+exported variable, as above, at least keeps it out of your shell history.
 
-One field in the example entry is an estimate rather than a measured fact: `cost`
-feeds usage tracking only and says nothing about what a gateway charges.
-`thinkingLevelMap` folds Pi's seven thinking levels onto `low`, `medium` and
-`high`, all three of which a LiteLLM gateway fronting Gemini accepts as
-`reasoning_effort`; if yours rejects a level, correct it there or set
-`"reasoning": false` to stop Pi sending one at all.
+#### Why this entry spells out its numbers
 
-Two failure modes are worth knowing before you debug the wrong thing.
+Pi ships a catalogue of 33 providers. OpenRouter is one of them; LiteLLM is not.
+The advice above about the `models` array therefore turns on its head here.
+Leave the array out for `openrouter` and the catalogue fills in real figures. Do
+the same for `litellm` and there is nothing to fill in, so Pi falls back to 128K
+of context, 16,384 output tokens and no reasoning.
 
-**An empty API key removes the provider rather than failing.** `apiKey` resolves
-through the environment, and a provider whose key comes back empty is dropped
-from the model list silently — no error, no warning. Forget the export and Pi
-reports the model as unknown rather than refusing the call. Confirm the provider is
-actually there before looking anywhere else, and note that the filter matches
-model ids, not provider names, so pass the model:
+That output cap is shared, which makes it tighter than it looks. Thinking
+tokens come out of the same budget as the answer, so a small cap can buy a lot
+of thought and no words at all: the gateway returns 200 and an empty `choices`
+array. Hence the explicit numbers in the entry. `modelOverrides` is no help,
+because it patches ids Pi already knows and drops the rest without a word.
+
+Two of those numbers are guesses. `cost` feeds Pi's own usage tracking and says
+nothing about what your gateway charges. `thinkingLevelMap` folds Pi's seven
+thinking levels onto `low`, `medium` and `high`, which a gateway fronting Gemini
+takes as `reasoning_effort`. If yours rejects a level, change the map, or set
+`"reasoning": false` and Pi will stop sending one.
+
+#### Two things to check before you debug the wrong one
+
+First, that the provider is there at all:
 
 ```bash
-sbx exec pi-kit -- pi --list-models gemini-3.1-pro
+sbx exec pi-kit -- pi --list-models litellm
 ```
 
-**Thinking shares the output budget.** On a reasoning model, reasoning tokens
-count against `maxTokens` alongside the visible answer, and the request succeeds
-either way: ask for a small cap and a gateway will happily return HTTP 200 with
-an empty `choices` array, having spent the entire allowance on thought. That is
-the truncation trap above with the volume turned up — Pi's 16,384 fallback is not
-just tight for a long `write`, it is shared. Another reason the entry sets
-`maxTokens` explicitly.
+The filter matches the provider name, so this lists your models and nothing
+else. An empty list means the key never reached Pi, which drops a provider whose
+`apiKey` resolves to nothing without an error or a warning. Beware that the
+listing and the lookup disagree: Pi will still choose the model when it runs,
+because the lookup that resolves `settings.json` pays no attention to keys. So a
+missing key shows up not here but at the first request.
 
-A gateway on a private network can be allowed by `caps.network` and still be
-unreachable — that lifts sbx's own policy without giving the microVM a route to
-it. Check from inside the runtime rather than from your shell:
+Second, that the gateway is reachable. A host that `caps.network` allows may
+still be out of reach, because lifting sbx's own policy does not give the
+microVM a route to it. Ask from inside, not from your shell:
 
 ```bash
 sbx exec pi-kit -- curl -sS -o /dev/null -w '%{http_code}\n' \
   https://<your-gateway-host>/v1/models
 ```
 
-`200` or `401` means the network path works, `401` being a credential problem
-rather than a routing one. A hang or a DNS failure means it does not.
+`200` or `401` means the path works, `401` being a credential problem rather
+than a routing one. A hang or a DNS failure means it does not.
+
+#### The container runtime, in short
+
+The same, minus the sandbox's plumbing. Make the first two edits in
+`pi/container/agent/`, which is bind-mounted, so they land on the next run
+rather than the next build. Steps 3 and 4 have no counterpart: the container has
+plain bridge networking, so there is no allowlist to widen, and `compose.yaml`
+passes `LITELLM_API_KEY` through from your shell.
+
+One snag. Three checks still demand `OPENROUTER_API_KEY` — in `compose.yaml`,
+`scripts/compile-wiki-container.sh` and `scripts/bash-container.sh` — so give it
+any value until you drop them. To check the provider, open a throwaway shell
+with `./scripts/bash-container.sh` and run `pi --list-models litellm`.
 
 ## Linting the wiki
 
