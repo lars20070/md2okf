@@ -17,15 +17,13 @@ sandbox:
 
 # Outbound egress allowlist (v2 caps.network replaces network.allowedDomains).
 # Keep this explicit under default-deny policy: model calls need openrouter.ai,
-# Pi service bootstrap uses pi.dev, and the agent fetches the OKF spec from
-# raw.githubusercontent.com on every run (see AGENTS.md).
+# and Pi service bootstrap uses pi.dev.
 caps:
   network:
     allow:
       - registry.npmjs.org
       - openrouter.ai
       - pi.dev
-      - raw.githubusercontent.com
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
