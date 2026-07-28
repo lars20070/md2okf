@@ -138,9 +138,11 @@ at all.
 
 ### Model configuration, sandbox only
 
-`pi/sandbox/files/home/.pi/agent/models.json` names the OpenRouter provider and
-stops there. It carries no `models` array, which is deliberate, and JSON has
-nowhere to put the reason. So here it is.
+The `openrouter` entry in `pi/sandbox/files/home/.pi/agent/models.json` names the
+provider and stops there. It carries no `models` array, which is deliberate, and
+JSON has nowhere to put the reason. So here it is. (The `litellm` entry alongside
+it does carry one, for a reason that is the mirror image of this — see
+[Using another provider](#using-another-provider).)
 
 Pi merges a custom `models` entry by `id`, and that entry replaces the built-in
 catalogue entry it matches. Name a model Pi already knows, such as `{"id":
@@ -190,10 +192,16 @@ To switch to it:
    LiteLLM authenticates too — then register the secret:
 
 ```bash
-echo "$LITELLM_API_KEY" | sbx secret set -g litellm
 sbx secret set-custom pi-kit --host <your-gateway-host> \
   --env LITELLM_API_KEY --value "$LITELLM_API_KEY"
 ```
+
+Only `set-custom` here, and no `sbx secret set -g` line to go with it: `set`
+knows a fixed list of built-in services — `openrouter` is on it, a gateway is
+not — and `set-custom` is what covers everything else. It has no stdin form
+either, so the value is visible to anything that can list processes for as long
+as the command runs; sbx labels `--value` "less secure" for that reason. Reading
+it from an exported variable, as above, keeps it out of shell history at least.
 
 Two fields in the example entry are estimates rather than measured facts. `cost`
 feeds usage tracking only and says nothing about what a gateway charges. And
