@@ -1,3 +1,5 @@
+# pdf2md
+
 Sometimes clean, structured Markdown files are not available, so they must be generated from PDFs. Full automation is difficult. The sections below explain how to use the `marker` tool and how to check the results with `prettier`, `markdownlint-cli2` and `cspell`.
 
 ## PDF to Markdown conversion
