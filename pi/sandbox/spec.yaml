@@ -17,7 +17,8 @@ sandbox:
 
 # Outbound egress allowlist (v2 caps.network replaces network.allowedDomains).
 # Keep this explicit under default-deny policy: model calls need openrouter.ai,
-# and Pi service bootstrap uses pi.dev.
+# and Pi service bootstrap uses pi.dev. Pointing Pi at a different provider means
+# adding its host here too — see "Using another provider" in the README.
 caps:
   network:
     allow:
