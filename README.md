@@ -203,12 +203,33 @@ either, so the value is visible to anything that can list processes for as long
 as the command runs; sbx labels `--value` "less secure" for that reason. Reading
 it from an exported variable, as above, keeps it out of shell history at least.
 
-Two fields in the example entry are estimates rather than measured facts. `cost`
-feeds usage tracking only and says nothing about what a gateway charges. And
+One field in the example entry is an estimate rather than a measured fact: `cost`
+feeds usage tracking only and says nothing about what a gateway charges.
 `thinkingLevelMap` folds Pi's seven thinking levels onto `low`, `medium` and
-`high`, those being what a reasoning-effort field reliably accepts through an
-OpenAI-compatible shim; if yours rejects a level, correct it there or set
+`high`, all three of which a LiteLLM gateway fronting Gemini accepts as
+`reasoning_effort`; if yours rejects a level, correct it there or set
 `"reasoning": false` to stop Pi sending one at all.
+
+Two failure modes are worth knowing before you debug the wrong thing.
+
+**An empty API key removes the provider rather than failing.** `apiKey` resolves
+through the environment, and a provider whose key comes back empty is dropped
+from the model list silently — no error, no warning. Forget the export and Pi
+reports the model as unknown rather than refusing the call. Confirm the provider is
+actually there before looking anywhere else, and note that the filter matches
+model ids, not provider names, so pass the model:
+
+```bash
+sbx exec pi-kit -- pi --list-models gemini-3.1-pro
+```
+
+**Thinking shares the output budget.** On a reasoning model, reasoning tokens
+count against `maxTokens` alongside the visible answer, and the request succeeds
+either way: ask for a small cap and a gateway will happily return HTTP 200 with
+an empty `choices` array, having spent the entire allowance on thought. That is
+the truncation trap above with the volume turned up — Pi's 16,384 fallback is not
+just tight for a long `write`, it is shared. Another reason the entry sets
+`maxTokens` explicitly.
 
 A gateway on a private network can be allowed by `caps.network` and still be
 unreachable — that lifts sbx's own policy without giving the microVM a route to
