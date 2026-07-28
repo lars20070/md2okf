@@ -24,6 +24,8 @@ string on the host and swaps it into requests at its proxy, so inside the
 sandbox `$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
 
 ```bash
+export OPENROUTER_API_KEY=sk-or-...
+
 echo "$OPENROUTER_API_KEY" | sbx secret set -g openrouter
 
 # And again as a custom secret, to work around a known sbx bug:
@@ -38,7 +40,7 @@ sbx secret set-custom pi-kit \
 
 ### Run it
 
-Put your Markdown in `md/`, one file per document, then:
+Put your Markdown files in `md/`, then:
 
 ```bash
 make wiki-sandbox
