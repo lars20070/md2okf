@@ -1,9 +1,10 @@
 ---
-title: Google Developer Documentation Style Guide
-source: https://developers.google.com/style
-generated_at: 2026-07-31
-pages: 70
-format: Single-file Markdown
+type: Book
+title: "Google. Google Developer Documentation Style Guide."
+description: "Style guide for Google developer documentation"
+resource: https://developers.google.com/style
+tags: [guide, Google]
+timestamp: 2026-07-31T09:20:57Z
 ---
 
 # Google Developer Documentation Style Guide

@@ -464,19 +464,20 @@ def build_toc(pages: list[Page]) -> str:
     return "\n".join(lines)
 
 
-def assemble(pages: list[Page], bodies: dict[str, str], generated_at: str) -> str:
+def assemble(pages: list[Page], bodies: dict[str, str], timestamp: str) -> str:
     parts: list[str] = [
         "---",
-        "title: Google Developer Documentation Style Guide",
-        f"source: {BOOK}",
-        f"generated_at: {generated_at}",
-        f"pages: {len(pages)}",
-        "format: Single-file Markdown",
+        "type: Book",
+        'title: "Google. Google Developer Documentation Style Guide."',
+        'description: "Style guide for Google developer documentation"',
+        f"resource: {BOOK}",
+        "tags: [guide, Google]",
+        f"timestamp: {timestamp}",
         "---",
         "",
         "# Google Developer Documentation Style Guide",
         "",
-        f"*Snapshot of [{BOOK}]({BOOK}) generated {generated_at}.*",
+        f"*Snapshot of [{BOOK}]({BOOK}) generated {timestamp[:10]}.*",
         "",
         build_toc(pages),
     ]
@@ -632,7 +633,7 @@ def run(*, refresh: bool, cache_dir: Path, output: Path) -> None:
         md = assemble(
             pages,
             bodies,
-            generated_at=datetime.now(tz=UTC).date().isoformat(),
+            timestamp=datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
         validate_output(md, pages, bodies)
         output.write_text(md, encoding="utf-8")
