@@ -14,3 +14,5 @@ md/*
 okf/*
 !okf/
 !okf/.okflintrc.json
+# consumption-test transcripts (generated)
+tests/house-style/out/
