@@ -28,9 +28,14 @@ Ten pages were fetched and analysed: the landing page, `word-list`, `tone`,
   principles, Language and grammar, Punctuation, Formatting and organization,
   Linking, Computer interfaces, HTML and CSS, Names and naming. No JavaScript,
   no lazy-loaded subtree: one fetch yields the whole ordered outline.
-- **`robots.txt` allows it.** `User-agent: *` with a single `Disallow:
-  /youtube/partner/`. A truthful, non-browser User-Agent is served normally
-  (checked: `200`), so there is no reason to spoof Mozilla as the old plan did.
+- **`robots.txt` allows it, and nothing blocks a scraper.** `User-agent: *` with
+  a single `Disallow: /youtube/partner/`, plus a declared sitemap. Across ~15
+  requests with three different identities — a spoofed `Mozilla/5.0`, a truthful
+  `md2okf-web2md/0.1`, and no `User-Agent` header at all — every response was
+  `200`, including six pages back to back at 0.3 s intervals. No `429`, no
+  `Retry-After`, no challenge page. So there is no reason to spoof Mozilla as
+  the old plan did. **Untested:** a sustained run across all 70 pages, and
+  repeat runs from one IP. See Risks.
 - **Roughly 1.2 MB of article HTML.** Article bodies measured 5–33 KB each,
   except `word-list` at 251 KB. Extrapolated: ~1.2 MB of body HTML, which
   converts to about **0.5–0.9 MB of Markdown** — not the 1.5–4 MB the old plan
@@ -172,7 +177,11 @@ DROP = (
    `web2md/cache/{slug}.html`; only `--refresh` re-fetches. Retry 429 and 5xx
    with exponential backoff in an explicit loop — note that
    `httpx.HTTPTransport(retries=…)` retries connection errors only, not status
-   codes.
+   codes. Two rules make throttling impossible to mistake for success, since a
+   challenge or error page still parses as HTML and would otherwise yield a
+   hollow section: **cache only `200` responses**, so a throttled reply never
+   becomes a poisoned cache entry, and **treat a missing `BODY` as a hard
+   error** that stops the run, naming the page.
 3. **Clean.** Take `BODY`, drop everything in `DROP`, unwrap `<devsite-code>` to
    the `<pre>` it contains. Before dropping, replace the empty semantic spans
    with text: `icon-dontuse` → `Don't use:`, `icon-avoid` → `Avoid:`,
@@ -293,6 +302,13 @@ as a Pi source document. `make validate` is not needed: nothing under `pi/` or
 - **The nav is one selector deep.** Everything hinges on
   `.devsite-book-nav-wrapper`. Hence the count assertions in stage 1: a DevSite
   redesign should stop the run, not quietly produce a stub.
+- **Google could throttle a run, even though nothing suggests it will.** The
+  15-request probe above was clean at three different identities, but a full
+  70-page pass has not been measured, and neither has a second pass from the
+  same IP. The stage 2 rules are the whole defence: back off on `429`, cache
+  only `200`s, and stop on a missing article body. If a run ever does trip a
+  limit, the first move is a longer delay, not a browser or a proxy — 70 pages
+  is small enough that politeness costs nothing.
 - **The guide changes under you.** The output is a dated snapshot. `whats-new`
   is part of the book, so the file records its own currency.
 - **CSS-only semantics may be wider than measured.** The 10-page sample found
