@@ -8,6 +8,12 @@ dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]
 
 [dependency-groups]
 dev = ["ruff>=0.8"]
+web2md = [
+  "httpx>=0.28.1",
+  "beautifulsoup4>=4.15.0",
+  "lxml>=6.1.1",
+  "markdownify>=1.2.3",
+]
 
 # No [build-system] / src layout yet — there is no first-party Python package in
 # this repo. Adopt src/md2okf/ + tests/ + pytest when real Python code lands

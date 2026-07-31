@@ -18,7 +18,7 @@ RUFF ?= uv run ruff
 HADOLINT ?= hadolint
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate wiki-container wiki-sandbox
+.PHONY: lint lint-okf validate wiki-container wiki-sandbox style-guide
 
 # Lint tracked Markdown, shell, Python, and the container Dockerfile. One
 # Markdown glob per runtime so deleting a runtime is a one-line removal. The
@@ -28,6 +28,7 @@ lint:
 	$(MARKDOWNLINT) \
 		"README.md" \
 		"pdf2md/README.md" \
+		"web2md/README.md" \
 		"AGENTS.md" \
 		"pi/container/agent/**/*.md" \
 		"pi/sandbox/files/home/.pi/agent/**/*.md"
@@ -56,3 +57,7 @@ wiki-container:
 # Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
 wiki-sandbox:
 	./scripts/compile-wiki-sandbox.sh
+
+# Fetch the Google developer documentation style guide into md/ as one file.
+style-guide:
+	uv run --group web2md python web2md/google_style_guide.py

@@ -27,6 +27,7 @@
     "psutil",
     "fdfind",
     "venv",
-    "okflintrc"
+    "okflintrc",
+    "pycache"
   ]
 }
