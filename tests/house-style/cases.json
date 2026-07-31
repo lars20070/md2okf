@@ -33,9 +33,12 @@
       "expect_present": [],
       "expect_absent": ["impacted"],
       "expect_any": [],
-      "grounding": "let one event impact another",
+      "grounding": [
+        "let one event impact another",
+        "no one is bothered by to impact"
+      ],
       "expected_page": "/part-2/9-confusing-cousins-american-and-british-english.md",
-      "note": "House prohibition on verbing nouns; any valid replacement passes."
+      "note": "House prohibition on verbing nouns; any valid replacement passes. The book rules on this twice — chapter 9 lists it among nouns not to verb, and chapter 1 names 'to impact' outright and prescribes 'to have an impact on'. Either page grounds the citation; an early run cited chapter 1 and was wrongly failed by a single-page grounding."
     },
     {
       "id": "due-to",

@@ -88,13 +88,19 @@ def grade(case, text, wiki):
         cited = [c.get("citation") for c in changes if isinstance(c, dict)]
         return False, f"cited: no citation resolves to a page ({cited})"
 
-    needle = case["grounding"].lower()
+    # A ruling may appear on more than one page — the book rules on verbing
+    # nouns in both chapter 1 and chapter 9, for instance — so `grounding`
+    # accepts a list and any one of them grounds the citation.
+    grounding = case["grounding"]
+    needles = [grounding] if isinstance(grounding, str) else list(grounding)
     for path in resolved:
-        if needle in path.read_text(errors="replace").lower():
-            return True, f"cited {path.name}"
+        body = path.read_text(errors="replace").lower()
+        for needle in needles:
+            if needle.lower() in body:
+                return True, f"cited {path.name}"
 
     names = ", ".join(p.name for p in resolved)
-    return False, f"grounded: no cited page contains {case['grounding']!r} (cited {names})"
+    return False, f"grounded: no cited page contains any of {needles} (cited {names})"
 
 
 def main():

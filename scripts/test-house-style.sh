@@ -52,6 +52,13 @@ esac
 mkdir -p "${outdir}"
 rm -f "${outdir}"/*.txt
 
+# Compose interpolates every service in the file, not just the one being run, so
+# the sibling `pi` service's OPENROUTER_API_KEY fail-fast would abort a
+# consumption run that never touches OpenRouter. Supply a placeholder purely to
+# satisfy interpolation; pi-consume itself takes the variable as optional, and
+# nothing here sends it anywhere.
+export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-unused-by-consumption-test}"
+
 docker compose -f "${compose_file}" build pi-consume >/dev/null
 
 ids="$(python3 -c "
