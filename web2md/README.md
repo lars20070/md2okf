@@ -15,8 +15,8 @@ update it.
 # Install scraper deps (separate from the heavy marker-pdf stack)
 uv sync --group web2md
 
-# Fetch (or reuse web2md/cache/) and write md/GoogleDeveloperDocumentationStyleGuide.md
-make style-guide
+# Fetch (or reuse web2md/cache/) and write md/*.md
+make scrape
 
 # Or call the module directly:
 uv run --group web2md python web2md/web2md.py

@@ -467,7 +467,7 @@ def build_toc(pages: list[Page]) -> str:
 def assemble(pages: list[Page], bodies: dict[str, str], timestamp: str) -> str:
     parts: list[str] = [
         "---",
-        "type: Book",
+        "type: Website",
         'title: "Google. Google Developer Documentation Style Guide."',
         'description: "Style guide for Google developer documentation"',
         f"resource: {BOOK}",

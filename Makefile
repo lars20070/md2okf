@@ -58,6 +58,6 @@ wiki-container:
 wiki-sandbox:
 	./scripts/compile-wiki-sandbox.sh
 
-# Fetch the Google developer documentation style guide into md/ as one file.
-style-guide:
+# Fetch the website into md/ as one file.
+scrape:
 	uv run --group web2md python web2md/web2md.py

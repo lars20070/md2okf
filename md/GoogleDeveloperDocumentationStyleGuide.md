@@ -1,15 +1,15 @@
 ---
-type: Book
+type: Website
 title: "Google. Google Developer Documentation Style Guide."
 description: "Style guide for Google developer documentation"
 resource: https://developers.google.com/style
 tags: [guide, Google]
-timestamp: 2026-07-31T09:20:57Z
+timestamp: 2026-08-01T06:28:39Z
 ---
 
 # Google Developer Documentation Style Guide
 
-*Snapshot of [https://developers.google.com/style](https://developers.google.com/style) generated 2026-07-31.*
+*Snapshot of [https://developers.google.com/style](https://developers.google.com/style) generated 2026-08-01.*
 
 ## Table of contents
 
