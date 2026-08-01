@@ -28,6 +28,19 @@
     "fdfind",
     "venv",
     "okflintrc",
-    "pycache"
+    "pycache",
+    "httpx",
+    "pythonpath",
+    "testpaths",
+    "minversion",
+    "addopts",
+    "coderabbit",
+    "pycodestyle",
+    "pyflakes",
+    "pydocstyle",
+    "docstring",
+    "docstrings",
+    "conftest",
+    "monkeypatch"
   ]
 }

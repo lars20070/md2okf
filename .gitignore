@@ -6,10 +6,12 @@
 
 # Python
 .venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
 
 # web2md HTML fetch cache
 web2md/cache/
-web2md/__pycache__/
 
 # md input folder
 # md/*

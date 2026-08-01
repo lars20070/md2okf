@@ -277,6 +277,7 @@ by name so it survives the `okf/*` rule in `.gitignore`.
 
 ```bash
 make lint       # markdownlint, shellcheck, ruff, hadolint
+make test       # pytest, the web2md scraper suite
 make validate   # check pi/sandbox/spec.yaml against the Sandbox Kit schema
 make lint-okf   # lint the generated wiki
 ```
@@ -299,10 +300,18 @@ Once a sandbox exists, this should print `proxy-managed` rather than your key:
 sbx exec pi-kit -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
-Python tooling is thin. A `dev` dependency group holds ruff and nothing else,
-and there is no first-party package yet. When real Python code lands, adopt
-`src/md2okf/` and `tests/` with pytest, add a `make test` target and switch on
-the reserved `test` job in CI.
+Python tooling is thin and split across three dependency groups: `dev` (ruff),
+`test` (pytest) and `web2md` (the scraper's four runtime deps). CI installs one
+group per job with `--only-group`, so neither the lint job nor the test job ever
+pulls in the heavy project dependencies (marker-pdf / torch).
+
+The only first-party Python is the web2md scraper, which follows a per-tool
+layout: the module in [web2md/src/](web2md/src/), its pytest suite in
+[web2md/tests/](web2md/tests/). There is no `[build-system]` and nothing is
+installed — `make scrape` runs the module by path, and pytest imports it through
+`pythonpath` in `pyproject.toml`. `make test` runs the suite, and CI runs the
+same command in its `test` job. The suite is offline, so it needs no network and
+never touches `web2md/cache/`.
 
 ## Starting from a PDF
 

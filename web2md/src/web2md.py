@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import unescape
 from pathlib import Path
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -58,19 +59,28 @@ WORD_LIST_TERM_TOLERANCE = 30
 SIZE_MIN = 0.4 * 1024 * 1024
 SIZE_MAX = 1.2 * 1024 * 1024
 
-ROOT = Path(__file__).resolve().parent
+# web2md/ — the module itself lives one level down, in web2md/src/.
+ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE = ROOT / "cache"
 DEFAULT_OUTPUT = ROOT.parent / "md" / "GoogleDeveloperDocumentationStyleGuide.md"
 
 _SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]")
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((#[^)]+)\)")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+", re.MULTILINE)
+# Unbounded run of '#' on purpose: validate_output filters on len(group) > 6, so
+# capping the group at 6 would make that check unreachable.
+_HEADING_RE = re.compile(r"^(#+)\s+", re.MULTILINE)
 _PANDOC_DD_RE = re.compile(r"^:\s{3,}", re.MULTILINE)
 _DEVSITE_RE = re.compile(r"devsite-|material-icons", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class Page:
+    """One page of the book, as listed in the site navigation.
+
+    `slug` is the anchor this page gets in the assembled document; `path` is the
+    site-relative URL path used to resolve cross-page links.
+    """
+
     section: str
     title: str
     slug: str
@@ -79,11 +89,18 @@ class Page:
 
 
 def slug_from_path(path: str) -> str:
+    """Derive a page slug from its URL path; the book root becomes "style"."""
     rest = path.removeprefix("/style").strip("/")
     return rest or "style"
 
 
 def sanitize_id(raw: str) -> str:
+    """Reduce an HTML id to `[A-Za-z0-9._-]`, escaping anything else as uXXXX.
+
+    The escape is reversible enough to stay unique, so two distinct ids never
+    collapse onto the same anchor.
+    """
+
     def repl(match: re.Match[str]) -> str:
         return f"u{ord(match.group(0)):04x}"
 
@@ -92,16 +109,23 @@ def sanitize_id(raw: str) -> str:
 
 
 def namespaced_anchor(page_slug: str, raw_id: str) -> str:
+    """Scope an id to its page, so ids repeated across pages stay distinct."""
     return f"{page_slug}--{sanitize_id(raw_id)}"
 
 
 def nav_text(el: Tag) -> str:
+    """Read a nav entry's label, preferring its `.devsite-nav-text` span."""
     span = el.select_one(".devsite-nav-text")
     text = span.get_text(" ", strip=True) if span else el.get_text(" ", strip=True)
     return unescape(text)
 
 
 def discover_pages(html: str) -> list[Page]:
+    """List every book page from the nav, in document order.
+
+    Raises SystemExit if the nav is missing or its shape looks wrong, so a
+    silently truncated book fails the run instead of producing a short document.
+    """
     soup = BeautifulSoup(html, "lxml")
     nav = soup.select_one(NAV)
     if nav is None:
@@ -160,6 +184,13 @@ def fetch_html(
     *,
     refresh: bool,
 ) -> str:
+    """Return the page HTML, from `cache_path` when possible.
+
+    On a cache miss the request is retried with exponential backoff, bounded by
+    MAX_RETRIES and capped at 30s per wait, honouring `Retry-After` on HTTP 429.
+    Only a successful response is cached. Raises SystemExit once the retry
+    budget is spent.
+    """
     if cache_path.exists() and not refresh:
         return cache_path.read_text(encoding="utf-8")
 
@@ -198,8 +229,11 @@ def fetch_html(
 
 
 def replace_icon_spans(body: Tag) -> None:
-    # Only rewrite icons inside definition terms. The word-list legend uses the
-    # same empty spans next to prose that already explains them.
+    """Turn DevSite's empty icon spans into the words they stand for.
+
+    Only inside definition terms: the word-list legend uses the same spans next
+    to prose that already explains them, where the replacement would duplicate.
+    """
     for class_name, label in ICON_TEXT.items():
         for el in body.select(f".{class_name}"):
             if el.find_parent("dt") is None:
@@ -209,6 +243,7 @@ def replace_icon_spans(body: Tag) -> None:
 
 
 def unwrap_devsite_code(body: Tag) -> None:
+    """Replace each <devsite-code> wrapper with the <pre> it holds."""
     for el in body.find_all("devsite-code"):
         pre = el.find("pre")
         if pre is not None:
@@ -218,6 +253,7 @@ def unwrap_devsite_code(body: Tag) -> None:
 
 
 def drop_noise(body: Tag, dropped_classes: set[str]) -> None:
+    """Strip site chrome listed in DROP, recording removed classes for the log."""
     for selector in DROP:
         for el in body.select(selector):
             for cls in el.get("class") or []:
@@ -231,6 +267,11 @@ def drop_noise(body: Tag, dropped_classes: set[str]) -> None:
 
 
 def clean_body(html: str, page: Page, dropped_classes: set[str]) -> Tag:
+    """Extract the article body and strip it down to publishable content.
+
+    Raises SystemExit if the body is missing, or if its headings fall outside
+    the h2–h4 range the assembled document's +2 shift assumes.
+    """
     soup = BeautifulSoup(html, "lxml")
     body = soup.select_one(BODY)
     if body is None:
@@ -240,19 +281,21 @@ def clean_body(html: str, page: Page, dropped_classes: set[str]) -> Tag:
     unwrap_devsite_code(body)
     drop_noise(body, dropped_classes)
 
-    # Heading depth check before conversion (body uses h2–h4).
+    # Heading depth check before conversion. The body is expected to use h2–h4:
+    # deeper would overflow h6 once assemble() shifts everything down by two,
+    # and an h1 would compete with the document title.
     for heading in body.find_all(re.compile(r"^h[1-6]$")):
         level = int(heading.name[1])
         if level > 4:
             raise SystemExit(f"body heading deeper than h4 on {page.url}: <{heading.name}>")
         if level < 2 and heading.get("id") != "key-takeaways-panel-title":
-            # h1 should not appear in the article body for this book.
-            pass
+            raise SystemExit(f"unexpected <h1> in the article body on {page.url}")
 
     return body
 
 
 def collect_ids(body: Tag, page_slug: str, anchor_map: dict[tuple[str, str], str]) -> None:
+    """Record every id on the page as (page_slug, raw_id) -> namespaced anchor."""
     for el in body.find_all(attrs={"id": True}):
         raw_id = el["id"]
         if not raw_id or raw_id == "key-takeaways-panel-title":
@@ -262,6 +305,7 @@ def collect_ids(body: Tag, page_slug: str, anchor_map: dict[tuple[str, str], str
 
 
 def absolutize_url(href: str) -> str:
+    """Resolve a possibly site-relative href against the site base URL."""
     return urljoin(BASE, href)
 
 
@@ -272,6 +316,12 @@ def rewrite_internal_href(
     anchor_map: dict[tuple[str, str], str],
     unresolved: list[str],
 ) -> str:
+    """Rewrite one href for the single-document output.
+
+    In-book targets become `#anchor` fragments; anything else is left alone or
+    made absolute. Targets that cannot be resolved are appended to `unresolved`
+    and fall back to an absolute URL, so no link is silently dropped.
+    """
     parsed = urlparse(href)
     fragment = parsed.fragment
 
@@ -325,6 +375,11 @@ def apply_anchors_and_links(
     anchor_map: dict[tuple[str, str], str],
     unresolved: list[str],
 ) -> None:
+    """Emit explicit anchors for id-bearing elements and rewrite links in place.
+
+    Mutates `body`: ids move onto injected <a id="…"> tags, hrefs are rewritten
+    for the single-document output, and image sources are made absolute.
+    """
     # Inject an explicit anchor before every id-bearing element (sections,
     # headings, dt terms, …). markdownify drops ids on non-heading tags, and
     # many DevSite fragments live on <section id="…"> wrappers. DevSite often
@@ -358,17 +413,21 @@ class StyleGuideConverter(MarkdownConverter):
     """DevSite-specific HTML → Markdown rules."""
 
     class Options(MarkdownConverter.Options):
+        """markdownify settings this book is converted with."""
+
         heading_style = ATX
         bullets = "-"
         escape_asterisks = False
         escape_underscores = False
 
-    def __init__(self, page_slug: str, aside_warnings: list[str], **options):
+    def __init__(self, page_slug: str, aside_warnings: list[str], **options: Any) -> None:
+        """Bind the converter to one page; `aside_warnings` collects warnings."""
         super().__init__(**options)
         self.page_slug = page_slug
         self.aside_warnings = aside_warnings
 
     def convert_aside(self, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Render an <aside> as a GitHub callout, defaulting to NOTE."""
         classes = el.get("class") or []
         kind = "NOTE"
         matched = False
@@ -386,22 +445,35 @@ class StyleGuideConverter(MarkdownConverter):
         return f"\n\n> [!{kind}]\n> {quoted}\n\n"
 
     def convert_a(self, el: Tag, text: str, parent_tags: set[str]) -> str:
-        # Keep explicit fragment targets; markdownify would otherwise drop empty
-        # anchors that have an id and no href.
+        """Convert a link, preserving the bare <a id="…"> anchors we injected.
+
+        markdownify would otherwise drop an empty anchor that has an id and no
+        href, taking every cross-reference target with it.
+        """
         anchor_id = el.get("id")
         if anchor_id and not el.get("href") and not (text or "").strip():
             return f'<a id="{anchor_id}"></a>'
         return super().convert_a(el, text, parent_tags)
 
-    def process_text(self, el, parent_tags=None):
+    def process_text(
+        self, el: NavigableString, parent_tags: set[str] | None = None
+    ) -> str:
+        """Escape literal Markdown fences that appear in prose.
+
+        DevSite documents mention ``` as prose; left alone those open a fence
+        and swallow the content that follows.
+        """
         text = super().process_text(el, parent_tags=parent_tags)
-        # DevSite docs mention Markdown fences as literal ``` in prose; left
-        # alone those open a fence and swallow the following content.
         if parent_tags is None or "pre" not in parent_tags:
             text = text.replace("```", r"\`\`\`")
         return text
 
     def convert_dt(self, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Render a definition term as a bold line.
+
+        Markdown has no definition lists; bold term plus indented body keeps the
+        structure readable and avoids Pandoc-only syntax.
+        """
         text = re.sub(r"\s+", " ", (text or "").strip())
         if "_inline" in parent_tags:
             return f" {text} "
@@ -410,6 +482,7 @@ class StyleGuideConverter(MarkdownConverter):
         return f"\n\n**{text}**\n"
 
     def convert_dd(self, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Render a definition body as a four-space indented block."""
         text = (text or "").strip()
         if "_inline" in parent_tags:
             return f" {text} "
@@ -421,9 +494,12 @@ class StyleGuideConverter(MarkdownConverter):
         return f"\n{indented}\n"
 
     def convert_hN(self, n: int, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Shift a body heading down two levels, clamped to h6.
+
+        The document already spends # / ## / ### on title / section / page.
+        """
         if "_inline" in parent_tags:
             return text
-        # Document uses # / ## / ### for title / section / page, so body shifts +2.
         n = max(1, min(6, n + 2))
         text = re.sub(r"\s+", " ", (text or "").strip())
         if not text:
@@ -431,6 +507,7 @@ class StyleGuideConverter(MarkdownConverter):
         return f"\n\n{'#' * n} {text}\n\n"
 
     def convert_img(self, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Render an image, degrading to its alt text when there is no source."""
         alt = el.get("alt") or ""
         src = el.get("src") or ""
         if not src:
@@ -438,6 +515,7 @@ class StyleGuideConverter(MarkdownConverter):
         return f"![{alt}]({src})"
 
     def convert_pre(self, el: Tag, text: str, parent_tags: set[str]) -> str:
+        """Render a code block as an unlabelled fence, always newline-terminated."""
         code = el.get_text().removeprefix("\n")
         if not code.endswith("\n"):
             code = code + "\n"
@@ -445,11 +523,13 @@ class StyleGuideConverter(MarkdownConverter):
 
 
 def convert_body(body: Tag, page_slug: str, aside_warnings: list[str]) -> str:
+    """Convert one cleaned article body to Markdown."""
     converter = StyleGuideConverter(page_slug=page_slug, aside_warnings=aside_warnings)
     return converter.convert(str(body)).strip()
 
 
 def build_toc(pages: list[Page]) -> str:
+    """Render the table of contents, grouped by section in nav order."""
     lines = ["## Table of contents", ""]
     current_section = None
     for page in pages:
@@ -465,6 +545,7 @@ def build_toc(pages: list[Page]) -> str:
 
 
 def assemble(pages: list[Page], bodies: dict[str, str], timestamp: str) -> str:
+    """Join frontmatter, table of contents, and every page body into one file."""
     parts: list[str] = [
         "---",
         "type: Website",
@@ -512,6 +593,11 @@ def markdown_without_fences(md: str) -> str:
 
 
 def validate_output(md: str, pages: list[Page], bodies: dict[str, str]) -> None:
+    """Check the assembled document before it is written.
+
+    Every failure is collected and reported together, then raises SystemExit, so
+    one run surfaces all the problems rather than only the first.
+    """
     errors: list[str] = []
 
     if len(bodies) != len(pages):
@@ -576,6 +662,11 @@ def validate_output(md: str, pages: list[Page], bodies: dict[str, str]) -> None:
 
 
 def run(*, refresh: bool, cache_dir: Path, output: Path) -> None:
+    """Fetch, clean, convert, validate, and write the whole book.
+
+    Nothing is written to `output` unless validation passes, so a failed run
+    leaves the previous snapshot intact.
+    """
     warnings.filterwarnings("ignore", category=UserWarning, module="bs4")
     cache_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -641,6 +732,7 @@ def run(*, refresh: bool, cache_dir: Path, output: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Parse the command line and run the scrape."""
     parser = argparse.ArgumentParser(
         description="Fetch developers.google.com/style into one Markdown file."
     )
