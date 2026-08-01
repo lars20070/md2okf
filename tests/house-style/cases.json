@@ -1,0 +1,104 @@
+{
+  "_comment": [
+    "Fixtures for the OKF consumption test. See",
+    "docs/superpowers/specs/2026-07-31-okf-consumption-test-design.md.",
+    "",
+    "Every 'grounding' string is copied verbatim from the compiled wiki. If a",
+    "case starts failing on 'grounded', check whether the compile changed the",
+    "wording before assuming the agent is at fault.",
+    "",
+    "Cases favour rulings a model cannot derive from general knowledge, several",
+    "of which invert the usual convention. That is what lets this test fail when",
+    "the agent answers from priors instead of reading the wiki.",
+    "",
+    "Matching is case-insensitive throughout.",
+    "  expect_present - every string must appear in the rewrite",
+    "  expect_absent  - no string may appear in the rewrite",
+    "  expect_any     - at least one string must appear (open-ended fixes)"
+  ],
+  "cases": [
+    {
+      "id": "percent-sign",
+      "input": "Revenues rose 12 per cent last year, and the board expects a further 4 per cent in 2026.",
+      "expect_present": ["12%"],
+      "expect_absent": ["per cent"],
+      "expect_any": [],
+      "grounding": "Use the sign % instead of per cent",
+      "expected_page": "/part-2/7-sweating-the-small-stuff-punctuation-mechanics-and-conventions.md",
+      "note": "Inverts the common convention: most guides spell it out, this one requires the sign."
+    },
+    {
+      "id": "impact-as-verb",
+      "input": "The new tariff impacted margins across the region.",
+      "expect_present": [],
+      "expect_absent": ["impacted"],
+      "expect_any": [],
+      "grounding": [
+        "let one event impact another",
+        "no one is bothered by to impact"
+      ],
+      "expected_page": "/part-2/9-confusing-cousins-american-and-british-english.md",
+      "note": "House prohibition on verbing nouns; any valid replacement passes. The book rules on this twice — chapter 9 lists it among nouns not to verb, and chapter 1 names 'to impact' outright and prescribes 'to have an impact on'. Either page grounds the citation; an early run cited chapter 1 and was wrongly failed by a single-page grounding."
+    },
+    {
+      "id": "due-to",
+      "input": "The launch was delayed due to a shortage of chips.",
+      "expect_present": [],
+      "expect_absent": ["due to"],
+      "expect_any": ["because of", "owing to", "on account of"],
+      "grounding": "Due to modifies a noun",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "Adverbial 'due to' is the disputed usage."
+    },
+    {
+      "id": "decimate",
+      "input": "The frost decimated the entire orchard, leaving not a single tree alive.",
+      "expect_present": [],
+      "expect_absent": ["decimated"],
+      "expect_any": ["annihilated", "wiped out", "destroyed"],
+      "grounding": "destroy a significant proportion",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "The paragraph describes total destruction, which the ruling reserves other words for."
+    },
+    {
+      "id": "fewer-than",
+      "input": "Less than seven firms bid for the contract.",
+      "expect_present": ["fewer"],
+      "expect_absent": ["less than seven"],
+      "expect_any": [],
+      "grounding": "Use fewer, not less, with individual items",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "Countable items take 'fewer'."
+    },
+    {
+      "id": "hopefully",
+      "input": "Hopefully, the merger will close before the end of the quarter.",
+      "expect_present": [],
+      "expect_absent": ["hopefully"],
+      "expect_any": ["with luck", "if all goes well", "it is hoped"],
+      "grounding": "we do not write Hopefully",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "The wiki concedes this is not grammatically wrong and forbids it anyway - unguessable from priors."
+    },
+    {
+      "id": "alibi",
+      "input": "The airline's alibi for the delay, a shortage of crew, convinced nobody.",
+      "expect_present": [],
+      "expect_absent": ["alibi"],
+      "expect_any": ["excuse", "explanation", "defence", "justification"],
+      "grounding": "not the same thing as a false explanation",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "An alibi is being elsewhere, not an excuse."
+    },
+    {
+      "id": "compared-with",
+      "input": "Compared to last year, profits fell sharply while costs climbed.",
+      "expect_present": ["compared with"],
+      "expect_absent": ["compared to"],
+      "expect_any": [],
+      "grounding": "compared with is used to evaluate similarities",
+      "expected_page": "/part-2/6-confusables-and-cuttables-individual-rulings.md",
+      "note": "The sentence evaluates and highlights differences, so 'with'."
+    }
+  ]
+}

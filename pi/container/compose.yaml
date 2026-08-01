@@ -56,5 +56,53 @@ services:
       - ../../md:/workspace/md:ro
       - ../../okf:/workspace/okf:rw
 
+  # Consumption runtime: reads the compiled wiki, never writes it. Used by
+  # scripts/test-house-style.sh to check the wiki is usable, not merely
+  # well-formed. Two differences from `pi` above carry the whole point:
+  #
+  #   - md/ is NOT mounted, so the agent cannot reach the source documents and
+  #     must answer from okf/ alone. Mount it and the test proves nothing.
+  #   - okf/ is read-only, because the artefact under test must survive the test
+  #     unchanged. Nothing is written, so no writable mount is needed; the
+  #     agent's answer is its stdout.
+  #
+  # Neither key is required here — the driver selects a provider with
+  # --provider/--model, and only that provider's key has to be set.
+  pi-consume:
+    build:
+      context: ../..
+      dockerfile: pi/container/Dockerfile
+    image: pi-container
+
+    environment:
+      HOME: /home/node
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+
+    network_mode: bridge
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    read_only: true
+    user: "1000:1000"
+
+    pids_limit: 512
+    mem_limit: 4g
+    cpus: 2
+
+    tmpfs:
+      - /tmp
+      - /run
+      - /home/node
+
+    volumes:
+      - pi-agent-home:/home/node/.pi/agent
+      - ./agent/settings.json:/home/node/.pi/agent/settings.json:ro
+      - ./agent/models.json:/home/node/.pi/agent/models.json:ro
+      - ./agent/AGENTS.md:/home/node/.pi/agent/AGENTS.md:ro
+      - ./agent/skills:/home/node/.pi/agent/skills:ro
+      - ../../okf:/workspace/okf:ro
+
 volumes:
   pi-agent-home:
