@@ -4,7 +4,7 @@ Sometimes clean, structured Markdown files are not available, so they must be
 fetched from a website and converted. This directory holds a deterministic
 scraper for the [Google developer documentation style
 guide](https://developers.google.com/style). The output is one file under
-`md/`, ready for `make wiki-sandbox`.
+`md/`, ready for `make wiki`.
 
 The result is a dated snapshot of a living document. Re-run with `--refresh` to
 update it.

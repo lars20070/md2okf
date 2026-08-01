@@ -5,7 +5,7 @@
 > not Pi's task instructions. Pi runs inside the sandbox with the repo root as
 > its workspace and may read this file as a project document; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
-> from `pi/sandbox/files/home/.pi/agent/AGENTS.md`) — nothing here changes that,
+> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that,
 > and the Context7 / GitHub MCP tooling below is not available to you.
 
 ## Repository map
@@ -29,30 +29,15 @@ first-party Python in the repo — module in `web2md/src/`, pytest suite in
 `pythonpath` in `pyproject.toml`. Run `make test` after touching either
 directory; the suite is offline and needs no network.
 
-There are **two independent Pi runtimes**, each self-contained and carrying its
-**own copy** of the Pi config (`AGENTS.md`, `settings.json`, `models.json`,
-`skills/`):
+Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
+`pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,
+`skills/`) lives in `pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
+its own output and dates its log entries, and the OpenRouter key stays outside
+the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
+only land in a fresh sandbox — which `make wiki` always builds. The `files/`
+level is fixed by the Sandbox Kit schema and cannot be renamed or removed.
 
-- `pi/sandbox/` — Docker Sandbox (sbx) kit; its config lives in
-  `pi/sandbox/files/home/.pi/agent/`. The one to reach for: the agent has
-  `bash`, so it lints its own output and dates its log entries, and the
-  OpenRouter key stays outside the VM (proxy-managed by sbx). Config is copied
-  in at kit build time, so edits only land in a fresh sandbox — which
-  `make wiki-sandbox` always builds.
-- `pi/container/` — Docker Compose runtime; its config lives in
-  `pi/container/agent/` and is bind-mounted, so edits apply on the next run.
-  Pi runs with `-xt bash`: no lint step, no dates in `okf/log.md`. Never add
-  `read` to that denylist, or Pi stops advertising the skill at all.
-
-Either runtime compiles the same wiki, but their `okf/log.md` formats differ, so
-don't mix the two for one wiki.
-
-The two config copies are deliberately **not** a single source of truth. When a
-change should apply to both runtimes, edit **both** copies by hand and keep them
-aligned. The runtimes share no code path, so deleting one never touches the
-other.
-
-Within each config, the split is: `AGENTS.md` holds what every task must respect
+Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
 each task's procedure lives in its own skill directory under `skills/`. There is
 one today, `compile-wiki`. A new task gets a new skill, not more rules in
@@ -61,26 +46,23 @@ one today, `compile-wiki`. A new task gets a new skill, not more rules in
 ## Commands
 
 ```bash
-make lint            # markdownlint + shellcheck + ruff + hadolint (default goal)
-make test            # pytest, the web2md scraper suite (offline)
-make validate        # validate the sandbox kit spec (runs scripts/validate-spec.sh)
-make wiki-sandbox    # compile the OKF wiki via the sandbox runtime (preferred)
-make wiki-container  # compile the OKF wiki via the container runtime
-make scrape          # fetch the website into md/ as one file (web2md)
-make lint-okf        # lint the generated okf/ wiki (okf-lint via pnpm dlx)
+make lint       # markdownlint + shellcheck + ruff (default goal)
+make test       # pytest, the web2md scraper suite (offline)
+make validate   # validate the sandbox kit spec (runs scripts/validate-spec.sh)
+make wiki       # compile the OKF wiki via the sandbox runtime
+make scrape     # fetch the website into md/ as one file (web2md)
+make lint-okf   # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ```
 
 ```bash
-./scripts/bash-sandbox.sh                            # shell into the existing sandbox
-./scripts/bash-container.sh                          # throwaway container shell
-./scripts/compile-wiki-container.sh md/other-books   # container run, different source folder
+./scripts/bash.sh                            # shell into the existing sandbox
+./scripts/compile-wiki.sh md/other-books     # compile a different source folder
 ```
 
 `make lint-okf` is host-only and needs a generated `okf/`; it sits outside
-`make lint` and outside CI because `okf/` is gitignored output, and neither
-driver calls it. `make wiki-container` needs `OPENROUTER_API_KEY` exported in
-your shell; `make wiki-sandbox` takes it from `sbx secret` instead (see the
-README for the two-step setup).
+`make lint` and outside CI because `okf/` is gitignored output, and the driver
+does not call it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
+from your shell (see the README for the two-step setup).
 
 ## Always validate the sandbox kit spec before finishing
 
@@ -91,7 +73,7 @@ Sandbox Kit spec before considering the task complete:
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks `pi/sandbox/spec.yaml` against the current Sandbox Kit schema (a
+This checks `pi/spec.yaml` against the current Sandbox Kit schema (a
 static schema check — no Docker, login, or network required). The same check runs
 in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
