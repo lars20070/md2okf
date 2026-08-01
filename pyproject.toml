@@ -6,11 +6,43 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]
 
+# Groups are kept narrow so a CI job installs only what it needs: lint uses
+# --only-group dev, tests use --only-group test --only-group web2md. Neither
+# pulls in the heavy project dependencies (marker-pdf / torch).
 [dependency-groups]
 dev = ["ruff>=0.8"]
+test = ["pytest>=8.4"]
+web2md = [
+  "httpx>=0.28.1",
+  "beautifulsoup4>=4.15.0",
+  "lxml>=6.1.1",
+  "markdownify>=1.2.3",
+]
 
-# No [build-system] / src layout yet — there is no first-party Python package in
-# this repo. Adopt src/md2okf/ + tests/ + pytest when real Python code lands
-# (see the README Development section).
+# No [build-system]: web2md is a single module run by path (`make scrape`), not a
+# distributable package. pytest imports it via `pythonpath` below, so there is no
+# install step and no first-party package to build.
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+testpaths = ["web2md/tests"]
+pythonpath = ["web2md/src"]
+
 [tool.ruff]
 target-version = "py312"
+line-length = 100
+
+# These rules are what makes the Python review instructions in .coderabbit.yaml
+# enforceable rather than advisory: pycodestyle/pyflakes (E, W, F), import order
+# (I), modern syntax (UP), likely bugs including mutable default arguments (B),
+# needless complexity (SIM, C4, RET), pytest idioms (PT), and docstrings (D).
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "RET", "PT", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# A test's name is its documentation; a docstring on each of them would be noise.
+# Fixtures and helpers are still expected to explain themselves.
+"web2md/tests/*" = ["D100", "D103"]

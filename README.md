@@ -277,6 +277,7 @@ by name so it survives the `okf/*` rule in `.gitignore`.
 
 ```bash
 make lint       # markdownlint, shellcheck, ruff, hadolint
+make test       # pytest, the web2md scraper suite
 make validate   # check pi/sandbox/spec.yaml against the Sandbox Kit schema
 make lint-okf   # lint the generated wiki
 ```
@@ -299,10 +300,18 @@ Once a sandbox exists, this should print `proxy-managed` rather than your key:
 sbx exec pi-kit -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
-Python tooling is thin. A `dev` dependency group holds ruff and nothing else,
-and there is no first-party package yet. When real Python code lands, adopt
-`src/md2okf/` and `tests/` with pytest, add a `make test` target and switch on
-the reserved `test` job in CI.
+Python tooling is thin and split across three dependency groups: `dev` (ruff),
+`test` (pytest) and `web2md` (the scraper's four runtime deps). CI installs one
+group per job with `--only-group`, so neither the lint job nor the test job ever
+pulls in the heavy project dependencies (marker-pdf / torch).
+
+The only first-party Python is the web2md scraper, which follows a per-tool
+layout: the module in [web2md/src/](web2md/src/), its pytest suite in
+[web2md/tests/](web2md/tests/). There is no `[build-system]` and nothing is
+installed — `make scrape` runs the module by path, and pytest imports it through
+`pythonpath` in `pyproject.toml`. `make test` runs the suite, and CI runs the
+same command in its `test` job. The suite is offline, so it needs no network and
+never touches `web2md/cache/`.
 
 ## Starting from a PDF
 
@@ -312,3 +321,24 @@ model or a cloud model through OpenRouter. Expect to check its output:
 `prettier`, `markdownlint-cli2` and `cspell` catch most of what it gets wrong,
 but none of this runs unattended. [pdf2md/README.md](pdf2md/README.md) has the
 commands.
+
+## Starting from a website
+
+When the source is a documentation site rather than a file, `make scrape` walks
+it and writes one Markdown document into `md/`. Unlike the PDF step this is
+deterministic — no model involved — and it caches the fetched HTML under
+`web2md/cache/`, so re-running is cheap and `--refresh` is what goes back to the
+network.
+
+Which book it fetches and what the result is called are two constants at the top
+of [web2md/src/web2md.py](web2md/src/web2md.py):
+
+```python
+SOURCE_URL = "https://developers.google.com/style"
+OUTPUT_FILE = "GoogleStyleGuide.md"
+```
+
+Everything URL-shaped in the scraper is derived from `SOURCE_URL`, so retargeting
+it is a one-line edit — though the HTML selectors and sanity thresholds describe
+this particular book and would need revisiting.
+[web2md/README.md](web2md/README.md) has the details.

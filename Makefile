@@ -13,12 +13,16 @@
 #   HADOLINT      hadolint launcher. Local: the brew-installed command. CI: a
 #                 pinned binary downloaded to PATH (see ci.yml), so the default
 #                 works there too. Config lives in .hadolint.yaml.
+#   PYTEST        pytest launcher. Local: `uv run --group test --group web2md`
+#                 (uses the full project venv). CI: the same groups via
+#                 `--only-group`, which drops the project deps — no marker-pdf.
 MARKDOWNLINT ?= markdownlint-cli2
 RUFF ?= uv run ruff
 HADOLINT ?= hadolint
+PYTEST ?= uv run --group test --group web2md pytest
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate wiki-container wiki-sandbox
+.PHONY: lint lint-okf validate test wiki-container wiki-sandbox scrape
 
 # Lint tracked Markdown, shell, Python, and the container Dockerfile. One
 # Markdown glob per runtime so deleting a runtime is a one-line removal. The
@@ -28,6 +32,7 @@ lint:
 	$(MARKDOWNLINT) \
 		"README.md" \
 		"pdf2md/README.md" \
+		"web2md/README.md" \
 		"AGENTS.md" \
 		"pi/container/agent/**/*.md" \
 		"pi/sandbox/files/home/.pi/agent/**/*.md"
@@ -49,6 +54,12 @@ lint-okf:
 validate:
 	./scripts/validate-spec.sh
 
+# Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
+# httpx.MockTransport, so no test opens a socket. Config is in pyproject.toml,
+# which also puts web2md/src/ on the import path.
+test:
+	$(PYTEST)
+
 # Compile the OKF wiki with the containerised Pi runtime (Docker Compose).
 wiki-container:
 	./scripts/compile-wiki-container.sh
@@ -56,3 +67,7 @@ wiki-container:
 # Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
 wiki-sandbox:
 	./scripts/compile-wiki-sandbox.sh
+
+# Fetch the website into md/ as one file.
+scrape:
+	uv run --group web2md python web2md/src/web2md.py

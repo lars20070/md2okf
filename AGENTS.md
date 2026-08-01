@@ -19,6 +19,16 @@ including the runtime agent configs. `pdf2md/` is the optional upstream step
 that turns a PDF into Markdown with `marker`; it is manual and not wired into
 the `make` pipeline.
 
+`web2md/` is the other upstream step: a deterministic scraper that fetches a
+website into a single file under `md/`, driven by `make scrape`. Which site and
+which output filename live in two constants at the top of `web2md/src/web2md.py`
+(`SOURCE_URL`, `OUTPUT_FILE`). It is the only
+first-party Python in the repo — module in `web2md/src/`, pytest suite in
+`web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
+`[build-system]`: the module is run by path and pytest imports it via
+`pythonpath` in `pyproject.toml`. Run `make test` after touching either
+directory; the suite is offline and needs no network.
+
 There are **two independent Pi runtimes**, each self-contained and carrying its
 **own copy** of the Pi config (`AGENTS.md`, `settings.json`, `models.json`,
 `skills/`):
@@ -52,9 +62,11 @@ one today, `compile-wiki`. A new task gets a new skill, not more rules in
 
 ```bash
 make lint            # markdownlint + shellcheck + ruff + hadolint (default goal)
+make test            # pytest, the web2md scraper suite (offline)
 make validate        # validate the sandbox kit spec (runs scripts/validate-spec.sh)
 make wiki-sandbox    # compile the OKF wiki via the sandbox runtime (preferred)
 make wiki-container  # compile the OKF wiki via the container runtime
+make scrape          # fetch the website into md/ as one file (web2md)
 make lint-okf        # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ```
 

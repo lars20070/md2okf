@@ -35,6 +35,7 @@ reviews:
     - "!md/**"
     - "!okf/**/*.md"
     - "!pdf2md/**"
+    - "!.cursor/mcp.json"
   path_instructions:
     - path: "**/*.sh"
       instructions: |
@@ -82,6 +83,25 @@ reviews:
         style: flag commands, paths, options, and examples that this change has
         made wrong or stale, and instructions that contradict each other. Do
         not raise wording, grammar, or line-length nitpicks.
+    - path: "**/*.py"
+      instructions: |
+        Review Python code for:
+        - PEP 8, type hints, docstrings, error handling, and performance. Flag mutable default arguments.
+        - Blocking calls inside async functions (use asyncio equivalents)
+        - API keys or secrets accidentally logged or exposed in error messages
+        - Missing context managers for network/file resources
+        - Unbounded retries or missing timeouts on external calls
+        - User-controlled strings passed unsanitized to shell commands or LLM prompts
+    - path: "**/tests/**/*.py"
+      instructions: |
+        Review test code for:
+        - Check pytest best practices, fixture usage, test isolation, and edge case coverage.
+        - Async test functions must have @pytest.mark.asyncio decorator
+        - Tests creating files/directories must have cleanup fixtures
+        - Prefer tmp_path over manual temp directories, and monkeypatch over
+          direct mutation of module state, so tests stay isolated.
+        - Tests must not perform real network I/O; HTTP belongs behind
+          httpx.MockTransport.
   auto_review:
     enabled: true
     auto_incremental_review: true
@@ -89,12 +109,13 @@ reviews:
       - "DO NOT REVIEW"
       - "WIP"
     drafts: false
-  # No source package and no test suite to generate these for.
+  # The web2md scraper (web2md/src/) and its pytest suite (web2md/tests/) are the
+  # only first-party code here.
   finishing_touches:
     docstrings:
-      enabled: false
+      enabled: true
     unit_tests:
-      enabled: false
+      enabled: true
   pre_merge_checks:
     docstrings:
       mode: "off"
