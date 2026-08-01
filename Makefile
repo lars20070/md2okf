@@ -60,4 +60,4 @@ wiki-sandbox:
 
 # Fetch the Google developer documentation style guide into md/ as one file.
 style-guide:
-	uv run --group web2md python web2md/google_style_guide.py
+	uv run --group web2md python web2md/web2md.py

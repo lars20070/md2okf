@@ -19,8 +19,8 @@ uv sync --group web2md
 make style-guide
 
 # Or call the module directly:
-uv run --group web2md python web2md/google_style_guide.py
-uv run --group web2md python web2md/google_style_guide.py --refresh
+uv run --group web2md python web2md/web2md.py
+uv run --group web2md python web2md/web2md.py --refresh
 ```
 
 ## Markdown linting

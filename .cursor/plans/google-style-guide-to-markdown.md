@@ -146,7 +146,7 @@ place to confirm it.
 
 ## Changes
 
-### `web2md/google_style_guide.py` (new)
+### `web2md/web2md.py` (new)
 
 One module, argparse CLI, six stages. DevSite-specific selectors live in
 constants at the top so pointing it at another DevSite book is a config change.
@@ -154,16 +154,24 @@ constants at the top so pointing it at another DevSite book is a config change.
 ```python
 BASE = "https://developers.google.com"
 BOOK = f"{BASE}/style"
-LOCALE = {"hl": "en"}          # pin the locale; the page honours ?hl=en
+LOCALE = {"hl": "en"}  # pin the locale; the page honours ?hl=en
 UA = "md2okf-web2md/0.1 (+https://github.com/<owner>/md2okf)"
 NAV = ".devsite-book-nav-wrapper"
 BODY = "div.devsite-article-body"
 DROP = (
-    "devsite-key-takeaways-panel", "devsite-recommendations",
-    "devsite-feedback", "devsite-thumb-rating", "devsite-toc",
-    ".devsite-rating-container", ".devsite-content-footer",
-    ".material-icons", "[aria-hidden=true]",
-    "script", "style", "noscript", "iframe",
+    "devsite-key-takeaways-panel",
+    "devsite-recommendations",
+    "devsite-feedback",
+    "devsite-thumb-rating",
+    "devsite-toc",
+    ".devsite-rating-container",
+    ".devsite-content-footer",
+    ".material-icons",
+    "[aria-hidden=true]",
+    "script",
+    "style",
+    "noscript",
+    "iframe",
 )
 ```
 
@@ -245,7 +253,7 @@ web2md = [
 ]
 ```
 
-Run it as `uv run --group web2md python web2md/google_style_guide.py`. `pyyaml`
+Run it as `uv run --group web2md python web2md/web2md.py`. `pyyaml`
 from the old plan is not needed.
 
 ### `Makefile`
@@ -256,7 +264,7 @@ from the old plan is not needed.
 ```make
 # Fetch the Google developer documentation style guide into md/ as one file.
 style-guide:
-	uv run --group web2md python web2md/google_style_guide.py
+	uv run --group web2md python web2md/web2md.py
 ```
 
 `ruff check .` already covers the new module.
