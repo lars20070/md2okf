@@ -2523,6 +2523,7 @@ This guide is *not* intended to do the following:
 
 > [!NOTE]
 > **Note**: Two disclaimers:
+>
 > - The guidance in this style guide doesn't limit the changes that Google can
 >   make to its documentation.
 > - If you don't read a given guideline, then you are still responsible for
@@ -7444,6 +7445,7 @@ unambiguous.
   | If the VM has started and if you're able to connect... | If the VM has started and you're able to connect... |
   | The resource hierarchy design creates both IAM segmentation and network segmentation by default. | The resource hierarchy design creates both IAM and network segmentation by default. |
   | An egress rule whose action is `allow`, whose destination is `0.0.0.0/0`, and whose priority is the lowest possible (`65535`). | An egress rule whose action is `allow`, destination is `0.0.0.0/0`, and priority is the lowest possible (`65535`). |
+
 - Use helper words. Helper words such as *then*, *that*, and *of*
   are frequently left out of conversational English. Use these words to avoid ambiguity.
 
@@ -10105,12 +10107,12 @@ Recommended:
 We use your feedback to improve the Animals API, in accordance with Example
 Pet Store's Privacy Policy:
 
-http://www.examplepetstore.com/privacy/
+<http://www.examplepetstore.com/privacy/>
 
 Not recommended:
 
 We use your feedback to improve the Animals API, in accordance with Example
-Pet Store's Privacy Policy at http://www.examplepetstore.com/privacy/.
+Pet Store's Privacy Policy at <http://www.examplepetstore.com/privacy/>.
 
 When you do put a period after a URL, don't leave any space between the last character of
 the URL and the period.
@@ -10416,8 +10418,6 @@ Not recommended: For example, a disaster
 relief map is not subject to the usage limits even if it has been
 developed/hosted by a commercial entity.
 
-  
-
 Recommended: Call this method five or six
 times.
 
@@ -10438,8 +10438,6 @@ and edit your own data.
 Not recommended: You can
 view and/or edit your own data.
 
-  
-
 Recommended: You can
 export raw events, processed events, or both.
 
@@ -10458,13 +10456,13 @@ Use forward slashes, as appropriate, in computer file paths and URLs.
 > **Note**: If you're documenting a Windows path, use backslashes.
 
 Recommended:
-https://developers.google.com/cardboard/
+<https://developers.google.com/cardboard/>
 
 Where very long URLs extend beyond a line, add a line break immediately after
 a slash. Don't ever insert an extraneous hyphen into a URL to break it between two lines.
 
 Recommended:
-https://developers.google.com/
+<https://developers.google.com/>
   
 cardboard/
 
@@ -10692,7 +10690,7 @@ examples using *such as*, *for example*, or *like* in various ways.
 | --- | --- | --- |
 | Introduce a short-to-medium-length example at the end of a sentence. For clarity, consider setting off the example using a comma, parentheses, or an em dash as appropriate. Avoid using a semicolon for this purpose. | Choose a strong encryption algorithm, such as AES-256.  You can monitor various metrics for your managed database instances—for example, CPU utilization, storage capacity, and active connections.  The API supports common image formats like PNG and JPEG. | Enter a name for the instance, for example, `my-instance-99`.  Specify the region for deployment; for example, `us-central1`.  Enter a name for the instance (for example, `my-instance-99`). |
 | Introduce a short example in the middle of a sentence. Keep the example in the middle of a sentence relatively short and consider setting it off with dashes, commas, or parentheses as appropriate. | Enter a six-digit hex number (for example, `228B22`), and then click **OK**.  The virtual machine (VM) requires an operating system, such as Ubuntu 22.04, to be installed.  Some elements, like buttons and input fields, have default accessibility attributes. | Enter a six-digit hex number (for example, if you want the color forest green, enter `228B22`), and then click **OK**. |
-| Introduce a longer example as a separate sentence. For a longer example, introduce it as a separate sentence using *for example* as an adverb in that sentence. | You can assign tags to your virtual machine instances to categorize them. For example, you could tag instances by environment with `env:prod` or `env:dev`. |  |
+| Introduce a longer example as a separate sentence. For a longer example, introduce it as a separate sentence using *for example* as an adverb in that sentence. | You can assign tags to your virtual machine instances to categorize them. For example, you could tag instances by environment with `env:prod` or `env:dev`. | |
 
 ---
 
@@ -10783,7 +10781,6 @@ ecommerce application:
 
 <a id="images--bounded"></a>
 ![Bounded contexts are applied to an application.](https://cloud.google.com/architecture/images/microservices-architecture-refactoring-monoliths-bounded-contexts.svg)
-
 
 **Figure 1**. Application capabilities are separated into bounded contexts that
 migrate to services.
@@ -11378,6 +11375,7 @@ that applies to standard text also applies to headings—for example,
 
   ### Estimate costs
   ```
+
 - **Don't use empty headings**. Make sure headings are followed by content.
 
   Recommended:
@@ -12128,19 +12126,13 @@ rules.</aside>
 > **Note**: All VPC networks include firewall
 > rules.
 
-
-
 > [!CAUTION]
 > **Caution**: We don't recommend using a subnet that's part of a dynamic
 > route.
 
-
-
 > [!WARNING]
 > **Warning**: Do not manually edit or delete generated
 > table entries.
-
-
 
 > [!TIP]
 > **Success**: You've successfully created a Compute Engine instance.
@@ -12913,10 +12905,10 @@ Recommended:
 | Guidance | Recommended | Not recommended |
 | --- | --- | --- |
 | Make sure that the first sentence in a procedural step includes an imperative verb. | Clone the repository that contains the sample data. | You need the project ID later in this document. Retrieve the project ID. |
-| Use complete sentences. |  |  |
+| Use complete sentences. | | |
 | Use parallel structure and consistent verb form. | Download the service account key to your local machine. Click **More**, and then click **Download**. | Download the service account key to your local machine by clicking **More** and then clicking **Download** file. |
 | For an optional step, type *Optional:* as the first word of the step. | Optional: Type an arbitrary string... | (Optional) Type an arbitrary string... |
-| Set the context (such as a tool or an environment) in which the reader performs a procedure.  If there are multiple headings associated with a set of procedures, restate the context of the procedure in the first step, even if the context is the same as in the previous procedure. | In Cloud Shell, connect to the development cluster.  In the Google Cloud console, go to the **BigQuery** page. |  |
+| Set the context (such as a tool or an environment) in which the reader performs a procedure.  If there are multiple headings associated with a set of procedures, restate the context of the procedure in the first step, even if the context is the same as in the previous procedure. | In Cloud Shell, connect to the development cluster.  In the Google Cloud console, go to the **BigQuery** page. | |
 | Write in the order that the reader needs to follow. State the location of the action before stating the action. | In Google Docs, click **File > New > Document**.  In the Google Cloud console, go to the **Monitoring** page. | Click **File > New > Document** in Google Docs.  Go to the **Monitoring** page in the Google Cloud console. |
 | State the purpose or goal of the action before stating the action. | To start a new document, click **File > New > Document**. | Click **File > New > Document** to start a new document. |
 | Don't use directional language to orient the reader, such as *above*, *below*, or *right-hand side*. This type of language doesn't work well for accessibility or for localization. If a UI element is hard to find, provide a screenshot.  For information about documenting icons, see [Buttons and icons](#ui-elements--buttons). | Click **Menu**.  In the preceding diagram,...  In the following diagram,... | Click the button with three lines.  In the above diagram, ...  In the diagram below, ... |
@@ -12924,12 +12916,12 @@ Recommended:
 | Avoid using *run the following command* to introduce code. Instead, focus on what the command does. | In Cloud Shell, deploy the load generator:...  Define a firewall rule to allow internal traffic:... | In Cloud Shell, deploy the load generator by running the following command:...  Run the following command:... |
 | If the reader must press **Enter** after a step, then include that instruction as part of the step. | Click the search box, type `custom function`, and then press **Enter**. | 1. Click the search box and type `custom function`. 2. Press **Enter**. |
 | Don't include keyboard shortcuts. | Copy the command, and then paste it... | Press Ctrl+C, and then press Ctrl+V... |
-| When there's more than one way to do something, give only the best way. Giving alternate ways can confuse readers. |  |  |
-| If your procedure includes code samples, see how to format  [code samples](#code-samples). |  |  |
-| If your procedure includes commands, see how to format  [commands](#code-syntax--formatting-a-command). |  |  |
-| Ensure that the reader has the information that they need in order to prepare for the task ahead of time. Having information in advance supports task management, executive functioning, memory, and emotional regulation. | The following hardware and software are required:... |  |
-| Include as few steps as possible to complete the task. Limit interruptions in the path. |  |  |
-| Focus on one reader decision at a time. Separate each instruction by making each instruction a separate list item. |  |  |
+| When there's more than one way to do something, give only the best way. Giving alternate ways can confuse readers. | | |
+| If your procedure includes code samples, see how to format  [code samples](#code-samples). | | |
+| If your procedure includes commands, see how to format  [commands](#code-syntax--formatting-a-command). | | |
+| Ensure that the reader has the information that they need in order to prepare for the task ahead of time. Having information in advance supports task management, executive functioning, memory, and emotional regulation. | The following hardware and software are required:... | |
+| Include as few steps as possible to complete the task. Limit interruptions in the path. | | |
+| Focus on one reader decision at a time. Separate each instruction by making each instruction a separate list item. | | |
 
 ---
 
@@ -13588,6 +13580,7 @@ then provide that context. The following are a few such situations:
   ```
     <a href="mailto:support@example.com">send email to Technical Support</a>
   ```
+
 - **Links to sections on the same page.** When you're
   linking to another section on the same page, let the reader know that the link
   takes you to a different section of the same page. Use a standard phrase to clue
@@ -14086,7 +14079,7 @@ list:
 | --- | --- |
 | Attribute names and values | The `imageURL` attribute contains the path for the image file that you can open in a browser—for example, `https://www.example.com/images/product.jpg`.  You can create a VM instance using the `e2-highcpu-16` machine type in the `us-central1-a` region. |
 | Class names | The `SnapshotDiskOperator` class includes the `generate_snapshot_name` method. |
-| Command output | The output is similar to the following:     ```         Found sysprep-specialize-script-ps1 in metadata.         ...         Finished running specialize scripts.          ``` |
+| Command output | The output is similar to the following:     ```Found sysprep-specialize-script-ps1 in metadata.         ...         Finished running specialize scripts.``` |
 | [Command-line utility names](https://developers.google.com/style/code-in-text#tool-names), such as `gcloud`, `gsutil`, `kubectl`, and `bq` | You can use the `kubectl` tool to define a network policy. |
 | Data types | Nested data is represented as a `STRUCT` type. |
 | Database elements (such as row and column names) | The query extracts the `month`, `julianday`, and `dayofweek` values from the `datetime` and `timestamp` columns. |
@@ -14129,8 +14122,8 @@ or as a code entity like an attribute or value, then use code font.
 | Item | Recommended |
 | --- | --- |
 | Domain names | The test environment is designed only for standard application offerings from example.com. |
-|<a id="code-in-text--u0023tool-names"></a> Names of products, services, and organizations | Example Organization has current and former employees who use Google products such as Google Docs and Google Sheets. |
-| URLs that the reader is supposed to follow in a browser | You can find support at https://support.example.com.  It's usually best to format a URL as a link and use descriptive link text instead of exposing the URL itself. For more information, see [Avoid URLs as link text](#cross-references--urls). |
+| <a id="code-in-text--u0023tool-names"></a> Names of products, services, and organizations | Example Organization has current and former employees who use Google products such as Google Docs and Google Sheets. |
+| URLs that the reader is supposed to follow in a browser | You can find support at <https://support.example.com>.  It's usually best to format a URL as a link and use descriptive link text instead of exposing the URL itself. For more information, see [Avoid URLs as link text](#cross-references--urls). |
 
 <a id="code-in-text--code-in-ui"></a>
 
@@ -14316,6 +14309,7 @@ To link to a class or method:
   ```
   <a href="/reference/android/widget/TextView">TextView</a>
   ```
+
 - To link to a method, use the method name as a fragment identifier. If
   you're linking to a static method, also include the class name in the link
   text. If you need to distinguish between overloaded versions of a particular
@@ -14324,6 +14318,7 @@ To link to a class or method:
   ```
   <a href="/reference/android/app/Activity.html#onCreate(android.os.Bundle)">onCreate(Bundle)</a>
   ```
+
 - To link the attribute for a particular widget or layout to its Javadoc
   in the widget or layout's API reference entry, use the URL for the page, and
   then add the fragment identifier
@@ -14492,6 +14487,7 @@ following best practices:
   ```
   gcloud compute ssh
   ```
+
 - **Determine which arguments are needed to complete each task in the recommended way**.
   To minimize the number of options that you need to document in non-reference content, use as
   few optional arguments as possible. Rely on the command reference for the complete list of
@@ -14570,7 +14566,7 @@ Recommended:
 Enter the following code into the terminal:
 
 ```
-$ adb devices
+adb devices
 ```
 
 The output is the following:
@@ -14601,7 +14597,7 @@ lines, we recommend using separate code blocks for input and output.
 Recommended:
 
 ```
-$ cat ~/.ssh/my-ssh-key.pub
+cat ~/.ssh/my-ssh-key.pub
 ```
 
 The output is similar to the following:
@@ -14735,6 +14731,7 @@ commands. Instead, choose one of the following approaches:
       --source-file=SOURCE_FILE \
       --byol
   ```
+
 - **Document optional arguments in separate tasks**. In some cases, it might be best to
   treat different options in separate sections.
 
@@ -14768,6 +14765,7 @@ commands. Instead, choose one of the following approaches:
       --source-file=SOURCE_FILE \
       --data-disk
   ```
+
 - **Let the reader know that the command contains optional arguments**. If you must
   include special characters to indicate optional arguments, indicate that fact when you
   introduce the command.
@@ -15044,6 +15042,7 @@ If your sample code and command placeholders occur in a sentence, use the follow
   ```
   <code><var>PLACEHOLDER_NAME</var></code>
   ```
+
 - In Markdown, wrap inline placeholders in backticks (`), and use an
   asterisk (*) before the first backtick and after the second one
   (`` *`PLACEHOLDER_NAME`* ``).
@@ -15076,12 +15075,15 @@ If your placeholders are in a block of code, use the following formatting:
         </pre>
         
   ```
+
 - In Markdown, wrap the code block in a code fence (\`\`\`). Inside a
   code fence, you can't apply formatting like bold or italic.
 
   ```
   ```
+
   PLACEHOLDER_NAME
+
   ```
   ```
 
@@ -15194,6 +15196,7 @@ Use the following format for two or more placeholders:
   ```
   <li><code><var>INSTANCE_NAME</var></code>: description</li>
   ```
+
 - If the description contains an example, introduce it with an *em dash* or
   *such as*—for example:
 
@@ -15204,6 +15207,7 @@ Use the following format for two or more placeholders:
   ```
   <li><code><var>INSTANCE_NAME</var></code>: description, such as...</li>
   ```
+
 - Each item in the list follows our [list style](#lists).
 
 Recommended:
@@ -15265,6 +15269,7 @@ sample output:
   ```
   <li><code><var>INSTANCE_NAME</var></code>: description</li>
   ```
+
 - If the description contains an example, introduce it with an *em dash* or
   *such as*—for example:
 
@@ -16131,7 +16136,7 @@ If you need a generic email address, use one of the domains listed
 in
 [Example domain names](#examples--example-domain-names)
 and one of the names listed in [Example person names](#examples--example-person-names)—for
-example, dana@example.com. It's OK to use generic addresses like support@example.net. Don't use
+example, <dana@example.com>. It's OK to use generic addresses like <support@example.net>. Don't use
 person names, product names, or made-up names in email addresses.
 
 <a id="examples--names"></a>
