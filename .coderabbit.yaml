@@ -36,6 +36,8 @@ reviews:
     - "!okf/**/*.md"
     - "!pdf2md/**"
     - "!.cursor/mcp.json"
+    - "!.cursor/plans/**"
+    - "!.claude/plans/**"
   path_instructions:
     - path: "**/*.sh"
       instructions: |
