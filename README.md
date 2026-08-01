@@ -335,7 +335,7 @@ of [web2md/src/web2md.py](web2md/src/web2md.py):
 
 ```python
 SOURCE_URL = "https://developers.google.com/style"
-OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+OUTPUT_FILE = "GoogleStyleGuide.md"
 ```
 
 Everything URL-shaped in the scraper is derived from `SOURCE_URL`, so retargeting

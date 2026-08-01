@@ -22,7 +22,7 @@ from markdownify import ATX, MarkdownConverter
 # it produces under md/. Everything URL-shaped below is derived from SOURCE_URL,
 # so pointing the script at another website is a one-line change here.
 SOURCE_URL = "https://developers.google.com/style"
-OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+OUTPUT_FILE = "GoogleStyleGuide.md"
 
 _SOURCE = urlparse(SOURCE_URL)
 HOST = _SOURCE.netloc                                   # developers.google.com

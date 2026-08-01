@@ -17,7 +17,7 @@ import web2md
 
 def test_source_url_and_output_file_are_the_current_book() -> None:
     assert web2md.SOURCE_URL == "https://developers.google.com/style"
-    assert web2md.OUTPUT_FILE == "GoogleDeveloperDocumentationStyleGuide.md"
+    assert web2md.OUTPUT_FILE == "GoogleStyleGuide.md"
 
 
 def test_host_base_and_book_path_derive_from_source_url() -> None:

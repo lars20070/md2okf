@@ -16,7 +16,7 @@ pointing the scraper somewhere else:
 
 ```python
 SOURCE_URL = "https://developers.google.com/style"
-OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+OUTPUT_FILE = "GoogleStyleGuide.md"
 ```
 
 `SOURCE_URL` is the book's landing page. The host, the site base URL, and the
@@ -75,11 +75,11 @@ The generated file under `md/` can be checked manually with the same tools as
 `pdf2md`. The filename below is the current `OUTPUT_FILE`:
 
 ```bash
-prettier --check md/GoogleDeveloperDocumentationStyleGuide.md
-prettier --write md/GoogleDeveloperDocumentationStyleGuide.md  # Edits in place!
+prettier --check md/GoogleStyleGuide.md
+prettier --write md/GoogleStyleGuide.md  # Edits in place!
 
-markdownlint-cli2 md/GoogleDeveloperDocumentationStyleGuide.md
-markdownlint-cli2 --fix md/GoogleDeveloperDocumentationStyleGuide.md  # Edits in place!
+markdownlint-cli2 md/GoogleStyleGuide.md
+markdownlint-cli2 --fix md/GoogleStyleGuide.md  # Edits in place!
 
-cspell md/GoogleDeveloperDocumentationStyleGuide.md
+cspell md/GoogleStyleGuide.md
 ```

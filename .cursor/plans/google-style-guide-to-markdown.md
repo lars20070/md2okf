@@ -132,7 +132,7 @@ place to confirm it.
 
 ## Decisions
 
-- **One output file**, `md/GoogleDeveloperDocumentationStyleGuide.md`, matching
+- **One output file**, `md/GoogleStyleGuide.md`, matching
   the existing `md/TheEconomistStyleGuide2023.md` naming.
 - **New `web2md/` directory**, mirroring `pdf2md/`: one Python module plus a
   README, wired into `make lint` and a `make` target.
@@ -296,9 +296,9 @@ In-script, exiting non-zero on failure:
 Then, by hand on the host, the `pdf2md` chain:
 
 ```bash
-prettier --check md/GoogleDeveloperDocumentationStyleGuide.md
-markdownlint-cli2 md/GoogleDeveloperDocumentationStyleGuide.md
-cspell md/GoogleDeveloperDocumentationStyleGuide.md
+prettier --check md/GoogleStyleGuide.md
+markdownlint-cli2 md/GoogleStyleGuide.md
+cspell md/GoogleStyleGuide.md
 ```
 
 Finish with `make lint`, and a `make wiki-sandbox` run to confirm the file works
