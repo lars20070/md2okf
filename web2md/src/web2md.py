@@ -18,8 +18,18 @@ import httpx
 from bs4 import BeautifulSoup, NavigableString, Tag
 from markdownify import ATX, MarkdownConverter
 
-BASE = "https://developers.google.com"
-BOOK = f"{BASE}/style"
+# The two knobs for this scraper: which website to fetch, and what to call the file
+# it produces under md/. Everything URL-shaped below is derived from SOURCE_URL,
+# so pointing the script at another website is a one-line change here.
+SOURCE_URL = "https://developers.google.com/style"
+OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+
+_SOURCE = urlparse(SOURCE_URL)
+HOST = _SOURCE.netloc                                   # developers.google.com
+BASE = f"{_SOURCE.scheme}://{HOST}"                     # https://developers.google.com
+BOOK_PATH = _SOURCE.path.rstrip("/") or "/"             # /style
+BOOK_SLUG = BOOK_PATH.strip("/").rsplit("/", 1)[-1] or "index"  # style
+
 LOCALE = {"hl": "en"}
 UA = "md2okf-web2md/0.1 (+https://github.com/lars20070/md2okf)"
 NAV = ".devsite-book-nav-wrapper"
@@ -62,7 +72,7 @@ SIZE_MAX = 1.2 * 1024 * 1024
 # web2md/ — the module itself lives one level down, in web2md/src/.
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE = ROOT / "cache"
-DEFAULT_OUTPUT = ROOT.parent / "md" / "GoogleDeveloperDocumentationStyleGuide.md"
+DEFAULT_OUTPUT = ROOT.parent / "md" / OUTPUT_FILE
 
 _SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]")
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((#[^)]+)\)")
@@ -89,9 +99,9 @@ class Page:
 
 
 def slug_from_path(path: str) -> str:
-    """Derive a page slug from its URL path; the book root becomes "style"."""
-    rest = path.removeprefix("/style").strip("/")
-    return rest or "style"
+    """Derive a page slug from its URL path; the book root becomes BOOK_SLUG."""
+    rest = path.removeprefix(BOOK_PATH).strip("/")
+    return rest or BOOK_SLUG
 
 
 def sanitize_id(raw: str) -> str:
@@ -152,13 +162,13 @@ def discover_pages(html: str) -> list[Page]:
         if link is None:
             continue
         href = link["href"].split("?")[0].split("#")[0]
-        if not href.startswith("/style"):
+        if not href.startswith(BOOK_PATH):
             continue
         full = urljoin(BASE, href)
         if full in seen:
             continue
         seen.add(full)
-        path = urlparse(full).path.rstrip("/") or "/style"
+        path = urlparse(full).path.rstrip("/") or BOOK_PATH
         pages.append(
             Page(
                 section=current_section,
@@ -335,22 +345,19 @@ def rewrite_internal_href(
         unresolved.append(f"{page.url} -> {href}")
         return absolutize_url(f"{page.path}#{fragment}")
 
-    # Absolute or site-relative /style/... links.
-    if parsed.netloc and parsed.netloc != "developers.google.com":
+    # Absolute or site-relative links into the book.
+    if parsed.netloc and parsed.netloc != HOST:
         return href
     if parsed.scheme and parsed.scheme not in ("http", "https"):
         return href
 
     path = parsed.path.rstrip("/") or "/"
-    if not path.startswith("/style"):
-        if href.startswith("/") or parsed.netloc == "developers.google.com":
+    if not path.startswith(BOOK_PATH):
+        if href.startswith("/") or parsed.netloc == HOST:
             return absolutize_url(href)
         return href
 
-    target_path = path if path != "/style" else "/style"
-    target_page = pages_by_path.get(target_path)
-    if target_page is None and target_path == "/style":
-        target_page = pages_by_path.get("/style")
+    target_page = pages_by_path.get(path)
 
     if fragment:
         if target_page is None:
@@ -551,14 +558,14 @@ def assemble(pages: list[Page], bodies: dict[str, str], timestamp: str) -> str:
         "type: Website",
         'title: "Google. Google Developer Documentation Style Guide."',
         'description: "Style guide for Google developer documentation"',
-        f"resource: {BOOK}",
+        f"resource: {SOURCE_URL}",
         "tags: [guide, Google]",
         f"timestamp: {timestamp}",
         "---",
         "",
         "# Google Developer Documentation Style Guide",
         "",
-        f"*Snapshot of [{BOOK}]({BOOK}) generated {timestamp[:10]}.*",
+        f"*Snapshot of [{SOURCE_URL}]({SOURCE_URL}) generated {timestamp[:10]}.*",
         "",
         build_toc(pages),
     ]
@@ -677,7 +684,7 @@ def run(*, refresh: bool, cache_dir: Path, output: Path) -> None:
         timeout=60.0,
     ) as client:
         index_html = fetch_html(
-            client, BOOK, cache_dir / "_index.html", refresh=refresh
+            client, SOURCE_URL, cache_dir / "_index.html", refresh=refresh
         )
         pages = discover_pages(index_html)
         pages_by_path = {p.path: p for p in pages}
@@ -734,7 +741,7 @@ def run(*, refresh: bool, cache_dir: Path, output: Path) -> None:
 def main(argv: list[str] | None = None) -> None:
     """Parse the command line and run the scrape."""
     parser = argparse.ArgumentParser(
-        description="Fetch developers.google.com/style into one Markdown file."
+        description=f"Fetch {SOURCE_URL} into one Markdown file."
     )
     parser.add_argument(
         "--refresh",

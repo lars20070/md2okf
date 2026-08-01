@@ -9,6 +9,27 @@ guide](https://developers.google.com/style). The output is one file under
 The result is a dated snapshot of a living document. Re-run with `--refresh` to
 update it.
 
+## What it fetches, and what it writes
+
+Two constants at the top of `src/web2md.py` are the only things to edit when
+pointing the scraper somewhere else:
+
+```python
+SOURCE_URL = "https://developers.google.com/style"
+OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+```
+
+`SOURCE_URL` is the book's landing page. The host, the site base URL, and the
+path prefix that decides which links count as in-book (`BOOK_PATH`) are all
+derived from it, so there is no second place to keep in step. `OUTPUT_FILE` is a
+bare filename; the scraper always writes it into `md/`, and `--output`
+overrides the whole path for a one-off run.
+
+Changing `SOURCE_URL` to a different book will need the DevSite selectors
+(`NAV`, `BODY`, `DROP`) and the sanity thresholds (page count, size band, and
+the `word-list` term count in `validate_output`) revisited — they describe this
+book, not the site in general.
+
 ## Layout
 
 | Path | Contents |
@@ -44,14 +65,14 @@ uv run --group test --group web2md pytest web2md/tests # the same, directly
 The suite is fully offline: HTTP is served by `httpx.MockTransport`, so no test
 opens a socket, and the only files written go to pytest's `tmp_path`. It covers
 the pure helpers (slugs, anchors, link rewriting, the Markdown converter,
-assembly, and every `validate_output` error branch), the fetch retry and caching
-logic, and one end-to-end `run()` over a synthetic 72-page site. CI runs it in
-the `test` job.
+assembly, and every `validate_output` error branch), the constants above and
+what is derived from them, the fetch retry and caching logic, and one end-to-end
+`run()` over a synthetic 72-page site. CI runs it in the `test` job.
 
 ## Markdown linting
 
 The generated file under `md/` can be checked manually with the same tools as
-`pdf2md`:
+`pdf2md`. The filename below is the current `OUTPUT_FILE`:
 
 ```bash
 prettier --check md/GoogleDeveloperDocumentationStyleGuide.md

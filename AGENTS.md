@@ -20,7 +20,9 @@ that turns a PDF into Markdown with `marker`; it is manual and not wired into
 the `make` pipeline.
 
 `web2md/` is the other upstream step: a deterministic scraper that fetches a
-website into a single file under `md/`, driven by `make scrape`. It is the only
+website into a single file under `md/`, driven by `make scrape`. Which site and
+which output filename live in two constants at the top of `web2md/src/web2md.py`
+(`SOURCE_URL`, `OUTPUT_FILE`). It is the only
 first-party Python in the repo — module in `web2md/src/`, pytest suite in
 `web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
 `[build-system]`: the module is run by path and pytest imports it via

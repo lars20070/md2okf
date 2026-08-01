@@ -19,9 +19,13 @@ def test_default_cache_sits_beside_the_src_directory() -> None:
 
 
 def test_default_output_goes_to_the_repo_level_md_directory() -> None:
-    assert web2md.DEFAULT_OUTPUT == (
-        REPO_ROOT / "md" / "GoogleDeveloperDocumentationStyleGuide.md"
-    )
+    assert web2md.DEFAULT_OUTPUT == REPO_ROOT / "md" / web2md.OUTPUT_FILE
+
+
+def test_output_file_is_a_bare_filename() -> None:
+    # DEFAULT_OUTPUT joins it onto md/, so a path here would escape that folder.
+    assert "/" not in web2md.OUTPUT_FILE
+    assert web2md.OUTPUT_FILE.endswith(".md")
 
 
 @pytest.fixture

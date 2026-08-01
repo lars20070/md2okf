@@ -321,3 +321,24 @@ model or a cloud model through OpenRouter. Expect to check its output:
 `prettier`, `markdownlint-cli2` and `cspell` catch most of what it gets wrong,
 but none of this runs unattended. [pdf2md/README.md](pdf2md/README.md) has the
 commands.
+
+## Starting from a website
+
+When the source is a documentation site rather than a file, `make scrape` walks
+it and writes one Markdown document into `md/`. Unlike the PDF step this is
+deterministic — no model involved — and it caches the fetched HTML under
+`web2md/cache/`, so re-running is cheap and `--refresh` is what goes back to the
+network.
+
+Which book it fetches and what the result is called are two constants at the top
+of [web2md/src/web2md.py](web2md/src/web2md.py):
+
+```python
+SOURCE_URL = "https://developers.google.com/style"
+OUTPUT_FILE = "GoogleDeveloperDocumentationStyleGuide.md"
+```
+
+Everything URL-shaped in the scraper is derived from `SOURCE_URL`, so retargeting
+it is a one-line edit — though the HTML selectors and sanity thresholds describe
+this particular book and would need revisiting.
+[web2md/README.md](web2md/README.md) has the details.

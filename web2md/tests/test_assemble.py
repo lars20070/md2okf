@@ -49,9 +49,10 @@ def test_assemble_writes_frontmatter_and_timestamp(
     assert lines[0] == "---"
     assert "type: Website" in lines
     assert f"timestamp: {TIMESTAMP}" in lines
-    assert f"resource: {web2md.BOOK}" in lines
+    assert f"resource: {web2md.SOURCE_URL}" in lines
     assert "# Google Developer Documentation Style Guide" in lines
-    assert f"*Snapshot of [{web2md.BOOK}]({web2md.BOOK}) generated 2026-08-01.*" in lines
+    snapshot = f"*Snapshot of [{web2md.SOURCE_URL}]({web2md.SOURCE_URL})"
+    assert f"{snapshot} generated 2026-08-01.*" in lines
 
 
 def test_assemble_emits_each_section_once_with_page_anchors(
