@@ -1,6 +1,13 @@
 # pdf2md
 
-Sometimes clean, structured Markdown files are not available, so they must be generated from PDFs. Full automation is difficult. The sections below explain how to use the `marker` tool and how to check the results with `prettier`, `markdownlint-cli2` and `cspell`.
+`md/` wants clean, structured Markdown, and a PDF is rarely that. `marker`
+converts one into the other with the help of a language model, either a local
+Ollama model or a cloud model through OpenRouter.
+
+Expect to check the output. `prettier`, `markdownlint-cli2` and `cspell` catch
+most of what marker gets wrong, but none of it runs unattended, and none of it
+is wired into `make`. This step is manual, and optional: it exists only to
+produce a file for `md/`, which `make wiki` then compiles.
 
 ## PDF to Markdown conversion
 
@@ -35,7 +42,7 @@ uv run marker_single pdf/example.pdf \
 
 ## Markdown linting
 
-The generated Markdown files under `md/` can be linted manually with the commands below.
+Check the generated files under `md/` by hand:
 
 ```bash
 # Check consistent formatting

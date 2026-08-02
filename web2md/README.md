@@ -1,13 +1,13 @@
 # web2md
 
-Sometimes clean, structured Markdown files are not available, so they must be
-fetched from a website and converted. This directory holds a deterministic
-scraper for the [Google developer documentation style
-guide](https://developers.google.com/style). The output is one file under
-`md/`, ready for `make wiki`.
+`md/` wants clean, structured Markdown. When the source is a documentation site
+rather than a file, this scraper walks it and writes one Markdown document into
+`md/`, ready for `make wiki`. It targets the [Google developer documentation
+style guide](https://developers.google.com/style).
 
-The result is a dated snapshot of a living document. Re-run with `--refresh` to
-update it.
+No language model is involved, so the result is deterministic — unlike the PDF
+step next door. It is a dated snapshot of a living document; re-run with
+`--refresh` to update it.
 
 ## What it fetches, and what it writes
 
@@ -22,13 +22,13 @@ OUTPUT_FILE = "GoogleStyleGuide.md"
 `SOURCE_URL` is the book's landing page. The host, the site base URL, and the
 path prefix that decides which links count as in-book (`BOOK_PATH`) are all
 derived from it, so there is no second place to keep in step. `OUTPUT_FILE` is a
-bare filename; the scraper always writes it into `md/`, and `--output`
-overrides the whole path for a one-off run.
+bare filename; the scraper always writes it into `md/`, and `--output` overrides
+the whole path for a one-off run.
 
-Changing `SOURCE_URL` to a different book will need the DevSite selectors
-(`NAV`, `BODY`, `DROP`) and the sanity thresholds (page count, size band, and
-the `word-list` term count in `validate_output`) revisited — they describe this
-book, not the site in general.
+Point `SOURCE_URL` at a different book and you will also need to revisit the
+DevSite selectors (`NAV`, `BODY`, `DROP`) and the sanity thresholds (page count,
+size band, and the `word-list` term count in `validate_output`). They describe
+this book, not the site in general.
 
 ## Layout
 
@@ -38,8 +38,9 @@ book, not the site in general.
 | `tests/` | the pytest suite (see below) |
 | `cache/` | fetched HTML, gitignored; reused unless you pass `--refresh` |
 
-There is no `[build-system]` and no installable package. pytest imports the
-module through `pythonpath = ["web2md/src"]` in the repo's `pyproject.toml`.
+This is the only first-party Python in the repo. There is no `[build-system]`
+and no installable package: `make scrape` runs the module by path, and pytest
+imports it through `pythonpath = ["web2md/src"]` in the repo's `pyproject.toml`.
 
 ## Fetch and convert
 
@@ -62,17 +63,18 @@ make test                                              # the whole suite
 uv run --group test --group web2md pytest web2md/tests # the same, directly
 ```
 
-The suite is fully offline: HTTP is served by `httpx.MockTransport`, so no test
-opens a socket, and the only files written go to pytest's `tmp_path`. It covers
-the pure helpers (slugs, anchors, link rewriting, the Markdown converter,
-assembly, and every `validate_output` error branch), the constants above and
-what is derived from them, the fetch retry and caching logic, and one end-to-end
-`run()` over a synthetic 72-page site. CI runs it in the `test` job.
+The suite is offline: HTTP is served by `httpx.MockTransport`, so no test opens
+a socket, and the only files written go to pytest's `tmp_path`. It never touches
+`web2md/cache/`. It covers the pure helpers (slugs, anchors, link rewriting, the
+Markdown converter, assembly, and every `validate_output` error branch), the
+constants above and what is derived from them, the fetch retry and caching
+logic, and one end-to-end `run()` over a synthetic 72-page site. CI runs it in
+the `test` job.
 
 ## Markdown linting
 
-The generated file under `md/` can be checked manually with the same tools as
-`pdf2md`. The filename below is the current `OUTPUT_FILE`:
+Check the generated file under `md/` by hand, with the same tools as `pdf2md`.
+The filename below is the current `OUTPUT_FILE`:
 
 ```bash
 prettier --check md/GoogleStyleGuide.md

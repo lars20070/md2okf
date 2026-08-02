@@ -27,6 +27,7 @@ lint:
 		"pdf2md/README.md" \
 		"web2md/README.md" \
 		"AGENTS.md" \
+		"pi/README.md" \
 		"pi/files/home/.pi/agent/**/*.md"
 	shellcheck \
 		scripts/*.sh \
