@@ -7,7 +7,7 @@ between them, and a log of what each run changed.
 
 OKF, the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf), is a tree of Markdown files with YAML
 frontmatter and nothing else. No schema registry, no server, nothing to install.
-`SPEC.md` at the repo root is the revision this wiki is built against. The agent
+`SPEC.md` at the repo root is the OKF specification this wiki is built against. The agent
 reads it at the start of every run, so the spec outranks anything written here.
 
 | Path | Description |
@@ -39,8 +39,7 @@ export OPENROUTER_API_KEY=sk-or-...
 
 echo "$OPENROUTER_API_KEY" | sbx secret set -g openrouter
 
-# And again as a custom secret, to work around a known sbx bug:
-# https://github.com/docker/sbx-releases/issues/25
+# And again as a custom secret, to work around a known sbx bug. https://github.com/docker/sbx-releases/issues/25
 sbx secret set-custom pi-kit \
   --host openrouter.ai \
   --env OPENROUTER_API_KEY \
