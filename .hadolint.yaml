@@ -1,4 +1,0 @@
-# hadolint config for pi/container/Dockerfile (run via `make lint`).
-
-ignored:
-  - DL3008

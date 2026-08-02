@@ -36,6 +36,8 @@ reviews:
     - "!okf/**/*.md"
     - "!pdf2md/**"
     - "!.cursor/mcp.json"
+    - "!.cursor/plans/**"
+    - "!.claude/plans/**"
   path_instructions:
     - path: "**/*.sh"
       instructions: |
@@ -45,22 +47,6 @@ reviews:
         directory, validate prerequisites early and exit non-zero with a clear
         message on stderr, clean up temporary resources with traps, keep
         secrets out of arguments and logs, and require ShellCheck-clean code.
-    - path: "**/Dockerfile"
-      instructions: |
-        Apply Dockerfile best practices: pin base images and dependencies, use
-        minimal images and multi-stage builds where useful, optimize layers and
-        remove package-manager caches, run as a non-root user, copy only needed
-        files, and never place secrets in build arguments, environment
-        variables, or layers. Keep the image compatible with read-only and
-        least-privilege runtime settings, and address Hadolint findings.
-    - path: "**/compose.yaml"
-      instructions: |
-        Apply Compose best practices: least privilege, non-root users, dropped
-        capabilities, no-new-privileges, read-only filesystems and mounts where
-        possible, explicit resource limits, and health checks when useful. Keep
-        secrets outside the file, fail fast on required variables, pin images,
-        and verify that relative paths resolve from the compose file's own
-        directory rather than the invoking directory.
     - path: "**/spec.yaml"
       instructions: |
         For Docker Sandbox Kit specs, treat schema conformance as load-bearing:
@@ -131,8 +117,6 @@ reviews:
   tools:
     shellcheck:
       enabled: true
-    hadolint:
-      enabled: true
     checkmake:
       enabled: true
     yamllint:
@@ -141,8 +125,6 @@ reviews:
       enabled: true
     markdownlint:
       enabled: true
-    # Secret, dependency, and infrastructure scanning: this repo handles an API
-    # key and builds a container image.
     gitleaks:
       enabled: true
     checkov:

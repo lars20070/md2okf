@@ -33,7 +33,7 @@ jobs:
   # lives in one place (the Makefile). markdownlint runs via npx (no global
   # install) and ruff runs from the dev group only, so this job never installs
   # the heavy project deps (marker-pdf / torch). shellcheck is pre-installed on
-  # ubuntu-latest; hadolint is downloaded as a pinned binary (step below).
+  # ubuntu-latest.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -50,17 +50,7 @@ jobs:
         with:
           enable-cache: true
 
-      # hadolint is not pre-installed on ubuntu-latest. Download a pinned binary
-      # to PATH so `make lint`'s default `hadolint` launcher works unchanged.
-      - name: Install hadolint
-        run: |
-          set -euo pipefail
-          sudo curl -fsSL -o /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/download/v2.14.0/hadolint-Linux-x86_64
-          sudo chmod +x /usr/local/bin/hadolint
-          hadolint --version
-
-      - name: Lint (markdownlint, shellcheck, ruff, hadolint)
+      - name: Lint (markdownlint, shellcheck, ruff)
         run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2' RUFF='uv run --only-group dev ruff'
 
   # Unit-test the web2md scraper. Reuses `make test` so the definition stays in
@@ -86,9 +76,8 @@ jobs:
       - name: Test (pytest)
         run: make test PYTEST='uv run --only-group test --only-group web2md pytest'
 
-  # Sandbox-only: validate pi/sandbox/spec.yaml against the current Sandbox Kit
-  # schema. Static check — no Docker or login; only the CLI download needs the
-  # network.
+  # Validate pi/spec.yaml against the current Sandbox Kit schema. Static check —
+  # no Docker or login; only the CLI download needs the network.
   validate-kit:
     runs-on: ubuntu-latest
     timeout-minutes: 10

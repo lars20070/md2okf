@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Validate the Pi Docker Sandbox Kit spec (pi/sandbox/spec.yaml) against the
+# Validate the Pi Docker Sandbox Kit spec (pi/spec.yaml) against the
 # current Sandbox Kit schema. Runs identically locally and in CI.
 #
 # `sbx kit validate` is a static schema check: no Docker, no `sbx login`, no
@@ -19,5 +19,5 @@ if ! command -v sbx >/dev/null 2>&1; then
 	exit 1
 fi
 
-echo "Validating ${repo_root}/pi/sandbox against the current Sandbox Kit schema..."
-exec sbx kit validate "${repo_root}/pi/sandbox/"
+echo "Validating ${repo_root}/pi against the current Sandbox Kit schema..."
+exec sbx kit validate "${repo_root}/pi/"

@@ -3,12 +3,11 @@ set -euo pipefail
 
 # Compile the OKF wiki with the SANDBOXED Pi runtime (Docker Sandbox / sbx).
 #
-# Usage: compile-wiki-sandbox.sh [md-folder]
+# Usage: compile-wiki.sh [md-folder]
 #   md-folder  source folder of *.md documents
 #              (default: md/)
 #
-# Self-contained: this driver shares no code with the container driver. Model
-# and provider come from the kit's own config (pi/sandbox/files/home/.pi/agent/
+# Model and provider come from the kit's own config (pi/files/home/.pi/agent/
 # settings.json + models.json), delivered to ~/.pi/agent/ in the VM — no
 # --provider/--model flags here. OPENROUTER_API_KEY is proxy-managed by sbx
 # (configured once via `sbx secret`, see README), so it is NOT required in the
@@ -18,7 +17,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 markdown_folder="${1:-md}"
-kit_name="pi-kit" # keyed to `name:` in pi/sandbox/spec.yaml and to sbx secrets
+kit_name="pi-kit" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
@@ -34,13 +33,13 @@ fi
 # Recreate the sandbox so the latest kit changes and secrets are applied, then
 # leave it running (detached) so we can exec one Pi run per document into it.
 sbx rm --force "${kit_name}" || true
-sbx run --detached --name "${kit_name}" --kit ./pi/sandbox/ "${kit_name}"
+sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 
 # Compile each document into okf/. Verified: `sbx exec` runs with the VM
 # workspace (the repo root) as its cwd, so a host path md/<...>.md is the same
 # relative path inside the VM and Pi resolves it directly.
 #
-# `</dev/null` is REQUIRED, not tidiness (the container driver needs it too).
+# `</dev/null` is REQUIRED, not tidiness.
 # `sbx exec` hands the guest process a pipe for stdin, and Pi's print mode reads
 # piped stdin to merge it into the prompt. Run from a terminal, that pipe never
 # reaches EOF, so Pi blocks before its first API call and the compile hangs
