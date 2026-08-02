@@ -10,6 +10,18 @@ frontmatter and nothing else. No schema registry, no server, nothing to install.
 `SPEC.md` at the repo root is the revision this wiki is built against. The agent
 reads it at the start of every run, so the spec outranks anything written here.
 
+| Path | Description |
+| --- | --- |
+| `md/` | source documents, one Pi run each |
+| `okf/` | the generated wiki |
+| `Makefile` | every task worth running; `make wiki` compiles |
+| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation |
+| `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
+| `SPEC.md` | the OKF specification the wiki is built against |
+| `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
+| `pdf2md/` | optional: converts a PDF into `md` |
+| `web2md/` | optional: scrapes a documentation site into `md` |
+
 ## Compile a wiki
 
 ### Set up, once
