@@ -5,7 +5,7 @@ an OKF knowledge base into `okf/`. It takes one source document per run and
 folds it into the wiki: a page per topic, an index in every directory, links
 between them, and a log of what each run changed.
 
-OKF, the Open Knowledge Format, is a tree of Markdown files with YAML
+OKF, the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf), is a tree of Markdown files with YAML
 frontmatter and nothing else. No schema registry, no server, nothing to install.
 `SPEC.md` at the repo root is the revision this wiki is built against. The agent
 reads it at the start of every run, so the spec outranks anything written here.
