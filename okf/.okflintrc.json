@@ -1,9 +1,14 @@
 {
   "rules": {
-    "recommended-description": "warning",
-    "recommended-log": "warning",
-    "recommended-timestamp": "off",
+    "recommended-title": "error",
+    "recommended-description": "error",
+    "recommended-timestamp": "error",
+    "timestamp-format": "error",
+    "tags-type": "error",
     "valid-links": "error",
-    "okf-version-declared": "error"
+    "prefer-absolute-links": "error",
+    "log-date-order": "error",
+    "okf-version-declared": "error",
+    "recommended-log": "error"
   }
 }
