@@ -15,13 +15,6 @@
       "headers": {
         "Authorization": "Bearer ${GITHUB_TOKEN}"
       }
-    },
-    "lat": {
-      "type": "stdio",
-      "command": "lat",
-      "args": [
-        "mcp"
-      ]
     }
   }
 }
