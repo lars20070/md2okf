@@ -19,8 +19,8 @@ PYTEST ?= uv run --group test --group web2md pytest
 .DEFAULT_GOAL := lint
 .PHONY: lint lint-okf validate test wiki scrape
 
-# Lint tracked Markdown, shell, and Python. The large generated Marker book
-# files under md/ are linted manually (see README), not here.
+# Lint tracked Markdown, shell, JSON, and Python. The large generated Marker
+# book files under md/ are linted manually (see README), not here.
 lint:
 	$(MARKDOWNLINT) \
 		"README.md" \
@@ -32,6 +32,7 @@ lint:
 	shellcheck \
 		scripts/*.sh \
 		pi/files/home/.pi/agent/skills/*/scripts/*.sh
+	git ls-files -z -- '*.json' | xargs -0 -n1 jq empty
 	$(RUFF) check .
 
 # Lint the generated okf/ wiki with okf-lint

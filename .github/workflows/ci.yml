@@ -29,11 +29,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Lint Markdown, shell, and Python. Reuses `make lint` so the lint definition
-  # lives in one place (the Makefile). markdownlint runs via npx (no global
-  # install) and ruff runs from the dev group only, so this job never installs
-  # the heavy project deps (marker-pdf / torch). shellcheck is pre-installed on
-  # ubuntu-latest.
+  # Lint Markdown, shell, JSON, and Python. Reuses `make lint` so the lint
+  # definition lives in one place (the Makefile). markdownlint runs via npx (no
+  # global install) and ruff runs from the dev group only, so this job never
+  # installs the heavy project deps (marker-pdf / torch). shellcheck and jq are
+  # both pre-installed on ubuntu-latest. The JSON check is syntax only (`jq
+  # empty`) — no schema validation.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -50,7 +51,7 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Lint (markdownlint, shellcheck, ruff)
+      - name: Lint (markdownlint, shellcheck, jq, ruff)
         run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2' RUFF='uv run --only-group dev ruff'
 
   # Unit-test the web2md scraper. Reuses `make test` so the definition stays in
