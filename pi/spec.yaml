@@ -8,18 +8,26 @@ description: >
 
 sandbox:
   image: "docker/sandbox-templates:shell-docker"
-  aiFilename: AGENTS.md
   # Model and provider come from the kit's own config (files/home/.pi/agent/
   # settings.json + models.json), delivered to ~/.pi/agent/ in the VM. No
   # --provider/--model flags here — Pi resolves defaults from settings.json.
-  entrypoint:
-    run: [pi]
+  entrypoint: [pi]
 
-# Outbound egress allowlist (v2 caps.network replaces network.allowedDomains).
-# Keep this explicit under default-deny policy: model calls need openrouter.ai,
-# and Pi service bootstrap uses pi.dev. Pointing Pi at a different provider means
-# adding its host here too — see "Using another provider" in the README.
-caps:
+# The AI profile Pi reads, and the text appended to it.
+agentInstructions:
+  filename: AGENTS.md
+  content: |
+    ## Sandbox environment
+    You are Pi running inside a Docker Sandbox microVM. The user's project is
+    mounted as your workspace, and edits apply directly to the host working tree.
+    `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
+    it with `sbx policy allow network "<host>"`.
+
+# Outbound egress allowlist. Default-deny: every host the kit reaches must be
+# listed. Model calls need openrouter.ai, Pi service bootstrap uses pi.dev.
+# Pointing Pi at a different provider means adding its host here too — see
+# "Using another provider" in the README.
+permissions:
   network:
     allow:
       - registry.npmjs.org
@@ -40,7 +48,7 @@ credentials:
           header: Authorization
           format: "Bearer %s"
 
-commands:
+setup:
   install:
     - command: >-
         PI_VERSION=0.82.1;
@@ -64,10 +72,3 @@ commands:
         done
       user: "1000"
       description: "Install the OKF linter (okf-lint) with retries"
-
-agentContext: |
-  ## Sandbox environment
-  You are Pi running inside a Docker Sandbox microVM. The user's project is
-  mounted as your workspace, and edits apply directly to the host working tree.
-  `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
-  it with `sbx policy allow network "<host>"`.

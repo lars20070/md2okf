@@ -39,6 +39,8 @@
     "docstring",
     "docstrings",
     "conftest",
-    "monkeypatch"
+    "monkeypatch",
+    "qwen",
+    "resumability"
   ]
 }

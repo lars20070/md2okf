@@ -12,7 +12,8 @@
 
 md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one source
 document per file in `md/`, one Pi run per file, folded into the wiki under
-`okf/`. Both directories are gitignored; only `okf/.okflintrc.json` is tracked.
+`okf/`. `md/` is tracked; `okf/` is gitignored except for `okf/.okflintrc.json`,
+which is tracked.
 `SPEC.md` at the repo root is the OKF revision the wiki is built against — the
 agent reads it at the start of every run, and it outranks any instruction file,
 including the runtime agent configs. `pdf2md/` is the optional upstream step
@@ -35,7 +36,8 @@ Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec i
 its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
 only land in a fresh sandbox — which `make wiki` always builds. The `files/`
-level is fixed by the Sandbox Kit schema and cannot be renamed or removed.
+level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
+kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
@@ -62,7 +64,9 @@ make lint-okf   # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 `make lint-okf` is host-only and needs a generated `okf/`; it sits outside
 `make lint` and outside CI because `okf/` is gitignored output, and the driver
 does not call it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
-from your shell (see the README for the two-step setup).
+from your shell (see the README for the two-step setup). Runtime commands such
+as `make wiki` and `scripts/bash.sh` require an active `sbx login` session;
+`make validate` is static and does not.
 
 ## Always validate the sandbox kit spec before finishing
 
@@ -77,48 +81,12 @@ This checks `pi/spec.yaml` against the current Sandbox Kit schema (a
 static schema check — no Docker, login, or network required). The same check runs
 in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
-is not installed, install it with `brew install docker/tap/sbx`.
+is not installed, install it with `brew install docker/tap/sbx`. If validation
+reports unknown fields, upgrade an older installation with `brew upgrade sbx`.
 
-## Library documentation (Context7 MCP)
+## Skills
 
-Before writing or modifying any code that uses a third-party library, package,
-or framework, fetch its current docs via the Context7 MCP server — do not rely
-on training data for external APIs.
-
-- Call `resolve-library-id` with the library name to get its Context7 ID, then
-  `query-docs` with that ID and a specific `topic` (e.g. "middleware",
-  "query invalidation").
-- If you already know the exact ID (e.g. `/vercel/next.js`), skip resolving and
-  call `query-docs` directly. Match the version in our manifest
-  (package.json / requirements.txt / go.mod) when the library moves fast.
-- Verify the library ID and version reported in the tool output before trusting
-  the result; Context7 falls back to "latest" if a pinned version isn't indexed.
-- Prefer a focused `topic` query to keep the pull small (~5k tokens/call).
-
-If Context7 has no entry for a library, say so and fall back to your best
-knowledge — do not block. You can also trigger a lookup manually by adding
-"use context7" to a request.
-
-## Debugging third-party libraries (GitHub MCP)
-
-When you hit an error, crash, or unexpected behavior that appears to come from
-an external dependency (not our own code), check whether it's a known bug
-BEFORE building a workaround.
-
-1. Identify the upstream repo (`owner/repo`) from the manifest — the
-   `repository` field in package.json, project URL in PyPI/pyproject.toml,
-   the Go module path, or Cargo.toml. Do not guess the repo.
-2. Use the GitHub MCP server (issues toolset) to search that repo:
-   - `search_issues` with a distinctive substring of the error message plus
-     `is:issue is:open` (or `state:open`). Search the key symbol/message, not
-     the whole stack trace.
-   - Open the best matches with `issue_read` (`method: "get"` for the issue
-     body, then `method: "get_comments"` — a separate call — for maintainer
-     replies and any linked fix or workaround; `get` alone won't surface
-     comments).
-3. Also skim recently closed issues / merged PRs with `search_pull_requests`.
-   A fix may exist in a newer release.
-4. Report back: whether it's a known issue, the issue number + status, the full
-   URL (`https://github.com/<owner>/<repo>/issues/<number>`), and any suggested
-   workaround. Only then implement a local fix, and reference the issue number
-   in a code comment.
+- `context7-docs` — fetch current library/framework docs before writing code
+  against one.
+- `debug-third-party` — check for a known upstream bug before working around
+  an error that looks like it's from a dependency.
