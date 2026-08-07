@@ -5,5 +5,6 @@
     "context7",
     "github"
   ],
-  "disableWorkflows": false
+  "disableWorkflows": false,
+  "plansDirectory": ".claude/plans"
 }
