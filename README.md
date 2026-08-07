@@ -28,7 +28,13 @@ reads it at the start of every run, so the spec outranks anything written here.
 
 ```bash
 brew install docker/tap/sbx
+sbx login
 ```
+
+The kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or
+newer. Run `brew upgrade sbx` if an older installation reports unknown fields
+from `pi/spec.yaml`. `sbx login` opens a browser to sign in with a Docker
+account; the sandbox runtime requires that host session.
 
 sbx keeps the OpenRouter key out of the virtual machine. It holds the real
 string on the host and swaps it into requests at its proxy, so inside the
@@ -37,10 +43,10 @@ sandbox `$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 
-echo "$OPENROUTER_API_KEY" | sbx secret set -g openrouter
+echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
 
 # And again as a custom secret, to work around a known sbx bug. https://github.com/docker/sbx-releases/issues/25
-sbx secret set-custom pi-kit \
+sbx secret set-custom --sandbox pi-kit \
   --host openrouter.ai \
   --env OPENROUTER_API_KEY \
   --value "$OPENROUTER_API_KEY"
@@ -135,7 +141,8 @@ make lint-okf   # lint the generated wiki
 Touch anything under `pi/` or `scripts/` and run `make validate` before you call
 the job done. It checks the kit spec against the schema bundled in your `sbx`
 binary, and needs no Docker, no login and no network. CI runs the same check in
-its `validate-kit` job, so catching a break locally saves a red build.
+its `validate-kit` job, so catching a break locally saves a red build. The
+current kit requires sbx 0.38.0 or newer.
 
 To look inside the sandbox:
 

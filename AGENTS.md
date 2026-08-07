@@ -36,7 +36,8 @@ Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec i
 its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
 only land in a fresh sandbox — which `make wiki` always builds. The `files/`
-level is fixed by the Sandbox Kit schema and cannot be renamed or removed.
+level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
+kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
@@ -63,7 +64,9 @@ make lint-okf   # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 `make lint-okf` is host-only and needs a generated `okf/`; it sits outside
 `make lint` and outside CI because `okf/` is gitignored output, and the driver
 does not call it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
-from your shell (see the README for the two-step setup).
+from your shell (see the README for the two-step setup). Runtime commands such
+as `make wiki` and `scripts/bash.sh` require an active `sbx login` session;
+`make validate` is static and does not.
 
 ## Always validate the sandbox kit spec before finishing
 
@@ -78,7 +81,8 @@ This checks `pi/spec.yaml` against the current Sandbox Kit schema (a
 static schema check — no Docker, login, or network required). The same check runs
 in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
-is not installed, install it with `brew install docker/tap/sbx`.
+is not installed, install it with `brew install docker/tap/sbx`. If validation
+reports unknown fields, upgrade an older installation with `brew upgrade sbx`.
 
 ## Skills
 
