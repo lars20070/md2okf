@@ -9,9 +9,9 @@
   makes schema v2 strict: the loader forks on `schemaVersion`, so a file
   declaring `"2"` must use only the
   [v2 kit grammar](https://docs.docker.com/ai/sandboxes/customize/kit-reference/).
-- Third-party v2 kit credentials require a host-side binding. Because
-  `make wiki` launches detached, setup must establish that binding
-  interactively once while retaining the existing custom-secret workaround.
+- The migration leaves `schemaVersion: "2"` and therefore the existing
+  credential-binding regime unchanged. The current custom-secret workaround
+  remains necessary while the referenced upstream sbx issue is open.
 
 ## Implementation
 
@@ -22,23 +22,23 @@
    - Flatten `sandbox.entrypoint.run: [pi]` to `sandbox.entrypoint: [pi]`.
    - Rename `caps.network` to `permissions.network` and `commands.install` to
      `setup.install`.
-   - Keep the image, network hosts, OpenRouter credential injection, install
-     command bodies/users, and static files unchanged; update comments to use
-     v2 terminology.
+   - Keep `name: pi-kit`, the image, network hosts, complete OpenRouter
+     credential block (including `format: "Bearer %s"`), install command
+     bodies/users, and static files unchanged. No `sandbox.command` is needed.
+     Update comments to use v2 terminology.
 2. Update user setup in [`README.md`](../../README.md): require sbx `>=0.38.0`,
    replace deprecated `sbx secret set -g openrouter` with the
-   global-by-default form, scope `set-custom` with `--sandbox pi-kit`, and add a
-   one-time interactive custom-kit launch to approve the v2 OpenRouter
-   credential binding before detached `make wiki` runs.
+   global-by-default form, and scope `set-custom` with `--sandbox pi-kit`.
+   Retain the custom-secret workaround and its upstream issue reference.
 3. Update [`pi/README.md`](../../pi/README.md) to reference
-   `permissions.network`, use the new `set-custom --sandbox` syntax, and explain
-   that another provider also needs one-time v2 credential approval before
-   unattended use.
+   `permissions.network` and use the new `set-custom --sandbox` syntax.
 4. Record kit-spec v2 and the sbx `>=0.38.0` minimum in
    [`AGENTS.md`](../../AGENTS.md), including the upgrade hint for old CLIs.
-   Leave [`scripts/validate-spec.sh`](../../scripts/validate-spec.sh),
-   [`Makefile`](../../Makefile), and
-   [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) unchanged:
+   Update the explanatory comment in
+   [`scripts/validate-spec.sh`](../../scripts/validate-spec.sh) with the same
+   minimum; no version guard is needed because schema validation already fails
+   clearly on older CLIs. Leave the runtime scripts, [`Makefile`](../../Makefile),
+   and [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) unchanged:
    their commands remain valid, and CI intentionally testing the latest sbx
    should continue detecting schema drift.
 
@@ -49,8 +49,8 @@
   entrypoint, image, three allowed hosts, credential, two install commands, and
   copied files.
 - Run `make lint` for the YAML-adjacent documentation and repository checks.
-- After the one-time binding approval, rebuild the sandbox and smoke-test that
-  `OPENROUTER_API_KEY` is still a proxy-managed placeholder, Pi configuration
-  files land under `~/.pi/agent/`, and `agentInstructions.content` appears in
-  `~/AGENTS.md`. Run `make wiki` only when the configured credential/model is
-  available; otherwise report the unperformed external-call check explicitly.
+- Rebuild the sandbox and smoke-test that `OPENROUTER_API_KEY` is still a
+  proxy-managed placeholder, Pi configuration files land under
+  `~/.pi/agent/`, and `agentInstructions.content` appears in `~/AGENTS.md`.
+  Run `make wiki` only when the configured credential/model is available;
+  otherwise report the unperformed external-call check explicitly.
