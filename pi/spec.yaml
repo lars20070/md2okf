@@ -51,7 +51,7 @@ credentials:
 setup:
   install:
     - command: >-
-        PI_VERSION=0.82.1;
+        PI_VERSION=0.84.1;
         npm config set proxy "$HTTP_PROXY";
         npm config set https-proxy "$HTTP_PROXY";
         attempt=1;
