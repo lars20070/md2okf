@@ -47,7 +47,7 @@ HOST  scripts/compile-wiki.sh                 (stays)
      └─ retry ≤ MAX_RETRIES, backoff          (stays — a provider 502 kills the
          │                                     whole in-VM loop, so the outer
          │                                     retry must survive it)
-         └─ sbx exec pi-kit -- pi -p "…call ralph_loop…" </dev/null
+         └─ sbx exec md2okf -- pi -p "…call ralph_loop…" </dev/null
               ▼ VM
               ralph_loop tool                 ← was lines 85-120
                 ├─ iter 1 → subagent wiki-pass (FRESH context) → one compile pass

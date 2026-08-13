@@ -210,10 +210,10 @@ strategy.
   today reaches the guest unusable.
 - `sorted(folder.glob("*.md"))`. Bash globs are sorted; `Path.glob` is not, and
   without `sorted` document order is irreproducible and the tests flake.
-- SIGINT: today's bash has no trap, so Ctrl-C leaves `pi-kit` running detached. In
+- SIGINT: today's bash has no trap, so Ctrl-C leaves `md2okf` running detached. In
   Python, SIGINT reaches Pi (same process group) and raises `KeyboardInterrupt` in
-  the parent — catch it, print that work is preserved in `okf/` and that `pi-kit` is
-  still running (`scripts/bash.sh`, or `sbx rm --force pi-kit`), exit 130. Do **not**
+  the parent — catch it, print that work is preserved in `okf/` and that `md2okf` is
+  still running (`scripts/bash.sh`, or `sbx rm --force md2okf`), exit 130. Do **not**
   pass `start_new_session=True`: that would shield Pi from Ctrl-C.
 - Add `PASS_TIMEOUT_S` and treat `TimeoutExpired` as a retryable failure. Bash has no
   timeout, and this is the safety net for exactly the `</dev/null` hang class.

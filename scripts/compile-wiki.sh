@@ -26,7 +26,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 markdown_folder="${1:-md}"
-kit_name="pi-kit"               # keyed to `name:` in pi/spec.yaml and to sbx secrets
+kit_name="md2okf"               # keyed to `name:` in pi/spec.yaml and to sbx secrets
 max_passes="${MAX_PASSES:-20}"  # upper bound on Pi runs per document
 max_retries="${MAX_RETRIES:-3}" # consecutive failed passes tolerated before giving up
 failed_documents=0

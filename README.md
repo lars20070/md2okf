@@ -46,13 +46,13 @@ export OPENROUTER_API_KEY=sk-or-...
 echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
 
 # And again as a custom secret, to work around a known sbx bug. https://github.com/docker/sbx-releases/issues/25
-sbx secret set-custom --sandbox pi-kit \
+sbx secret set-custom --sandbox md2okf \
   --host openrouter.ai \
   --env OPENROUTER_API_KEY \
   --value "$OPENROUTER_API_KEY"
 ```
 
-`pi-kit` is the kit's name, which comes from `pi/spec.yaml`.
+`md2okf` is the kit's name, which comes from `pi/spec.yaml`.
 
 ### Run it
 
@@ -153,7 +153,7 @@ To look inside the sandbox:
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
 
 ```bash
-sbx exec pi-kit -- sh -lc 'echo "$OPENROUTER_API_KEY"'
+sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
 Python tooling is thin, split across three dependency groups: `dev` (ruff),

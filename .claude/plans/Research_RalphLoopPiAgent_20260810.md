@@ -8,7 +8,7 @@
 ## Key Findings
 
 ### 1. The Pi package registry is huge but has no loop primitive built for external drivers
-Pi's package catalog lists 5,342 packages (pi.dev/packages), installable with `pi install npm:<pkg>`. Packages bundle four resource types — extensions (TypeScript), skills, prompt templates, themes — declared in `package.json` under a `pi` key or via convention directories (`extensions/`, `skills/`, `prompts/`, `themes/`). There are many loop/queue/autonomy packages, but **all of them drive the loop *from inside* a running Pi session** via the `agent_end`/`agent_settled` events or a `ralph_loop` custom tool. None of them is designed to be invoked as `sbx exec pi-kit -- pi ...` once per pass by an external shell script — which is md2okf's model.
+Pi's package catalog lists 5,342 packages (pi.dev/packages), installable with `pi install npm:<pkg>`. Packages bundle four resource types — extensions (TypeScript), skills, prompt templates, themes — declared in `package.json` under a `pi` key or via convention directories (`extensions/`, `skills/`, `prompts/`, `themes/`). There are many loop/queue/autonomy packages, but **all of them drive the loop *from inside* a running Pi session** via the `agent_end`/`agent_settled` events or a `ralph_loop` custom tool. None of them is designed to be invoked as `sbx exec md2okf -- pi ...` once per pass by an external shell script — which is md2okf's model.
 
 Relevant loop/autonomy packages found:
 - **`@tmustier/pi-ralph-wiggum`** (npm, git:github.com/tmustier/pi-extensions) — the most directly "Ralph" package. Sets up `.ralph/<name>.md` with a checklist, runs `ralph_start`, re-sends the same prompt on `ralph_done`, stops on `<promise>COMPLETE</promise>`. Explicitly "builds on Geoffrey Huntley's ralph-loop for Claude Code and adapts it for Pi." Can optionally invoke another Pi via tmux. In-session driver.
@@ -61,7 +61,7 @@ Note: earendil-works/pi mass-closes issues during refactors (labels like `closed
 - **Non-interactive project trust / skills loading.** Per usage docs: "Non-interactive modes (`-p`, `--mode json`, `--mode rpc`) do not show a trust prompt." Without a saved decision they fall back to `defaultProjectTrust` (default `ask` → **ignores project resources**). Project-local `.pi` extensions/skills/settings load **only after trust is resolved**. **Consequence for md2okf:** because config is delivered in the kit at `~/.pi/agent/` (the *global/user* location, copied into the sandbox home), the compile-wiki skill lives at the user scope and loads fine; but if any resource were project-local (`.pi/` in the repo), it would be silently dropped in `-p` mode unless the driver passes `--approve`/`-a` or sets `defaultProjectTrust: always`. Recommendation: keep everything user-scoped in the kit (as md2okf does) and/or pass `-a`.
 
 ### 5. Agent-agnostic Ralph harnesses that could drive `pi` as the CLI
-| Harness | Pluggable agents? | Adapter contract | Stop condition | Effort to point at `sbx exec pi-kit -- pi ...` |
+| Harness | Pluggable agents? | Adapter contract | Stop condition | Effort to point at `sbx exec md2okf -- pi ...` |
 |---|---|---|---|---|
 | **frankbria/ralph-claude-code** | In progress — multi-provider epic (#313 seam, #317 Codex pilot) decouples from `claude` via `lib/agents/<name>.sh` producing a normalized analysis struct | ADRs 0001 (multi-provider abstraction) + 0002 (agent adapter contract); each adapter does build + parse + capabilities | Per README (v0.11.5): "Dual-condition exit gate: requires BOTH completion indicators AND explicit EXIT_SIGNAL"; plus rate limiting (100 calls/hr), circuit breaker, 784 tests | Medium once merged — write a `lib/agents/pi.sh` that shells `pi --mode json` and maps events to the struct; today still Claude-only |
 | **mikeyobrien/ralph-orchestrator** (Rust) | **Yes** — `ralph-adapters` crate (Claude, Kiro, Gemini, Codex, ACP) + generic CLI executor; `--backend`; ACP adapter for any ACP agent | Backend contract + ACP; `ralph.yml` | `LOOP_COMPLETE` marker or iteration limit; stall detection | Medium — add a CLI/ACP backend entry pointing at pi; pi isn't ACP-native so use the generic CLI executor path |
@@ -79,12 +79,12 @@ Note: earendil-works/pi mass-closes issues during refactors (labels like `closed
 ## Details: concrete recommendations for md2okf
 
 ### What exists today and is ready to use (category i)
-- **`--mode json` as the driver's I/O contract.** Ready now. Switch `sbx exec pi-kit -- pi -p "<prompt>"` to `pi --mode json "<prompt>"` and parse stdout. This gives a real progress/stop signal (a `tool_execution_end` for your completion tool, `agent_end`, and `usage`) instead of the brittle `wiki_size()` byte-fixpoint. This is the sanctioned integration path (ralph-tui's Pi plugin uses exactly this).
+- **`--mode json` as the driver's I/O contract.** Ready now. Switch `sbx exec md2okf -- pi -p "<prompt>"` to `pi --mode json "<prompt>"` and parse stdout. This gives a real progress/stop signal (a `tool_execution_end` for your completion tool, `agent_end`, and `usage`) instead of the brittle `wiki_size()` byte-fixpoint. This is the sanctioned integration path (ralph-tui's Pi plugin uses exactly this).
 - **The host-side bash loop itself.** Keep it. It already implements fresh-context-per-pass, disk-as-state, iteration cap, and retry/backoff — all things Pi deliberately does not provide and the maintainer explicitly pushes to external drivers.
 
 ### What exists but needs adapting (category ii)
 - **`@rahulmutt/pi-ralph`** is the single package whose philosophy matches md2okf (fresh branched session per iteration, `.ralph/` progress on disk). If lars ever wanted the loop *inside* one Pi process, this is the closest — but it's in-session and would duplicate the sandbox/host loop lars already has. Not recommended for the current architecture.
-- **Th0rgal/open-ralph-wiggum or michaelshimeles/ralphy** — if lars wants to *replace* his bespoke bash loop with a maintained one, these are the lowest-effort adapters (add a `pi` branch to their `--agent` switch, calling `sbx exec pi-kit -- pi --mode json`). Trade-off: they assume a `<promise>DONE</promise>` marker convention rather than a byte-fixpoint, which is arguably *better* — but they weren't written with a microVM boundary, so lars would still own the `sbx exec` wrapping.
+- **Th0rgal/open-ralph-wiggum or michaelshimeles/ralphy** — if lars wants to *replace* his bespoke bash loop with a maintained one, these are the lowest-effort adapters (add a `pi` branch to their `--agent` switch, calling `sbx exec md2okf -- pi --mode json`). Trade-off: they assume a `<promise>DONE</promise>` marker convention rather than a byte-fixpoint, which is arguably *better* — but they weren't written with a microVM boundary, so lars would still own the `sbx exec` wrapping.
 - **frankbria/ralph-claude-code** — worth tracking. Once the agent adapter contract (ADR 0002) ships, a `lib/agents/pi.sh` adapter is the most robust long-term option, and its Docker-sandbox posture matches md2okf. Not ready today.
 
 ### What does not exist and must be written (category iii)
@@ -102,7 +102,7 @@ Note: earendil-works/pi mass-closes issues during refactors (labels like `closed
 ## Recommendations (staged)
 
 **Stage 1 — de-risk the current loop (do first, no new deps).**
-1. Replace `</dev/null` with an empty-stdin pipe to dodge the #4303 hang: `echo "" | sbx exec pi-kit -- pi -p "<prompt>"` (or add the `agent_end`→`process.exit(0)` guard extension to the kit). Benchmark: if any pass ever exits 124/times out, this bug is active.
+1. Replace `</dev/null` with an empty-stdin pipe to dodge the #4303 hang: `echo "" | sbx exec md2okf -- pi -p "<prompt>"` (or add the `agent_end`→`process.exit(0)` guard extension to the kit). Benchmark: if any pass ever exits 124/times out, this bug is active.
 2. Ensure no kit extension emits a startup steer message (avoids #2195). If you see `pi -p` hang right after "session_start," suspect this.
 3. Keep MAX_PASSES/MAX_RETRIES — Pi has no budget flags and won't get them (#1898 closed).
 
