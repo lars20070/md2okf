@@ -3,7 +3,19 @@
     "openrouter": {
       "baseUrl": "https://openrouter.ai/api/v1",
       "api": "openai-completions",
-      "apiKey": "$OPENROUTER_API_KEY"
+      "apiKey": "$OPENROUTER_API_KEY",
+      "modelOverrides": {
+        "qwen/qwen3.6-35b-a3b": {
+          "compat": {
+            "openRouterRouting": {
+              "only": [
+                "deepinfra"
+              ],
+              "allow_fallbacks": false
+            }
+          }
+        }
+      }
     },
     "litellm": {
       "baseUrl": "https://litellm.example.com/v1",
@@ -23,7 +35,10 @@
             "xhigh": "high",
             "max": "high"
           },
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "cost": {
             "input": 2,
             "output": 12,
