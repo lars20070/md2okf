@@ -14,6 +14,16 @@
               "allow_fallbacks": false
             }
           }
+        },
+        "deepseek/deepseek-v4-pro": {
+          "compat": {
+            "openRouterRouting": {
+              "only": [
+                "deepinfra"
+              ],
+              "allow_fallbacks": false
+            }
+          }
         }
       }
     },
