@@ -1,3 +1,4 @@
+---
 schemaVersion: "2"
 kind: sandbox
 name: md2okf
@@ -55,7 +56,8 @@ setup:
         npm config set proxy "$HTTP_PROXY";
         npm config set https-proxy "$HTTP_PROXY";
         attempt=1;
-        until npm install -g --ignore-scripts --maxsockets=1 --fetch-timeout=600000 "@earendil-works/pi-coding-agent@${PI_VERSION}"; do
+        until npm install -g --ignore-scripts --maxsockets=1
+        --fetch-timeout=600000 "@earendil-works/pi-coding-agent@${PI_VERSION}"; do
         if [ "$attempt" -ge 5 ]; then echo "Pi install failed after ${attempt} attempts" >&2; exit 1; fi;
         echo "Pi install failed (attempt ${attempt}/5), retrying...";
         attempt=$((attempt+1)); sleep 5;
@@ -65,7 +67,8 @@ setup:
     - command: >-
         OKF_LINT_VERSION=0.1.0;
         attempt=1;
-        until npm install -g --ignore-scripts --maxsockets=1 --fetch-timeout=600000 "@thisismydesign/okf-lint@${OKF_LINT_VERSION}"; do
+        until npm install -g --ignore-scripts --maxsockets=1
+        --fetch-timeout=600000 "@thisismydesign/okf-lint@${OKF_LINT_VERSION}"; do
         if [ "$attempt" -ge 5 ]; then echo "okf-lint install failed after ${attempt} attempts" >&2; exit 1; fi;
         echo "okf-lint install failed (attempt ${attempt}/5), retrying...";
         attempt=$((attempt+1)); sleep 5;
