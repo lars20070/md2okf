@@ -41,6 +41,8 @@
     "conftest",
     "monkeypatch",
     "qwen",
-    "resumability"
+    "resumability",
+    "deepinfra",
+    "xhigh"
   ]
 }
