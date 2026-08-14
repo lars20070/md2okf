@@ -132,10 +132,11 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 ## Development
 
 ```bash
-make lint       # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make test       # pytest, the web2md scraper suite
-make validate   # check pi/spec.yaml against the Sandbox Kit schema
-make lint-okf   # lint the generated wiki
+make lint            # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make validate        # check pi/spec.yaml against the Sandbox Kit schema
+make test-web2md     # pytest, the web2md scraper suite
+make test-sandbox    # check the sandbox has the tools, config and key it promises
+make lint-okf        # lint the generated wiki
 ```
 
 markdownlint needs `brew install markdownlint-cli2`; yamllint runs via the uv
@@ -146,6 +147,15 @@ the job done. It checks the kit spec against the schema bundled in your `sbx`
 binary, and needs no Docker, no login and no network. CI runs the same check in
 its `validate-kit` job, so catching a break locally saves a red build. The
 current kit requires sbx 0.38.0 or newer.
+
+`make test-sandbox` asks the other question: does the sandbox actually have
+every tool `pi/spec.yaml` installs, the agent config copied in from
+`pi/files/`, and a proxy-managed key? It needs an `sbx login` session. Like
+`./scripts/bash.sh` below it reuses the sandbox — fast, and nothing a compile
+left behind is lost — and only builds one if none exists. That also means it
+tests the sandbox you have, which may be older than your last `pi/` edit. To
+check the current kit from scratch, throw the sandbox away first with
+`sbx rm --force md2okf`; building the next one takes minutes.
 
 To look inside the sandbox:
 

@@ -23,7 +23,7 @@ YAMLLINT ?= uv run --group dev yamllint
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate test wiki scrape
+.PHONY: lint lint-okf validate test test-web2md test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, and
 # lint Python. Driving every check off `git ls-files` means a newly added file
@@ -62,11 +62,20 @@ lint-okf:
 validate:
 	./scripts/validate-spec.sh
 
+# Both suites. Host-only: the sandbox half needs `sbx login`. CI runs
+# `test-web2md` on its own and does not invoke this target.
+test: test-web2md test-sandbox
+
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in pyproject.toml,
 # which also puts web2md/src/ on the import path.
-test:
+test-web2md:
 	$(PYTEST)
+
+# Check that the sandbox delivers the toolchain, agent config and proxy-managed
+# key that pi/spec.yaml promises.
+test-sandbox:
+	./tests/test-sandbox.sh
 
 # Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
 wiki:

@@ -59,7 +59,7 @@ uv run --group web2md python web2md/src/web2md.py --refresh
 ## Tests
 
 ```bash
-make test                                              # the whole suite
+make test-web2md                                       # the whole suite
 uv run --group test --group web2md pytest web2md/tests # the same, directly
 ```
 
@@ -69,7 +69,7 @@ a socket, and the only files written go to pytest's `tmp_path`. It never touches
 Markdown converter, assembly, and every `validate_output` error branch), the
 constants above and what is derived from them, the fetch retry and caching
 logic, and one end-to-end `run()` over a synthetic 72-page site. CI runs it in
-the `test` job.
+the `test-web2md` job.
 
 ## Markdown linting
 

@@ -45,11 +45,12 @@ jobs:
           YAMLLINT='uv run --only-group dev yamllint'
           RUFF='uv run --only-group dev ruff'
 
-  # Unit-test the web2md scraper. Reuses `make test` so the definition stays in
-  # the Makefile. `--only-group` twice installs just pytest and the four scraper
-  # dependencies from the lockfile: no marker-pdf / torch. The suite is offline
-  # (httpx.MockTransport), so this job needs no network beyond the install.
-  test:
+  # Unit-test the web2md scraper. Reuses `make test-web2md` so the definition
+  # stays in the Makefile. `--only-group` twice installs just pytest and the
+  # four scraper dependencies from the lockfile: no marker-pdf / torch. The
+  # suite is offline (httpx.MockTransport), so this job needs no network beyond
+  # the install.
+  test-web2md:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -66,7 +67,7 @@ jobs:
           enable-cache: true
 
       - name: Test (pytest)
-        run: make test PYTEST='uv run --only-group test --only-group web2md pytest'
+        run: make test-web2md PYTEST='uv run --only-group test --only-group web2md pytest'
 
   # Validate pi/spec.yaml against the current Sandbox Kit schema. Static check —
   # no Docker or login; only the CLI download needs the network.

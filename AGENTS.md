@@ -28,7 +28,7 @@ which output filename live in two constants at the top of `web2md/src/web2md.py`
 first-party Python in the repo — module in `web2md/src/`, pytest suite in
 `web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
 `[build-system]`: the module is run by path and pytest imports it via
-`pythonpath` in `pyproject.toml`. Run `make test` after touching either
+`pythonpath` in `pyproject.toml`. Run `make test-web2md` after touching either
 directory; the suite is offline and needs no network.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
@@ -46,28 +46,36 @@ each task's procedure lives in its own skill directory under `skills/`. There is
 one today, `compile-wiki`. A new task gets a new skill, not more rules in
 `AGENTS.md`.
 
+`tests/` holds shell tests for that sandbox, in pairs: a host-side script
+(`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`
+script it runs inside the VM (`test-sandbox-guest.sh`).
+
 ## Commands
 
 ```bash
-make lint       # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make test       # pytest, the web2md scraper suite (offline)
-make validate   # validate the sandbox kit spec (runs scripts/validate-spec.sh)
-make wiki       # compile the OKF wiki via the sandbox runtime
-make scrape     # fetch the website into md/ as one file (web2md)
-make lint-okf   # lint the generated okf/ wiki (okf-lint via pnpm dlx)
+make lint            # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make validate        # validate the sandbox kit spec (runs scripts/validate-spec.sh)
+make test-web2md     # pytest, the web2md scraper suite (offline)
+make test-sandbox    # check the sandbox delivers what pi/spec.yaml promises
+make scrape          # fetch the website into md/ as one file (web2md)
+make wiki            # compile the OKF wiki via the sandbox runtime
+make lint-okf        # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ```
 
 ```bash
 ./scripts/bash.sh                            # shell into the existing sandbox
 ./scripts/compile-wiki.sh md/other-books     # compile a different source folder
+sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
 ```
 
 `make lint-okf` is host-only and needs a generated `okf/`; it sits outside
 `make lint` and outside CI because `okf/` is gitignored output, and the driver
-does not call it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
+does not call it. `make test-sandbox` is host-only for the other reason — it
+needs an sbx runtime — and reuses the existing sandbox rather than rebuilding
+it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
 from your shell (see the README for the two-step setup). Runtime commands such
-as `make wiki` and `scripts/bash.sh` require an active `sbx login` session;
-`make validate` is static and does not.
+as `make wiki`, `make test-sandbox` and `scripts/bash.sh` require an active
+`sbx login` session; `make validate` is static and does not.
 
 ## Always validate the sandbox kit spec before finishing
 
@@ -84,6 +92,11 @@ in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locall
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
 is not installed, install it with `brew install docker/tap/sbx`. If validation
 reports unknown fields, upgrade an older installation with `brew upgrade sbx`.
+
+`make validate` only checks the spec statically. If you changed what the sandbox
+installs or what it carries in `pi/files/`, also run `sbx rm --force md2okf &&
+make test-sandbox` — on its own `make test-sandbox` reuses whatever sandbox
+is running, which may predate your edit.
 
 ## Skills
 
