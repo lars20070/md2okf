@@ -1,4 +1,4 @@
 {
   "defaultProvider": "openrouter",
-  "defaultModel": "deepseek/deepseek-v4-pro"
+  "defaultModel": "qwen/qwen3.6-35b-a3b"
 }

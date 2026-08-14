@@ -31,7 +31,7 @@ takes the run down with it. Leave the array out and the catalogue values apply:
 Check after any change:
 
 ```bash
-sbx exec pi-kit -- pi --list-models deepseek
+sbx exec md2okf -- pi --list-models deepseek
 ```
 
 To change a single field of a catalogue model, use `modelOverrides`, not a
@@ -53,7 +53,7 @@ Switching to it takes four steps.
 2. **Choose it.** In `files/home/.pi/agent/settings.json`, set
    `"defaultProvider": "litellm"` and `"defaultModel"` to the model id. Pi needs
    both, and both must match an entry in `models.json`.
-3. **Open the road.** Add the gateway's host to `caps.network.allow` in
+3. **Open the road.** Add the gateway's host to `permissions.network.allow` in
    `spec.yaml`, and give it a `credentials` entry like the OpenRouter one:
    `header: Authorization`, `format: "Bearer %s"`, which is how LiteLLM
    authenticates too.
@@ -61,7 +61,7 @@ Switching to it takes four steps.
    copies the config in.
 
 ```bash
-sbx secret set-custom pi-kit --host <your-gateway-host> \
+sbx secret set-custom --sandbox md2okf --host <your-gateway-host> \
   --env LITELLM_API_KEY --value "$LITELLM_API_KEY"
 ```
 
@@ -96,7 +96,7 @@ takes as `reasoning_effort`. If yours rejects a level, change the map, or set
 First, that the provider is there at all:
 
 ```bash
-sbx exec pi-kit -- pi --list-models litellm
+sbx exec md2okf -- pi --list-models litellm
 ```
 
 The filter matches the provider name, so this lists your models and nothing
@@ -106,12 +106,12 @@ listing and the lookup disagree: Pi will still choose the model when it runs,
 because the lookup that resolves `settings.json` pays no attention to keys. So a
 missing key shows up not here but at the first request.
 
-Second, that the gateway is reachable. A host that `caps.network` allows may
-still be out of reach, because lifting sbx's own policy does not give the
+Second, that the gateway is reachable. A host that `permissions.network` allows
+may still be out of reach, because lifting sbx's own policy does not give the
 microVM a route to it. Ask from inside, not from your shell:
 
 ```bash
-sbx exec pi-kit -- curl -sS -o /dev/null -w '%{http_code}\n' \
+sbx exec md2okf -- curl -sS -o /dev/null -w '%{http_code}\n' \
   https://<your-gateway-host>/v1/models
 ```
 

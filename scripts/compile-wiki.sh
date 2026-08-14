@@ -17,7 +17,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 markdown_folder="${1:-md}"
-kit_name="pi-kit" # keyed to `name:` in pi/spec.yaml and to sbx secrets
+kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2

@@ -1,0 +1,29 @@
+# ShellCheck settings for every script in this repository.
+
+# Run every optional check, then switch off the few that cost readability
+# without buying safety. Separate disable= lines accumulate, and a disable=
+# here takes precedence over the --enable=all that `make lint` passes.
+enable=all
+
+# The set -e advisory trio, all info level. They fire on idiomatic code:
+#   SC2310  if my_func; then ...   and   my_func || die ...
+#   SC2311  var="$(my_func)"
+#   SC2312  [[ "$(my_func)" == x ]]   and   echo "$(my_func)"
+# Each reports that set -e does not apply inside a function called in that
+# position, which is exactly the intent when the status is being tested. Genuine
+# failures still abort, because set -e aborts on var="$(failing_func)" by itself.
+# Leaving these on forces extra temporary variables and split-up statements that
+# make the scripts longer without making them safer.
+disable=SC2310
+disable=SC2311
+disable=SC2312
+
+# Deliberately still enforced, because each catches a real bug class here:
+#   SC2249  every case needs a default; this wrapper dispatches user input, so a
+#           missing *) would let an unknown command silently succeed
+#   SC2292  require [[ ]] over [ ], which avoids word splitting inside tests
+#   SC2248  quote variables even when they look safe
+#   SC2154  warn on unassigned uppercase variables
+#   SC2230  command -v instead of which
+#
+# To silence another rule, add a disable= line with the reason above it.

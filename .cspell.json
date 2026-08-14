@@ -1,6 +1,15 @@
 {
   "version": "0.2",
-  "language": "en",
+  "language": "en,en-GB",
+  "ignorePaths": [
+    "md/**",
+    ".claude/**",
+    ".cursor/**",
+    "SPEC.md",
+    "CLAUDE.md",
+    "uv.lock",
+    "web2md/tests/**"
+  ],
   "words": [
     "okf",
     "frontmatter",
@@ -39,6 +48,16 @@
     "docstring",
     "docstrings",
     "conftest",
-    "monkeypatch"
+    "monkeypatch",
+    "qwen",
+    "resumability",
+    "resumable",
+    "deepinfra",
+    "xhigh",
+    "gemma",
+    "idempotently",
+    "misordered",
+    "scannable",
+    "writable"
   ]
 }

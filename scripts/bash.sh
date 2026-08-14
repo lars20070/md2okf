@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Usage: bash.sh
 #
-# Reuses the existing pi-kit sandbox (creating it only if missing; `sbx exec`
+# Reuses the existing md2okf sandbox (creating it only if missing; `sbx exec`
 # auto-starts it if stopped), so a prior compile run's state is preserved.
 # OPENROUTER_API_KEY is proxy-managed by sbx, so it is NOT required in the host
 # environment.
@@ -14,7 +14,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-kit_name="pi-kit" # keyed to `name:` in pi/spec.yaml and to sbx secrets
+kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
