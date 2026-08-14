@@ -132,11 +132,14 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 ## Development
 
 ```bash
-make lint       # markdownlint, shellcheck, ruff
+make lint       # markdownlint, jq, yamllint, shellcheck, cspell, ruff
 make test       # pytest, the web2md scraper suite
 make validate   # check pi/spec.yaml against the Sandbox Kit schema
 make lint-okf   # lint the generated wiki
 ```
+
+markdownlint needs `brew install markdownlint-cli2`; yamllint runs via the uv
+`dev` group and cspell via `npx`, so neither needs a separate install.
 
 Touch anything under `pi/` or `scripts/` and run `make validate` before you call
 the job done. It checks the kit spec against the schema bundled in your `sbx`

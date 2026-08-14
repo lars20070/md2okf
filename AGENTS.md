@@ -48,7 +48,7 @@ one today, `compile-wiki`. A new task gets a new skill, not more rules in
 ## Commands
 
 ```bash
-make lint       # markdownlint + shellcheck + ruff (default goal)
+make lint       # markdownlint, jq, yamllint, shellcheck, cspell, ruff
 make test       # pytest, the web2md scraper suite (offline)
 make validate   # validate the sandbox kit spec (runs scripts/validate-spec.sh)
 make wiki       # compile the OKF wiki via the sandbox runtime

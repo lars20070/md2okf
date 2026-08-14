@@ -1,6 +1,15 @@
 {
   "version": "0.2",
-  "language": "en",
+  "language": "en-GB",
+  "ignorePaths": [
+    "md/**",
+    ".claude/**",
+    ".cursor/**",
+    "SPEC.md",
+    "CLAUDE.md",
+    "uv.lock",
+    "web2md/tests/**"
+  ],
   "words": [
     "okf",
     "frontmatter",
@@ -43,6 +52,11 @@
     "qwen",
     "resumability",
     "deepinfra",
-    "xhigh"
+    "xhigh",
+    "gemma",
+    "idempotently",
+    "misordered",
+    "scannable",
+    "writable"
   ]
 }

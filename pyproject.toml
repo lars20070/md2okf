@@ -10,7 +10,7 @@ dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]
 # --only-group dev, tests use --only-group test --only-group web2md. Neither
 # pulls in the heavy project dependencies (marker-pdf / torch).
 [dependency-groups]
-dev = ["ruff>=0.8"]
+dev = ["ruff>=0.8", "yamllint>=1.35"]
 test = ["pytest>=8.4"]
 web2md = [
   "httpx>=0.28.1",
