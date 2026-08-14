@@ -80,11 +80,11 @@ check yamllint
 
 # Config delivery: pi/files/home/.pi/agent/ is copied at kit build time, not
 # mounted, so a layout change can leave Pi with no instructions and no skill.
-check_file "$HOME/.pi/agent/AGENTS.md"
-check_file "$HOME/.pi/agent/settings.json"
-check_file "$HOME/.pi/agent/models.json"
-check_file "$HOME/.pi/agent/skills/compile-wiki/SKILL.md"
-check_exec "$HOME/.pi/agent/skills/compile-wiki/scripts/lint-okf.sh"
+check_file "${HOME}/.pi/agent/AGENTS.md"
+check_file "${HOME}/.pi/agent/settings.json"
+check_file "${HOME}/.pi/agent/models.json"
+check_file "${HOME}/.pi/agent/skills/compile-wiki/SKILL.md"
+check_exec "${HOME}/.pi/agent/skills/compile-wiki/scripts/lint-okf.sh"
 
 # Credentials (pi/spec.yaml:62-70). Automates the manual check in the README.
 # Never print the value — case-match and report only a verdict.
@@ -102,8 +102,8 @@ proxy-managed)
 	;;
 esac
 
-if [ "$failures" -ne 0 ]; then
-	echo "FAILED: $failures check(s)"
+if [ "${failures}" -ne 0 ]; then
+	echo "FAILED: ${failures} check(s)"
 	exit 1
 fi
 echo "All toolchain checks passed."
