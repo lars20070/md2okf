@@ -31,9 +31,15 @@ agentInstructions:
 permissions:
   network:
     allow:
-      - registry.npmjs.org
-      - openrouter.ai
-      - pi.dev
+      - "registry.npmjs.org"
+      - "openrouter.ai"
+      - "pi.dev"
+      - "registry.npmjs.org:443"
+      - "context7.com:443"
+      - "api.githubcopilot.com:443"
+      - "github.com:443"
+      - "release-assets.githubusercontent.com:443"
+      - "pypi.org:443"
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
@@ -75,3 +81,23 @@ setup:
         done
       user: "1000"
       description: "Install the OKF linter (okf-lint) with retries"
+    - command: |
+        set -eu
+        apt-get update
+        apt-get install -y \
+          ca-certificates \
+          curl \
+          jq \
+          python3 \
+          ripgrep \
+          shellcheck
+      description: CLI tools
+    - command: "uv tool install ruff@0.16.2"
+      user: "1000"
+      description: Ruff
+    - command: "uv tool install yamllint@1.38.0"
+      user: "1000"
+      description: yamllint
+    - command: "npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1"
+      user: "1000"
+      description: Markdown and spelling linters
