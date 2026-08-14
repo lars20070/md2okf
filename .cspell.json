@@ -51,6 +51,7 @@
     "monkeypatch",
     "qwen",
     "resumability",
+    "resumable",
     "deepinfra",
     "xhigh",
     "gemma",

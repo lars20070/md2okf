@@ -14,6 +14,7 @@ md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one source
 document per file in `md/`, one Pi run per file, folded into the wiki under
 `okf/`. `md/` is tracked; `okf/` is gitignored except for `okf/.okflintrc.json`,
 which is tracked.
+
 `SPEC.md` at the repo root is the OKF revision the wiki is built against — the
 agent reads it at the start of every run, and it outranks any instruction file,
 including the runtime agent configs. `pdf2md/` is the optional upstream step
