@@ -25,21 +25,27 @@ agentInstructions:
     it with `sbx policy allow network "<host>"`.
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
-# listed. Model calls need openrouter.ai, Pi service bootstrap uses pi.dev.
-# Pointing Pi at a different provider means adding its host here too — see
-# "Using another provider" in the README.
+# listed. Pointing Pi at a different provider means adding its host here too —
+# see "Using another provider" in the README.
 permissions:
   network:
     allow:
-      - "registry.npmjs.org"
+      # Model API. Must match credentials[].apiKey.inject[].domain exactly.
       - "openrouter.ai"
+      # Pi service bootstrap.
       - "pi.dev"
+      # npm: pi-coding-agent, okf-lint, markdownlint-cli2, cspell.
       - "registry.npmjs.org:443"
-      - "context7.com:443"
-      - "api.githubcopilot.com:443"
-      - "github.com:443"
-      - "release-assets.githubusercontent.com:443"
+      # uv tool install: ruff, yamllint (index + wheels).
       - "pypi.org:443"
+      - "files.pythonhosted.org:443"
+      # apt-get update refreshes every template source, so all of them must
+      # be reachable: Ubuntu amd64 (archive/security), arm64 (ports), and
+      # Docker's apt repo (pre-added by shell-docker).
+      - "archive.ubuntu.com:80"
+      - "security.ubuntu.com:80"
+      - "ports.ubuntu.com:80"
+      - "download.docker.com:443"
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
@@ -55,32 +61,11 @@ credentials:
           header: Authorization
           format: "Bearer %s"
 
+# Runs once at sandbox create, in order, via `sh -c`. `user` defaults to root
+# ("0"); "1000" is the agent.
 setup:
   install:
-    - command: >-
-        PI_VERSION=0.84.1;
-        npm config set proxy "$HTTP_PROXY";
-        npm config set https-proxy "$HTTP_PROXY";
-        attempt=1;
-        until npm install -g --ignore-scripts --maxsockets=1
-        --fetch-timeout=600000 "@earendil-works/pi-coding-agent@${PI_VERSION}"; do
-        if [ "$attempt" -ge 5 ]; then echo "Pi install failed after ${attempt} attempts" >&2; exit 1; fi;
-        echo "Pi install failed (attempt ${attempt}/5), retrying...";
-        attempt=$((attempt+1)); sleep 5;
-        done
-      user: "1000"
-      description: "Configure npm proxy and install the Pi coding agent with retries"
-    - command: >-
-        OKF_LINT_VERSION=0.1.0;
-        attempt=1;
-        until npm install -g --ignore-scripts --maxsockets=1
-        --fetch-timeout=600000 "@thisismydesign/okf-lint@${OKF_LINT_VERSION}"; do
-        if [ "$attempt" -ge 5 ]; then echo "okf-lint install failed after ${attempt} attempts" >&2; exit 1; fi;
-        echo "okf-lint install failed (attempt ${attempt}/5), retrying...";
-        attempt=$((attempt+1)); sleep 5;
-        done
-      user: "1000"
-      description: "Install the OKF linter (okf-lint) with retries"
+    # Distro CLI tools the agent shells out to.
     - command: |
         set -eu
         apt-get update
@@ -90,14 +75,48 @@ setup:
           jq \
           python3 \
           ripgrep \
-          shellcheck
-      description: CLI tools
-    - command: "uv tool install ruff@0.16.2"
+          shellcheck \
+          tree
+      description: Install distro CLI tools
+
+    # npm through the sandbox proxy is flaky: pin, one socket, 10-minute fetch,
+    # five attempts. `npm config` writes ~/.npmrc, so later npm steps inherit it.
+    - command: |
+        set -eu
+        PI_VERSION=0.84.1
+        OKF_LINT_VERSION=0.1.0
+
+        npm config set proxy "$HTTP_PROXY"
+        npm config set https-proxy "$HTTP_PROXY"
+
+        npm_install_retry() {
+          pkg=$1
+          attempt=1
+          until npm install -g --ignore-scripts --maxsockets=1 \
+            --fetch-timeout=600000 "$pkg"
+          do
+            if [ "$attempt" -ge 5 ]; then
+              echo "${pkg} install failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            echo "${pkg} install failed (attempt ${attempt}/5), retrying..."
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+        }
+
+        npm_install_retry "@earendil-works/pi-coding-agent@${PI_VERSION}"
+        npm_install_retry "@thisismydesign/okf-lint@${OKF_LINT_VERSION}"
       user: "1000"
-      description: Ruff
-    - command: "uv tool install yamllint@1.38.0"
+      description: Configure npm proxy and install Pi and okf-lint
+
+    - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
       user: "1000"
-      description: yamllint
-    - command: "npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1"
+      description: Install Markdown and spelling linters
+
+    - command: |
+        set -eu
+        uv tool install ruff@0.16.2
+        uv tool install yamllint@1.38.0
       user: "1000"
-      description: Markdown and spelling linters
+      description: Install Python linters
