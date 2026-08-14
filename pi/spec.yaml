@@ -24,6 +24,14 @@ agentInstructions:
     `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
     it with `sbx policy allow network "<host>"`.
 
+    ## Installed tools
+    These commands are on PATH. Use them; do not reinstall them.
+
+    - `curl`, `jq`, `python3`, `rg` (ripgrep), `shellcheck`, `tree`
+    - `okf-lint` — OKF wiki linter (the compile-wiki skill wraps it)
+    - `markdownlint-cli2`, `cspell` — Markdown and spelling
+    - `ruff`, `yamllint` — Python and YAML
+
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
 # listed. Pointing Pi at a different provider means adding its host here too —
 # see "Using another provider" in the README.
@@ -70,7 +78,6 @@ setup:
         set -eu
         apt-get update
         apt-get install -y \
-          ca-certificates \
           curl \
           jq \
           python3 \
