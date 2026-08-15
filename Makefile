@@ -3,23 +3,21 @@
 # Pi runs in one runtime: the Docker Sandbox (sbx) kit under pi/, which owns the
 # only copy of the agent config (see AGENTS.md).
 #
-# Tool overrides (defaults suit local dev; CI overrides them — see ci.yml):
+# Tool overrides (defaults suit local dev; CI overrides only MARKDOWNLINT):
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
-#   RUFF          ruff launcher. Local: `uv run ruff` (uses the full project
-#                 venv). CI: `uv run --only-group dev ruff` (installs only ruff
-#                 and yamllint from the lockfile — no heavy project deps like
-#                 marker-pdf).
-#   PYTEST        pytest launcher. Local: `uv run --group test --group web2md`
-#                 (uses the full project venv). CI: the same groups via
-#                 `--only-group`, which drops the project deps — no marker-pdf.
-#   YAMLLINT      yamllint launcher. Local and CI: `uv run --group dev yamllint`
-#                 (dev group; CI uses `--only-group dev`).
+#   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
+#                 project; the pin matches the sandbox (pi/spec.yaml).
+#   PYTEST        pytest launcher. Runs in the web2md project; `-c` points
+#                 pytest at that project's config, whose testpaths/pythonpath
+#                 are relative to it.
+#   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside both Python
+#                 projects), so ephemeral and pinned like ruff.
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
 MARKDOWNLINT ?= markdownlint-cli2
-RUFF ?= uv run ruff
-PYTEST ?= uv run --group test --group web2md pytest
-YAMLLINT ?= uv run --group dev yamllint
+RUFF ?= uv tool run ruff@0.16.2
+PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml
+YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
@@ -39,6 +37,10 @@ CSPELL ?= npx --yes cspell
 #   SPEC.md            upstream OKF spec, not project prose.
 #   CLAUDE.md          one-line `@AGENTS.md` pointer, not a document.
 # cspell runs on owned Markdown only (same exclusions as markdownlint).
+#
+# ruff runs once per tracked subproject rather than once over the tree, because
+# each project carries its own [tool.ruff]. Deriving the list from tracked
+# pyproject.toml files means a new subproject is linted the moment it is added.
 lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(MARKDOWNLINT)
@@ -47,7 +49,7 @@ lint:
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(CSPELL) --no-progress
-	$(RUFF) check .
+	git ls-files -- '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
 	@echo "All lint checks passed."
 
 # Lint the generated okf/ wiki with okf-lint
@@ -67,8 +69,8 @@ validate:
 test: test-web2md test-sandbox
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
-# httpx.MockTransport, so no test opens a socket. Config is in pyproject.toml,
-# which also puts web2md/src/ on the import path.
+# httpx.MockTransport, so no test opens a socket. Config is in
+# web2md/pyproject.toml, which also puts web2md/src/ on the import path.
 test-web2md:
 	$(PYTEST)
 
@@ -83,4 +85,4 @@ wiki:
 
 # Fetch the website into md/ as one file.
 scrape:
-	uv run --group web2md python web2md/src/web2md.py
+	uv run --project web2md python web2md/src/web2md.py

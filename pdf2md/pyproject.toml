@@ -1,0 +1,11 @@
+[project]
+name = "pdf2md"
+version = "0.1.0"
+description = "Convert a PDF into Markdown with marker"
+requires-python = ">=3.12"
+dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]
+
+# No [build-system] and no first-party Python: this file exists to pin marker
+# and give it a venv of its own. `uv sync --project pdf2md` builds it,
+# `uv run --project pdf2md marker ...` runs in it (see README.md). Nothing here
+# is shared with web2md — no ruff, no pytest, no lockfile in common.

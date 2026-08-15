@@ -18,10 +18,11 @@ concurrency:
 jobs:
   # Lint Markdown, JSON, YAML, shell, spelling, and Python. Reuses `make lint`
   # so the lint definition lives in one place (the Makefile). markdownlint runs
-  # via npx; yamllint and ruff run from the dev group only, so this job never
-  # installs the heavy project deps (marker-pdf / torch). cspell runs via npx.
-  # shellcheck and jq are both pre-installed on ubuntu-latest. The JSON check is
-  # syntax only (`jq empty`) — no schema validation.
+  # via npx; yamllint and ruff run ephemerally at a pinned version via
+  # `uv tool run`, belonging to no project, so this job installs neither
+  # project's dependencies. cspell runs via npx. shellcheck and jq are both
+  # pre-installed on ubuntu-latest. The JSON check is syntax only (`jq empty`)
+  # — no schema validation.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -39,17 +40,13 @@ jobs:
           enable-cache: true
 
       - name: Lint (markdownlint, jq, yamllint, shellcheck, cspell, ruff)
-        run: >-
-          make lint
-          MARKDOWNLINT='npx --yes markdownlint-cli2'
-          YAMLLINT='uv run --only-group dev yamllint'
-          RUFF='uv run --only-group dev ruff'
+        run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2'
 
   # Unit-test the web2md scraper. Reuses `make test-web2md` so the definition
-  # stays in the Makefile. `--only-group` twice installs just pytest and the
-  # four scraper dependencies from the lockfile: no marker-pdf / torch. The
-  # suite is offline (httpx.MockTransport), so this job needs no network beyond
-  # the install.
+  # stays in the Makefile. web2md is its own project, so its lockfile holds
+  # only the scraper's own deps plus pytest — marker-pdf / torch cannot reach
+  # it and there is nothing to exclude. The suite is offline
+  # (httpx.MockTransport), so this job needs no network beyond the install.
   test-web2md:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -67,7 +64,7 @@ jobs:
           enable-cache: true
 
       - name: Test (pytest)
-        run: make test-web2md PYTEST='uv run --only-group test --only-group web2md pytest'
+        run: make test-web2md
 
   # Validate pi/spec.yaml against the current Sandbox Kit schema. Static check —
   # no Docker or login; only the CLI download needs the network.

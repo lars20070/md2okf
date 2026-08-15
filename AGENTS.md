@@ -28,8 +28,8 @@ which output filename live in two constants at the top of `web2md/src/web2md.py`
 first-party Python in the repo — module in `web2md/src/`, pytest suite in
 `web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
 `[build-system]`: the module is run by path and pytest imports it via
-`pythonpath` in `pyproject.toml`. Run `make test-web2md` after touching either
-directory; the suite is offline and needs no network.
+`pythonpath` in `web2md/pyproject.toml`. Run `make test-web2md` after touching
+either directory; the suite is offline and needs no network.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
 `pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,

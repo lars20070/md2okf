@@ -139,8 +139,8 @@ make test-sandbox    # check the sandbox has the tools, config and key it promis
 make lint-okf        # lint the generated wiki
 ```
 
-markdownlint needs `brew install markdownlint-cli2`; yamllint runs via the uv
-`dev` group and cspell via `npx`, so neither needs a separate install.
+markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
+`uv tool run` and cspell via `npx`, so none of them needs a separate install.
 
 Touch anything under `pi/` or `scripts/` and run `make validate` before you call
 the job done. It checks the kit spec against the schema bundled in your `sbx`
@@ -169,8 +169,15 @@ Once a sandbox exists, this should print `proxy-managed` rather than your key:
 sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
-Python tooling is thin, split across three dependency groups: `dev` (ruff),
-`test` (pytest) and `web2md` (the scraper's runtime deps). CI installs one group
-per job with `--only-group`, so neither the lint job nor the test job pulls in
-the heavy project dependencies (marker-pdf, torch). The only first-party Python
-is the web2md scraper.
+Python tooling is thin. There is no project at the repo root: `pdf2md/` and
+`web2md/` are independent uv projects, each with its own `pyproject.toml` and
+`uv.lock` and nothing shared between them. `pdf2md/` exists only to give
+`marker` a pinned venv; `web2md/` owns the scraper's dependencies, its pytest
+config and the only `[tool.ruff]` in the repo. So the heavy dependencies
+(marker-pdf, torch) cannot reach the lint or test job at all, rather than being
+excluded by flag. The only first-party Python is the web2md scraper.
+
+`ruff` and `yamllint` belong to neither project; `make lint` runs them
+ephemerally at a pinned version with `uv tool run`, and checks each tracked
+subproject in turn — a new subproject carries its own `[tool.ruff]` and needs
+no Makefile change.
