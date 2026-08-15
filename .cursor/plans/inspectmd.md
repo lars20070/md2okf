@@ -1,12 +1,12 @@
 ---
 name: inspectmd CLI tool
-overview: Add a uv-installable `inspectmd` Python package that prints a Markdown heading map (line ranges + sizes), expose it as the `inspectmd` command on the host and in the sandbox, and teach Pi via a dedicated skill plus compile-wiki wiring.
+overview: Add a third independent uv project, inspectmd — installable CLI that prints a Markdown heading map — exposed on the host and in the sandbox as `inspectmd`, with its own ruff/pytest config and a Pi skill. No root pyproject.
 todos:
   - id: package
-    content: Create inspectmd/ uv package (pyproject, parse/cli modules, README, pytest suite)
+    content: Create inspectmd/ as independent uv project (pyproject with ruff+pytest, parse/cli, README, uv.lock, tests)
     status: pending
   - id: host-make-ci
-    content: Wire Makefile (test-inspectmd, install-inspectmd), root pyproject ruff ignores, CI step
+    content: Wire Makefile (test-inspectmd, install-inspectmd) and CI test-inspectmd job; lint auto-picks up via */pyproject.toml
     status: pending
   - id: sandbox
     content: Add setup.files shim + agentInstructions entry in pi/spec.yaml; extend test-sandbox-guest.sh
@@ -21,6 +21,15 @@ isProject: true
 ---
 
 # Add `inspectmd` CLI + sandbox skill
+
+## Context after the pyproject split
+
+There is **no root** `pyproject.toml`. [`pdf2md/`](../pdf2md/) and [`web2md/`](../web2md/) are independent uv projects with zero shared config. [`Makefile`](../Makefile) already:
+
+- runs ruff via pinned `uv tool run ruff@0.16.2` once per tracked `*/pyproject.toml`
+- runs yamllint the same way (belongs to no project)
+
+`inspectmd/` is a **third** independent project on that same pattern: own `pyproject.toml`, own `uv.lock`, own `[tool.ruff]`, own pytest config. No overlap with web2md or pdf2md.
 
 ## Why the prior plan fell short
 
@@ -59,15 +68,16 @@ flowchart LR
   compile --> skill
 ```
 
-Single source of truth at repo root. Host gets a real uv tool install. Sandbox cannot `uv tool install` from the workspace during `setup.install` (workspace is not ready yet — kit apply order), so use the documented `${WORKDIR}` pattern: write an executable shim under `~/.local/bin/` via `setup.files`.
+Source of truth is `inspectmd/` in the workspace. Host gets a real `uv tool install`. Sandbox cannot install from the workspace during `setup.install` (workspace not ready yet), so use `${WORKDIR}` via `setup.files` to write an executable shim under `~/.local/bin/`.
 
 ## Package layout
 
-New uv project (not another path-run module like `web2md/`):
+Third independent uv project (installable CLI, unlike path-run `web2md/`):
 
 ```text
 inspectmd/
-  pyproject.toml          # hatchling; [project.scripts] inspectmd = "inspectmd.cli:main"
+  pyproject.toml          # hatchling; scripts; test group; [tool.ruff]; pytest
+  uv.lock                 # committed
   README.md
   src/inspectmd/
     __init__.py
@@ -82,11 +92,13 @@ inspectmd/
 [`inspectmd/pyproject.toml`](../inspectmd/pyproject.toml) essentials:
 
 - `requires-python = ">=3.12"`, no runtime deps
-- `[dependency-groups] test = ["pytest>=8.4"]`
+- `[build-system]` + hatchling (needed for `uv tool install` / console script)
 - `[project.scripts] inspectmd = "inspectmd.cli:main"`
-- Build backend so `uv tool install ./inspectmd` and `uvx --from ./inspectmd` work
+- `[dependency-groups] test = ["pytest>=8.4"]`
+- `[tool.pytest.ini_options]`: `testpaths = ["tests"]`, `pythonpath` as needed for the src layout
+- **`[tool.ruff]` owned here** — copy the same rule set web2md uses today (`target-version`, `line-length`, `select`, google pydocstyle, `"tests/*"` per-file-ignores). Do **not** share or import web2md’s config; duplication is intentional under the zero-overlap rule.
 
-Keep root [`pyproject.toml`](../pyproject.toml) as the ruff config for the whole tree (add `"inspectmd/tests/*"` to per-file-ignores). Do not add a root `[build-system]` — leave `web2md`’s run-by-path story alone.
+`uv lock --project inspectmd` → commit `inspectmd/uv.lock`.
 
 ## Delivery: three audiences
 
@@ -133,34 +145,39 @@ Wire it in:
 - [`pi/files/home/.pi/agent/AGENTS.md`](../pi/files/home/.pi/agent/AGENTS.md) — list `inspectmd` under available skills
 - [`pi/files/home/.pi/agent/skills/compile-wiki/SKILL.md`](../pi/files/home/.pi/agent/skills/compile-wiki/SKILL.md) — in “Write in bounded chunks” and procedure step 2: run `inspectmd` (or load the inspectmd skill) first and cut on reported ranges
 
-No skill-owned Python copy (unlike a temptation to mirror `lint-okf.sh`): the CLI is the interface; the skill is the procedure.
+No skill-owned Python copy: the CLI is the interface; the skill is the procedure.
 
-## Tests and CI
+## Tests, lint, and CI
 
-- [`Makefile`](../Makefile): `test-inspectmd` → `uv run --project inspectmd --group test pytest`; fold into `test:`; `.PHONY` update; `install-inspectmd` target
-- Narrow `test-web2md` so it stays path-scoped once pytest config grows (same split the old plan wanted): `$(PYTEST) web2md/tests`
-- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): add a `test-inspectmd` step (or sibling job) using `uv run --project inspectmd --group test pytest`
-- [`tests/test-sandbox-guest.sh`](../tests/test-sandbox-guest.sh): `check inspectmd` and `check_file` the skill `SKILL.md` (same contract as other PATH tools + skill layout)
+- [`Makefile`](../Makefile):
+  - `test-inspectmd` → `uv run --project inspectmd --group test pytest -c inspectmd/pyproject.toml` (same `-c` pattern as `PYTEST` for web2md)
+  - `install-inspectmd` → `uv tool install --force ./inspectmd`
+  - fold `test-inspectmd` into `test:`; update `.PHONY`
+  - **no Makefile change for ruff** — once `inspectmd/pyproject.toml` is tracked, `git ls-files -- '*/pyproject.toml' | … | xargs $(RUFF) check` already includes it
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): add a `test-inspectmd` job (mirror `test-web2md`) running `make test-inspectmd`
+- [`tests/test-sandbox-guest.sh`](../tests/test-sandbox-guest.sh): `check inspectmd` and `check_file` the skill `SKILL.md`
+- [`.coderabbit.yaml`](../.coderabbit.yaml): today `ruff.config_file` points at `web2md/pyproject.toml` only. Either leave it (CodeRabbit stays web2md-scoped) or note in the PR that multi-project ruff review is limited — do not invent a root config to “fix” that
 
 Parser/CLI tests (offline): ATX rules, fence ignoring, frontmatter, preamble, empty file, slugify, `main()` success + exit 2.
 
 ## Docs touchpoints
 
-- Root [`AGENTS.md`](../AGENTS.md) repository map + commands (`inspectmd/`, `make test-inspectmd`, `make install-inspectmd`)
+- Root [`AGENTS.md`](../AGENTS.md) repository map + commands (`inspectmd/` as third independent Python project, `make test-inspectmd`, `make install-inspectmd`)
 - Root [`README.md`](../README.md) — short “inspectmd” mention under Development
 - Spell-check: any new words in skill/AGENTS prose via existing cspell path
 
 ## Verification
 
 ```bash
-make lint
+uv lock --project inspectmd
+make lint                    # must ruff-check inspectmd/ via auto-discovery
 make test-inspectmd
 make test-web2md
-make validate                          # required: pi/ + possibly scripts/
+make validate                # required: pi/ changes
 make install-inspectmd && inspectmd md/GoogleStyleGuide.md
-sbx rm --force md2okf && make test-sandbox   # fresh kit: shim + skill + agentInstructions
+sbx rm --force md2okf && make test-sandbox
 ```
 
 ## Out of scope
 
-`--json`, setext headings, publishing to PyPI, coverage against `okf/`, and any third-party Markdown parser.
+`--json`, setext headings, publishing to PyPI, coverage against `okf/`, any third-party Markdown parser, and any return of a root `pyproject.toml`.
