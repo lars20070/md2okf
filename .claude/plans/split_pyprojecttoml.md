@@ -15,18 +15,34 @@ overlap. This plan does that, and updates every place that currently assumes
 a single root project: `Makefile`, CI, `AGENTS.md`, `README.md`, both
 sub-READMEs, and `.coderabbit.yaml`.
 
+`pdf2md/pyproject.toml` has no first-party Python of its own to lint or test —
+its whole purpose is letting someone spin up an isolated venv that has
+`marker` installed. `uv run --project pdf2md marker ...` (or `uv sync
+--project pdf2md` up front) creates and populates `pdf2md/.venv` on first use,
+which is the entire point of the file: a pinned, disposable environment for
+running the third-party `marker` CLI, not a package to build or test.
+
 ## Design decisions (already validated empirically in this sandbox)
 
 - **`ruff`/`yamllint` become ephemeral**, run via `uv tool run ruff` / `uv tool
   run yamllint` (the `uvx` equivalent — confirmed working here even though the
   standalone `uvx` shim isn't installed in this sandbox). They are declared in
   **no** `pyproject.toml`. This is what makes "no overlap" possible: repo-wide
-  lint tooling isn't owned by either project. Verified `ruff check .` from the
-  repo root still correctly picks up per-project `[tool.ruff]` config for
-  files under `web2md/` via ruff's normal upward config discovery.
+  lint tooling isn't owned by either project. Verified `ruff check <dir>`
+  correctly picks up that subproject's own `[tool.ruff]` config via ruff's
+  normal upward config discovery.
 - **`[tool.ruff]` config moves into `web2md/pyproject.toml`** — the only
   project with lintable first-party Python today. `pdf2md/pyproject.toml`
   carries no lint config since it has no `.py` files of its own.
+- **`make lint` runs ruff once per subproject, not once over the whole repo.**
+  Instead of `$(RUFF) check .`, it derives the subproject list from tracked
+  `*/pyproject.toml` files (`git ls-files -- '*/pyproject.toml' | xargs -n1
+  dirname | xargs $(RUFF) check`) — the same "driven by `git ls-files`, not a
+  hand-maintained list" philosophy the rest of `lint`'s exclusions already
+  follow (see the target's own comment). Today that's just `web2md`; the
+  moment a future subproject (e.g. a Python `pdf2md` or a new `inspectmd`)
+  gets its own tracked `pyproject.toml`, `make lint` picks it up automatically
+  with no Makefile edit required.
 - **Invocation uses `uv run --project <dir> ...`**, not `cd`/`--directory`.
   For `marker` (pdf2md) this is sufficient alone: CWD stays at the repo root,
   so the existing `pdf/`/`md/` relative paths in `pdf2md/README.md` keep
@@ -95,10 +111,16 @@ pdf2md` and `uv lock --project web2md`, committed.
   ruff` / `uv run --group dev yamllint`).
 - `PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml`
   (was `uv run --group test --group web2md pytest`).
+- `lint` target: replace `$(RUFF) check .` with
+  `git ls-files -- '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check`
+  — runs ruff once per subproject directory instead of once over the whole
+  tree, auto-discovered from tracked `pyproject.toml` files (see design note
+  above).
 - `scrape` target: `uv run --project web2md python web2md/src/web2md.py` (drop
   `--group web2md`, no longer needed now deps are plain project dependencies).
 - Rewrite the top-of-file tool-override comment block (lines 6–18) to explain
-  the new split and why `RUFF`/`YAMLLINT` need no CI override anymore.
+  the new split, the per-subproject ruff invocation, and why `RUFF`/`YAMLLINT`
+  need no CI override anymore.
 
 **`.github/workflows/ci.yml`**
 - `lint` job: drop the `YAMLLINT=`/`RUFF=` overrides — keep only
@@ -126,7 +148,10 @@ group") to say both run ephemerally via `uv tool run`.
 
 **`pdf2md/README.md`** — update all `uv run marker ...` / `uv run
 marker_single ...` commands to `uv run --project pdf2md marker ...` /
-`uv run --project pdf2md marker_single ...`.
+`uv run --project pdf2md marker_single ...`, and add a leading `uv sync
+--project pdf2md` step (mirroring `web2md/README.md`'s "Install scraper deps"
+line) so the venv-creation purpose of `pdf2md/pyproject.toml` is explicit
+rather than implied by `uv run`'s automatic sync.
 
 **`web2md/README.md`**
 - Layout section (line 41–43): fix the `[build-system]`/`pythonpath` sentence
@@ -146,10 +171,11 @@ repo.
 
 1. `uv lock --project pdf2md` and `uv lock --project web2md` — both resolve
    cleanly, producing `pdf2md/uv.lock` and `web2md/uv.lock`.
-2. `make lint` — runs ruff/yamllint via `uv tool run` against the whole repo;
-   confirm it still finds and applies `web2md/pyproject.toml`'s ruff config
-   (only `web2md/` files should be subject to those rules) and passes (or
-   shows only pre-existing findings).
+2. `make lint` — yamllint via `uv tool run` against the whole repo; ruff via
+   `uv tool run` once per discovered subproject (today just `web2md`),
+   confirm it applies `web2md/pyproject.toml`'s ruff config and passes (or
+   shows only pre-existing findings). Confirm `pdf2md` — no `.py` files —
+   doesn't break the invocation.
 3. `make test-web2md` — full web2md suite passes using the new
    `--project web2md ... -c web2md/pyproject.toml` invocation, confirming
    `pythonpath`/`testpaths` resolve correctly from the moved config.
