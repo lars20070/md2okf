@@ -21,6 +21,10 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |
+| `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
+| `inspectokf/` | optional: wiki directory tree CLI (wraps `tree`) |
+| `sizeokf/` | optional: wiki content-size CLI (excludes frontmatter) |
+| `merkleokf/` | optional: wiki Merkle hash tree CLI, for change detection |
 
 ## Compile a wiki
 
@@ -105,8 +109,11 @@ deterministic, and the fetched HTML is cached — see
 The instructions come in two parts. `AGENTS.md` holds what every task must
 respect: the OKF conventions, the directories the agent may write to, and the
 rule that `SPEC.md` outranks both. Each task's procedure lives in a skill of its
-own. There is one today, `compile-wiki`, and a new task gets a new directory
-rather than more rules in `AGENTS.md`.
+own. Task skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`,
+`size-okf`, `merkle-okf` — a tool gets a skill, not an `AGENTS.md` section. The
+sandbox also installs the `context7-docs` skill via `@upstash/context7-pi`
+(library docs lookups). A new task gets a new directory rather than more rules in
+`AGENTS.md`.
 
 A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
 `description`, then the instructions, plus any scripts it needs. Pi picks skills
@@ -123,7 +130,7 @@ edit reaches Pi on the next fresh sandbox — which `make wiki` always builds.
 the spec. Rules live in `okf/.okflintrc.json`, tracked and un-ignored by name so
 it survives the `okf/*` rule in `.gitignore`.
 
-The sandbox installs okf-lint at a pinned version, and the `compile-wiki` skill
+The sandbox installs okf-lint at a pinned version, and the `compile-okf` skill
 wraps it in `scripts/lint-okf.sh`. The agent lints its own output and fixes what
 the linter reports before it finishes. On the host, `make lint-okf` runs the
 same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
@@ -132,15 +139,23 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 ## Development
 
 ```bash
-make lint            # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make validate        # check pi/spec.yaml against the Sandbox Kit schema
-make test-web2md     # pytest, the web2md scraper suite
-make test-sandbox    # check the sandbox has the tools, config and key it promises
-make lint-okf        # lint the generated wiki
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make validate            # check pi/spec.yaml against the Sandbox Kit schema
+make test-web2md         # pytest, the web2md scraper suite
+make test-inspectmd      # pytest, the inspectmd CLI suite
+make install-inspectmd   # install the inspectmd CLI onto PATH
+make test-inspectokf     # pytest, the inspectokf CLI suite
+make install-inspectokf  # install the inspectokf CLI onto PATH
+make test-sizeokf        # pytest, the sizeokf CLI suite
+make install-sizeokf     # install the sizeokf CLI onto PATH
+make test-merkleokf      # pytest, the merkleokf CLI suite
+make install-merkleokf   # install the merkleokf CLI onto PATH
+make test-sandbox        # check the sandbox has the tools, config and key it promises
+make lint-okf            # lint the generated wiki
 ```
 
-markdownlint needs `brew install markdownlint-cli2`; yamllint runs via the uv
-`dev` group and cspell via `npx`, so neither needs a separate install.
+markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
+`uv tool run` and cspell via `npx`, so none of them needs a separate install.
 
 Touch anything under `pi/` or `scripts/` and run `make validate` before you call
 the job done. It checks the kit spec against the schema bundled in your `sbx`
@@ -169,8 +184,17 @@ Once a sandbox exists, this should print `proxy-managed` rather than your key:
 sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
-Python tooling is thin, split across three dependency groups: `dev` (ruff),
-`test` (pytest) and `web2md` (the scraper's runtime deps). CI installs one group
-per job with `--only-group`, so neither the lint job nor the test job pulls in
-the heavy project dependencies (marker-pdf, torch). The only first-party Python
-is the web2md scraper.
+Python tooling is thin. There is no project at the repo root: `pdf2md/`,
+`web2md/`, `inspectmd/`, `inspectokf/`, `sizeokf/`, and `merkleokf/` are
+independent uv projects, each with its own `pyproject.toml` and (where needed)
+`uv.lock`, and nothing shared between them. `pdf2md/` exists only to give
+`marker` a pinned venv; `web2md/` owns the scraper's dependencies and its
+pytest/ruff config; `inspectmd/`, `inspectokf/`, `sizeokf/` and `merkleokf/` are
+installable stdlib-only CLIs with their own ruff and pytest. So the heavy
+dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
+rather than being excluded by flag.
+
+`ruff` and `yamllint` belong to neither project; `make lint` runs them
+ephemerally at a pinned version with `uv tool run`, and checks each tracked
+subproject in turn — a new subproject carries its own `[tool.ruff]` and needs
+no Makefile change.

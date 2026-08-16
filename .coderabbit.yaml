@@ -142,7 +142,7 @@ reviews:
       timeout_ms: 900000
     ruff:
       enabled: true
-      config_file: "pyproject.toml"
+      config_file: "web2md/pyproject.toml"
 chat:
   art: false
   auto_reply: true

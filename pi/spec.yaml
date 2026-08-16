@@ -28,9 +28,14 @@ agentInstructions:
     These commands are on PATH. Use them; do not reinstall them.
 
     - `curl`, `jq`, `python3`, `rg` (ripgrep), `shellcheck`, `tree`
-    - `okf-lint` — OKF wiki linter (the compile-wiki skill wraps it)
+    - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
+    - `inspectmd` — Markdown heading map (line ranges and sizes)
+    - `inspectokf` — wiki directory tree (via `tree`)
+    - `sizeokf` — Markdown content size, excluding frontmatter
+    - `merkleokf` — wiki Merkle hash tree, for change detection
+    - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
 # listed. Pointing Pi at a different provider means adding its host here too —
@@ -54,6 +59,16 @@ permissions:
       - "security.ubuntu.com:80"
       - "ports.ubuntu.com:80"
       - "download.docker.com:443"
+      # mq release binary: github.com redirects to a GitHub CDN host.
+      # Today that is objects.githubusercontent.com; release-assets is also
+      # used for release downloads and must stay allowlisted.
+      - "github.com:443"
+      - "objects.githubusercontent.com:443"
+      - "release-assets.githubusercontent.com:443"
+      # mq docs and language reference, for the agent to consult at runtime.
+      - "mqlang.org/book/"
+      # Context7 docs API (native @upstash/context7-pi extension).
+      - "context7.com:443"
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
@@ -90,7 +105,7 @@ setup:
     # five attempts. `npm config` writes ~/.npmrc, so later npm steps inherit it.
     - command: |
         set -eu
-        PI_VERSION=0.84.1
+        PI_VERSION=0.84.2
         OKF_LINT_VERSION=0.1.0
 
         npm config set proxy "$HTTP_PROXY"
@@ -127,3 +142,79 @@ setup:
         uv tool install yamllint@1.38.0
       user: "1000"
       description: Install Python linters
+
+    # No apt/uv/npm package; fetched as a pinned, checksummed release binary.
+    - command: |
+        set -eu
+        MQ_VERSION=0.8.2
+
+        case "$(uname -m)" in
+          x86_64) MQ_TARGET=x86_64-unknown-linux-gnu ;;
+          aarch64) MQ_TARGET=aarch64-unknown-linux-gnu ;;
+          *)
+            echo "mq: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        base="https://github.com/harehare/mq/releases/download/v${MQ_VERSION}"
+        curl -fsSL -o "$tmp/mq" "${base}/mq-${MQ_TARGET}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="mq-${MQ_TARGET}/mq-${MQ_TARGET}" '$2 == f { print $1 }' \
+          "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/mq" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "mq: checksum mismatch for ${MQ_TARGET}" >&2
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/mq" "$HOME/.local/bin/mq"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install mq (Markdown query tool)
+
+    # Native Pi package (not MCP): tools + context7-docs skill under ~/.pi/agent/npm/.
+    - command: |
+        set -eu
+        CONTEXT7_PI_VERSION=0.1.2
+        pi install "npm:@upstash/context7-pi@${CONTEXT7_PI_VERSION}"
+      user: "1000"
+      description: Install Context7 Pi extension
+
+  # Workspace is not mounted during setup.install, so the CLIs are shims that
+  # resolve from ${WORKDIR} at invoke time (always tracks the tree).
+  files:
+    - path: /home/agent/.local/bin/inspectmd
+      mode: "0755"
+      description: Workspace-backed inspectmd CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/inspectmd" inspectmd "$@"
+
+    - path: /home/agent/.local/bin/inspectokf
+      mode: "0755"
+      description: Workspace-backed inspectokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/inspectokf" inspectokf "$@"
+
+    - path: /home/agent/.local/bin/sizeokf
+      mode: "0755"
+      description: Workspace-backed sizeokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/sizeokf" sizeokf "$@"
+
+    - path: /home/agent/.local/bin/merkleokf
+      mode: "0755"
+      description: Workspace-backed merkleokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/merkleokf" merkleokf "$@"

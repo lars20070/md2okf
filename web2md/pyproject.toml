@@ -1,32 +1,28 @@
 [project]
-name = "md2okf"
+name = "web2md"
 version = "0.1.0"
-description = "Convert Markdown files to an OKF knowledge base"
-readme = "README.md"
+description = "Scrape a documentation site into a single Markdown file"
 requires-python = ">=3.12"
-dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]
-
-# Groups are kept narrow so a CI job installs only what it needs: lint uses
-# --only-group dev, tests use --only-group test --only-group web2md. Neither
-# pulls in the heavy project dependencies (marker-pdf / torch).
-[dependency-groups]
-dev = ["ruff>=0.8", "yamllint>=1.35"]
-test = ["pytest>=8.4"]
-web2md = [
+dependencies = [
   "httpx>=0.28.1",
   "beautifulsoup4>=4.15.0",
   "lxml>=6.1.1",
   "markdownify>=1.2.3",
 ]
 
-# No [build-system]: web2md is a single module run by path (`make scrape`), not a
-# distributable package. pytest imports it via `pythonpath` below, so there is no
-# install step and no first-party package to build.
+# The scraper's runtime deps are plain project dependencies rather than a
+# group: nothing heavy lives in this project, so there is nothing to exclude.
+[dependency-groups]
+test = ["pytest>=8.4"]
+
+# No [build-system]: the module is run by path (`make scrape`), not installed.
+# pytest imports it via `pythonpath` below. Both paths are relative to this
+# file, so they resolve wherever the project is invoked from.
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = ["-ra", "--strict-markers", "--strict-config"]
-testpaths = ["web2md/tests"]
-pythonpath = ["web2md/src"]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py312"
@@ -45,4 +41,4 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 # A test's name is its documentation; a docstring on each of them would be noise.
 # Fixtures and helpers are still expected to explain themselves.
-"web2md/tests/*" = ["D100", "D103"]
+"tests/*" = ["D100", "D103"]

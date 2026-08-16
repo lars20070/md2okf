@@ -5,8 +5,10 @@
 > not Pi's task instructions. Pi runs inside the sandbox with the repo root as
 > its workspace and may read this file as a project document; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
-> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that,
-> and the Context7 / GitHub MCP tooling below is not available to you.
+> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
+> Host MCP (Context7 / GitHub in `.mcp.json`) is for Cursor/Claude on the host
+> only. Sandbox Pi gets Context7 through the native `@upstash/context7-pi`
+> package installed by the kit, not via MCP.
 
 ## Repository map
 
@@ -21,15 +23,48 @@ including the runtime agent configs. `pdf2md/` is the optional upstream step
 that turns a PDF into Markdown with `marker`; it is manual and not wired into
 the `make` pipeline.
 
-`web2md/` is the other upstream step: a deterministic scraper that fetches a
+`web2md/` is one upstream step: a deterministic scraper that fetches a
 website into a single file under `md/`, driven by `make scrape`. Which site and
 which output filename live in two constants at the top of `web2md/src/web2md.py`
-(`SOURCE_URL`, `OUTPUT_FILE`). It is the only
-first-party Python in the repo — module in `web2md/src/`, pytest suite in
+(`SOURCE_URL`, `OUTPUT_FILE`). Module in `web2md/src/`, pytest suite in
 `web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
 `[build-system]`: the module is run by path and pytest imports it via
-`pythonpath` in `pyproject.toml`. Run `make test-web2md` after touching either
-directory; the suite is offline and needs no network.
+`pythonpath` in `web2md/pyproject.toml`. Run `make test-web2md` after touching
+either directory; the suite is offline and needs no network.
+
+`inspectmd/` is a third independent uv project: an installable CLI that prints a
+Markdown heading map (line ranges, sizes, kebab-case slugs). Host install is
+`make install-inspectmd`; the sandbox exposes the same `inspectmd` command via a
+`setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest — nothing
+shared with `web2md/` or `pdf2md/`. Run `make test-inspectmd` after touching it.
+
+`inspectokf/` is a fourth independent uv project: an installable CLI that prints
+a wiki directory tree by wrapping `tree` (default path `okf/`, unlimited depth
+unless `-L`/`--level` caps it). Host install is `make install-inspectokf`; the
+sandbox exposes `inspectokf` the same way. Own `pyproject.toml`, `uv.lock`, ruff
+and pytest. Run `make test-inspectokf` after touching it. Both inspect CLIs spell
+the depth cap `-L`/`--level`.
+
+`sizeokf/` is a fifth independent uv project: an installable CLI that reports
+Markdown content size per file and per folder (recursive), **excluding YAML
+frontmatter** — which is 43.6% of the current wiki, so byte counters like `du`
+and `wc -c` roughly double the real figure. Same `-L`/`--level` depth cap as the
+inspect CLIs. It carries its own `strip_frontmatter` rather than importing
+`inspectmd`'s, under the zero-overlap rule; the two are pinned by tests on both
+sides. Host install is `make install-sizeokf`; the sandbox exposes `sizeokf`
+through the same `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and
+pytest. Run `make test-sizeokf` after touching it.
+
+`merkleokf/` is a sixth independent uv project: an installable CLI that prints a
+Merkle hash tree — a hash per `*.md` file and per directory — so a change to any
+page moves its parents' hashes and nothing else. Same `-L`/`--level` cap as the
+other CLIs; also accepts a single file. It hashes **raw bytes**, deliberately the
+opposite of `sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
+change", `sizeokf` answers "how much prose is here", and they share no code.
+Digests display as 12 hex characters; full digests are computed internally. Host
+install is `make install-merkleokf`; the sandbox exposes `merkleokf` through the
+same `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest. Run
+`make test-merkleokf` after touching it.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
 `pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,
@@ -42,9 +77,11 @@ kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
-each task's procedure lives in its own skill directory under `skills/`. There is
-one today, `compile-wiki`. A new task gets a new skill, not more rules in
-`AGENTS.md`.
+each task's procedure lives in its own skill directory under `skills/`. Task
+skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`, `size-okf`,
+`merkle-okf` — **a tool gets a skill, not an `AGENTS.md` section.** Helper skill:
+`context7-docs`, installed by the kit via `@upstash/context7-pi`. A new task gets
+a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds shell tests for that sandbox, in pairs: a host-side script
 (`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`
@@ -53,18 +90,26 @@ script it runs inside the VM (`test-sandbox-guest.sh`).
 ## Commands
 
 ```bash
-make lint            # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make validate        # validate the sandbox kit spec (runs scripts/validate-spec.sh)
-make test-web2md     # pytest, the web2md scraper suite (offline)
-make test-sandbox    # check the sandbox delivers what pi/spec.yaml promises
-make scrape          # fetch the website into md/ as one file (web2md)
-make wiki            # compile the OKF wiki via the sandbox runtime
-make lint-okf        # lint the generated okf/ wiki (okf-lint via pnpm dlx)
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
+make test-web2md         # pytest, the web2md scraper suite (offline)
+make test-inspectmd      # pytest, the inspectmd CLI suite (offline)
+make install-inspectmd   # uv tool install ./inspectmd onto PATH
+make test-inspectokf     # pytest, the inspectokf CLI suite (offline)
+make install-inspectokf  # uv tool install ./inspectokf onto PATH
+make test-sizeokf        # pytest, the sizeokf CLI suite (offline)
+make install-sizeokf     # uv tool install ./sizeokf onto PATH
+make test-merkleokf      # pytest, the merkleokf CLI suite (offline)
+make install-merkleokf   # uv tool install ./merkleokf onto PATH
+make test-sandbox        # check the sandbox delivers what pi/spec.yaml promises
+make scrape              # fetch the website into md/ as one file (web2md)
+make wiki                # compile the OKF wiki via the sandbox runtime
+make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ```
 
 ```bash
 ./scripts/bash.sh                            # shell into the existing sandbox
-./scripts/compile-wiki.sh md/other-books     # compile a different source folder
+./scripts/compile-okf.sh md/other-books      # compile a different source folder
 sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
 ```
 

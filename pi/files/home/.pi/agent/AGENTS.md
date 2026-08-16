@@ -16,8 +16,16 @@ directory per task, each with a `SKILL.md`.
   skill tells you the procedure; this file tells you the conventions that
   procedure has to respect.
 - Available skills:
-  - `compile-wiki` — compile a Markdown source document from `md/` into the wiki
+  - `compile-okf` — compile a Markdown source document from `md/` into the wiki
     under `okf/`.
+  - `inspect-md` — map a long source under `md/` before reading it in ranges.
+  - `inspect-okf` — survey what the wiki already contains, before writing.
+  - `size-okf` — measure how much prose a page or category holds.
+  - `merkle-okf` — confirm which pages a run actually changed.
+  - `context7-docs` — fetch current library/framework docs via Context7 (installed
+    with `@upstash/context7-pi`; use before relying on training data for APIs).
+- Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`) are read
+  **when the work calls for them**, not only when a run names one.
 
 ## The OKF specification is the source of truth
 

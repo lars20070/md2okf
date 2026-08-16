@@ -38,29 +38,36 @@ this book, not the site in general.
 | `tests/` | the pytest suite (see below) |
 | `cache/` | fetched HTML, gitignored; reused unless you pass `--refresh` |
 
-This is the only first-party Python in the repo. There is no `[build-system]`
-and no installable package: `make scrape` runs the module by path, and pytest
-imports it through `pythonpath = ["web2md/src"]` in the repo's `pyproject.toml`.
+This is the only first-party Python in the repo, and its own uv project:
+`web2md/pyproject.toml` holds the scraper's dependencies, the pytest config and
+the only `[tool.ruff]` in the repo, with a `uv.lock` of its own. Nothing is
+shared with `pdf2md` — the heavy `marker` stack cannot reach this project.
+There is still no `[build-system]` and no installable package: `make scrape`
+runs the module by path, and pytest imports it through `pythonpath = ["src"]`,
+relative to `web2md/pyproject.toml`.
 
 ## Fetch and convert
 
 ```bash
-# Install scraper deps (separate from the heavy marker-pdf stack)
-uv sync --group web2md
+# Install scraper deps (its own project, so no marker-pdf stack in sight)
+uv sync --project web2md
 
 # Fetch (or reuse web2md/cache/) and write md/*.md
 make scrape
 
 # Or call the module directly:
-uv run --group web2md python web2md/src/web2md.py
-uv run --group web2md python web2md/src/web2md.py --refresh
+uv run --project web2md python web2md/src/web2md.py
+uv run --project web2md python web2md/src/web2md.py --refresh
 ```
 
 ## Tests
 
 ```bash
-make test-web2md                                       # the whole suite
-uv run --group test --group web2md pytest web2md/tests # the same, directly
+make test-web2md   # the whole suite
+
+# The same, directly. -c points pytest at this project's config, whose
+# testpaths and pythonpath are relative to it.
+uv run --project web2md --group test pytest -c web2md/pyproject.toml
 ```
 
 The suite is offline: HTTP is served by `httpx.MockTransport`, so no test opens
