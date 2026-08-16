@@ -21,7 +21,7 @@ CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
 .PHONY: lint lint-okf validate test test-web2md test-inspectmd install-inspectmd \
-	test-sandbox wiki scrape
+	test-inspectokf install-inspectokf test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, and
 # lint Python. Driving every check off `git ls-files` means a newly added file
@@ -67,7 +67,7 @@ validate:
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-web2md test-inspectmd test-sandbox
+test: test-web2md test-inspectmd test-inspectokf test-sandbox
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
@@ -86,6 +86,16 @@ test-inspectmd:
 # Install the inspectmd CLI onto the host PATH via uv tool.
 install-inspectmd:
 	uv tool install --force ./inspectmd
+
+# Unit-test inspectokf (inspectokf/tests/). Offline: tree is mocked. Own project
+# and lockfile — nothing shared with inspectmd or web2md.
+test-inspectokf:
+	uv run --project inspectokf --group test pytest -c inspectokf/pyproject.toml \
+		inspectokf/tests
+
+# Install the inspectokf CLI onto the host PATH via uv tool.
+install-inspectokf:
+	uv tool install --force ./inspectokf
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that pi/spec.yaml promises.

@@ -32,6 +32,7 @@ agentInstructions:
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and sizes)
+    - `inspectokf` — wiki directory tree (via `tree`)
     - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
@@ -178,8 +179,8 @@ setup:
       user: "1000"
       description: Install Context7 Pi extension
 
-  # Workspace is not mounted during setup.install, so the CLI is a shim that
-  # resolves inspectmd from ${WORKDIR} at invoke time (always tracks the tree).
+  # Workspace is not mounted during setup.install, so the CLIs are shims that
+  # resolve from ${WORKDIR} at invoke time (always tracks the tree).
   files:
     - path: /home/agent/.local/bin/inspectmd
       mode: "0755"
@@ -188,3 +189,11 @@ setup:
         #!/bin/sh
         set -eu
         exec uv tool run --from "${WORKDIR}/inspectmd" inspectmd "$@"
+
+    - path: /home/agent/.local/bin/inspectokf
+      mode: "0755"
+      description: Workspace-backed inspectokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/inspectokf" inspectokf "$@"

@@ -78,8 +78,9 @@ check cspell
 check ruff
 check yamllint
 
-# setup.files shim (pi/spec.yaml): workspace-backed CLI on PATH.
+# setup.files shims (pi/spec.yaml): workspace-backed CLIs on PATH.
 check inspectmd
+check inspectokf
 
 # pinned release binary (pi/spec.yaml): checksummed download, no package manager.
 check mq

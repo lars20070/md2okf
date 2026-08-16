@@ -38,6 +38,12 @@ Markdown heading map (line ranges, sizes, kebab-case slugs). Host install is
 `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest — nothing
 shared with `web2md/` or `pdf2md/`. Run `make test-inspectmd` after touching it.
 
+`inspectokf/` is a fourth independent uv project: an installable CLI that prints
+a wiki directory tree by wrapping `tree` (default path `okf/`). Host install is
+`make install-inspectokf`; the sandbox exposes `inspectokf` the same way. Own
+`pyproject.toml`, `uv.lock`, ruff and pytest. Run `make test-inspectokf` after
+touching it.
+
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
 `pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,
 `skills/`) lives in `pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
@@ -65,6 +71,8 @@ make validate            # validate the sandbox kit spec (runs scripts/validate-
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-inspectmd      # pytest, the inspectmd CLI suite (offline)
 make install-inspectmd   # uv tool install ./inspectmd onto PATH
+make test-inspectokf     # pytest, the inspectokf CLI suite (offline)
+make install-inspectokf  # uv tool install ./inspectokf onto PATH
 make test-sandbox        # check the sandbox delivers what pi/spec.yaml promises
 make scrape              # fetch the website into md/ as one file (web2md)
 make wiki                # compile the OKF wiki via the sandbox runtime

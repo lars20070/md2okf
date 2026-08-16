@@ -65,6 +65,7 @@
     "hatchling",
     "stdlib",
     "context7",
-    "upstash"
+    "upstash",
+    "inspectokf"
   ]
 }

@@ -173,6 +173,18 @@ The default table columns mean:
 `--section N` prints only `start:end  N chars` for a ranged read. The map is a
 plan for cuts and reads — not permission to paraphrase source prose.
 
+### Surveying the wiki with `inspectokf`
+
+Before writing or updating pages, survey what already exists:
+
+```bash
+inspectokf
+inspectokf okf/<topic>
+```
+
+Defaults to `okf/`. Pass any existing directory (typically a wiki subfolder).
+Output is the `tree` listing of that path.
+
 ### Idempotency
 
 - Updates are **idempotent**. If a page for a topic already exists, update it in
