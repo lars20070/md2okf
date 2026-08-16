@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from inspectmd import __version__
 from inspectmd.parse import Section, inspect_markdown
 
 
@@ -65,6 +66,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "file",
         type=Path,
         help="Markdown file to inspect",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--section",

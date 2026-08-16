@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+
+from inspectmd import __version__
 from inspectmd.cli import format_section_range, format_table, main
 from inspectmd.parse import Section
 
@@ -85,3 +88,11 @@ def test_main_max_depth(tmp_path: Path, capsys):
     assert "Alpha" in out
     assert "Beta" not in out
     assert "Gamma" not in out
+
+
+def test_main_version(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert out == f"inspectmd {__version__}\n"
