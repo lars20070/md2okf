@@ -53,7 +53,7 @@ CLI essentials in `cli.py`:
 - Positional `path` defaulting to `okf` (`nargs="?"`, `default=Path("okf")`).
 - Validate `path.is_dir()`; else stderr + exit 2.
 - `shutil.which("tree")`; if missing, stderr + exit 2.
-- `subprocess.run(["tree", str(path)], capture_output=False)` (inherit stdio) or capture-and-forward; return 0 if tree exit 0 else 2.
+- `subprocess.run(["tree", str(path)], check=False)` with inherited stdio (do **not** use `capture_output=True`). Tree writes straight to the process stdout/stderr; return `0` if tree’s exit code is `0`, else `2`.
 
 ## Delivery (same as inspectmd)
 
