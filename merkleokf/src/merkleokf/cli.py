@@ -11,13 +11,33 @@ from merkleokf import __version__
 from merkleokf.merkle import Entry, collect, hash_file, short
 
 
+def escape_display_path(path: str) -> str:
+    """Escape controls so a path stays one table cell (no newlines or ANSI)."""
+    out: list[str] = []
+    for ch in path:
+        code = ord(ch)
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif code < 0x20 or code == 0x7F:
+            out.append(f"\\x{code:02x}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def format_table(entries: Sequence[Entry]) -> str:
     """Render entries as a fixed-width table, one row per file or directory."""
     if not entries:
         return "(no Markdown files)\n"
 
     headers = ("Hash", "Files", "Path")
-    rows = [(short(e.digest), f"{e.files:,}", e.path) for e in entries]
+    rows = [(short(e.digest), f"{e.files:,}", escape_display_path(e.path)) for e in entries]
 
     widths = [len(h) for h in headers]
     for row in rows:
@@ -76,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     path: Path = args.path
 
     if path.is_file():
-        sys.stdout.write(f"{short(hash_file(path))}  {path.name}\n")
+        sys.stdout.write(f"{short(hash_file(path))}  {escape_display_path(path.name)}\n")
         return 0
 
     if not path.is_dir():
@@ -84,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     entries, root = collect(path, max_level=level)
-    sys.stdout.write(f"{path.name}: {short(root.digest)}, {root.files:,} files\n\n")
+    sys.stdout.write(f"{escape_display_path(path.name)}: {short(root.digest)}, {root.files:,} files\n\n")
     sys.stdout.write(format_table(entries))
     return 0
 

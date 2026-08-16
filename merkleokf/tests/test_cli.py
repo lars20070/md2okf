@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from merkleokf import __version__
-from merkleokf.cli import main
-from merkleokf.merkle import DISPLAY_WIDTH
+from merkleokf.cli import escape_display_path, format_table, main
+from merkleokf.merkle import DISPLAY_WIDTH, Entry
 
 
 def _wiki(tmp_path: Path) -> Path:
@@ -103,3 +103,35 @@ def test_main_unknown_flag(capsys):
         main(["--nope"])
     assert exc_info.value.code == 2
     assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_escape_display_path_newlines_and_ansi():
+    assert escape_display_path("a\nb.md") == "a\\nb.md"
+    assert escape_display_path("c\x1b[31md.md") == "c\\x1b[31md.md"
+    assert escape_display_path("plain.md") == "plain.md"
+
+
+def test_format_table_escapes_controls_before_width():
+    """Newlines/ANSI must not break the table or inflate display width wrongly."""
+    entries = [
+        Entry(path="a\nb.md", is_dir=False, digest=b"\x00" * 32, files=1, depth=1),
+        Entry(path="c\x1b[31md.md", is_dir=False, digest=b"\x01" * 32, files=1, depth=1),
+    ]
+    out = format_table(entries)
+    assert "\x1b" not in out
+    assert "\\n" in out
+    assert "\\x1b" in out
+    # One header, one rule, two data rows — a raw newline in the path would add lines.
+    assert len(out.splitlines()) == 4
+
+
+def test_main_escapes_control_chars_in_paths(tmp_path: Path, capsys):
+    root = tmp_path / "okf"
+    root.mkdir()
+    (root / "a\nb.md").write_text("# nl\n", encoding="utf-8")
+    (root / "c\x1b[31md.md").write_text("# ansi\n", encoding="utf-8")
+    assert main([str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "\\n" in out
+    assert "\\x1b" in out
