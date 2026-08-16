@@ -25,7 +25,7 @@ def format_table(sections: Sequence[Section], *, max_depth: int | None = None) -
     if not visible:
         return "(no sections at this depth)\n"
 
-    headers = ("Idx", "Lv", "Lines", "Chars", "Slug", "Title")
+    headers = ("Index", "Level", "Lines", "Characters", "Slug", "Title")
     rows: list[tuple[str, str, str, str, str, str]] = []
     for s in visible:
         rows.append(

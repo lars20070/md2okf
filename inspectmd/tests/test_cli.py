@@ -15,7 +15,7 @@ def test_format_table_columns():
         Section(1, 1, "Hello", "hello", 3, 5, 20),
     ]
     out = format_table(sections)
-    assert "Idx" in out
+    assert "Index" in out
     assert "preamble" in out
     assert "hello" in out
     assert "1-2" in out
