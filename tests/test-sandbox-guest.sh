@@ -92,7 +92,35 @@ check_file "${HOME}/.pi/agent/models.json"
 check_file "${HOME}/.pi/agent/skills/compile-wiki/SKILL.md"
 check_exec "${HOME}/.pi/agent/skills/compile-wiki/scripts/lint-okf.sh"
 
-# Credentials (pi/spec.yaml:62-70). Automates the manual check in the README.
+# Context7 native Pi package (pi/spec.yaml setup.install + settings.json
+# packages). Presence only — no live Context7 API call.
+if timeout 20 pi list 2>/dev/null | grep -q context7-pi; then
+	echo "ok context7-pi (pi list)"
+else
+	echo "MISSING context7-pi (pi list)"
+	failures=$((failures + 1))
+fi
+
+if grep -q 'npm:@upstash/context7-pi@0.1.2' "${HOME}/.pi/agent/settings.json"; then
+	echo "ok settings.json context7-pi package"
+else
+	echo "MISSING settings.json context7-pi package"
+	failures=$((failures + 1))
+fi
+
+c7_skill=$(
+	find "${HOME}/.pi/agent/npm" \
+		-path '*context7-pi*/skills/context7-docs/SKILL.md' \
+		2>/dev/null | head -n 1
+)
+if [ -n "${c7_skill}" ] && [ -f "${c7_skill}" ]; then
+	echo "ok ${c7_skill}"
+else
+	echo "MISSING context7-docs SKILL.md under ~/.pi/agent/npm"
+	failures=$((failures + 1))
+fi
+
+# Credentials (pi/spec.yaml:69-77). Automates the manual check in the README.
 # Never print the value — case-match and report only a verdict.
 case "${OPENROUTER_API_KEY-}" in
 "")

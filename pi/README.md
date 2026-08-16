@@ -71,6 +71,13 @@ experimental. It has no stdin form either, so the key is visible to anything
 that can list processes for as long as the command runs. Reading it from an
 exported variable, as above, at least keeps it out of your shell history.
 
+## Context7 docs extension
+
+The kit installs `@upstash/context7-pi` (pinned in `setup.install` and listed
+under `packages` in `settings.json`). That is a native Pi package — not MCP —
+and registers `resolve-library-id`, `query-docs`, and the `context7-docs` skill.
+Egress to `context7.com` is allowlisted in `spec.yaml`.
+
 ### Why the litellm entry spells out its numbers
 
 Pi ships a catalogue of 33 providers. OpenRouter is one of them; LiteLLM is not.

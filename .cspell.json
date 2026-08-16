@@ -63,6 +63,8 @@
     "inspectmd",
     "uvx",
     "hatchling",
-    "stdlib"
+    "stdlib",
+    "context7",
+    "upstash"
   ]
 }

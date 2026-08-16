@@ -5,8 +5,10 @@
 > not Pi's task instructions. Pi runs inside the sandbox with the repo root as
 > its workspace and may read this file as a project document; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
-> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that,
-> and the Context7 / GitHub MCP tooling below is not available to you.
+> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
+> Host MCP (Context7 / GitHub in `.mcp.json`) is for Cursor/Claude on the host
+> only. Sandbox Pi gets Context7 through the native `@upstash/context7-pi`
+> package installed by the kit, not via MCP.
 
 ## Repository map
 

@@ -18,6 +18,8 @@ directory per task, each with a `SKILL.md`.
 - Available skills:
   - `compile-wiki` — compile a Markdown source document from `md/` into the wiki
     under `okf/`.
+  - `context7-docs` — fetch current library/framework docs via Context7 (installed
+    with `@upstash/context7-pi`; use before relying on training data for APIs).
 
 ## The OKF specification is the source of truth
 

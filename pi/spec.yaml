@@ -61,6 +61,8 @@ permissions:
       - "objects.githubusercontent.com:443"
       # mq docs and language reference, for the agent to consult at runtime.
       - "mqlang.org/book/"
+      # Context7 docs API (native @upstash/context7-pi extension).
+      - "context7.com:443"
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
@@ -167,6 +169,14 @@ setup:
         rm -rf "$tmp"
       user: "1000"
       description: Install mq (Markdown query tool)
+
+    # Native Pi package (not MCP): tools + context7-docs skill under ~/.pi/agent/npm/.
+    - command: |
+        set -eu
+        CONTEXT7_PI_VERSION=0.1.2
+        pi install "npm:@upstash/context7-pi@${CONTEXT7_PI_VERSION}"
+      user: "1000"
+      description: Install Context7 Pi extension
 
   # Workspace is not mounted during setup.install, so the CLI is a shim that
   # resolves inspectmd from ${WORKDIR} at invoke time (always tracks the tree).
