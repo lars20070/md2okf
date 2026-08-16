@@ -24,7 +24,7 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
 | `inspectokf/` | optional: wiki directory tree CLI (wraps `tree`) |
 | `sizeokf/` | optional: wiki content-size CLI (excludes frontmatter) |
-| `merkleokf/` | optional: wiki Merkle hash tree CLI (scaffold, no behaviour yet) |
+| `merkleokf/` | optional: wiki Merkle hash tree CLI, for change detection |
 
 ## Compile a wiki
 

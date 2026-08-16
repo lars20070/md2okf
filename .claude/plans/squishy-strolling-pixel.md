@@ -1,169 +1,185 @@
-# Give `sizeokf` its behaviour: content sizes excluding frontmatter, with `-L`
+# Give `merkleokf` its behaviour: a Merkle hash tree, with `-L`
 
 ## Context
 
-`sizeokf` is currently a scaffold — it parses `--help` and `--version` and does
-nothing. This change makes it do its job: report the **character count of
-Markdown content, excluding YAML frontmatter**, per file and per folder
-(folders recursive), with a `-L`/`--level` depth cap matching `inspectmd` and
-`inspectokf`.
+`merkleokf` is currently a scaffold — it parses `--help` and `--version` and does
+nothing. This change makes it compute a **Merkle hash tree** over an OKF wiki: a
+content hash per Markdown file, and a hash per directory derived from its
+children, so a change to any leaf propagates to exactly one chain of parents.
+A `-L`/`--level` depth cap matches `inspectmd`, `inspectokf` and `sizeokf`.
 
-The reason to exclude frontmatter is not cosmetic. Measured on the current wiki:
+The point is cheap change localisation. Verified on the real wiki during design:
+editing **one** leaf file changed the root hash and exactly **one** of 15
+top-level rows; the other 13 categories stayed byte-identical. So an agent reads
+15 lines, sees which category moved, and descends — instead of diffing 217 files.
 
-| | chars |
-| --- | --- |
-| raw | 186,950 |
-| frontmatter | 81,518 — **43.6%** |
-| content | **105,432** |
-
-So `du`, `wc -c` and every other byte-counting tool overstate the actual prose by
-roughly a factor of two. No existing tool answers "how much writing is in this
-category", which is the question that matters when deciding whether a page needs
-splitting or a category is thin.
+Today the alternative is hand-rolled git plumbing (`GIT_INDEX_FILE` +
+`git add -Af` + `git write-tree` + `git ls-tree`), which works but leaks objects
+unless redirected, silently includes `.DS_Store`, and gives `-` for every
+directory size.
 
 Four design decisions, confirmed with the user:
 
-- **Fixed-width table** with a header row, in `inspectmd`'s house style.
-- **Largest first**, so the answer to "what is big here" is the first row.
-- **Chars + file count** columns — the count distinguishes "many short pages"
-  from "few long ones" and is free while walking.
-- **Copy the frontmatter logic** into `sizeokf` rather than share a module,
-  honouring the repo's zero-overlap rule (`AGENTS.md`: "nothing shared").
+- **Raw file bytes** are hashed — *not* frontmatter-stripped content. This makes
+  `merkleokf` the integrity tool and `sizeokf` the prose tool: any byte change,
+  including a timestamp bump, moves the hash. Consequence: a regeneration that
+  rewrites the 164 shared `2026-08-11` timestamps will light up the whole tree,
+  and that is the intended, honest answer.
+- **Only `*.md` files** feed the tree, matching `sizeokf`. `.DS_Store` (live in
+  `okf/` today, and rewritten whenever Finder looks at the folder) and
+  `.okflintrc.json` are both ignored, so hashes never flap from OS noise.
+- **12 hex characters** displayed, from SHA-256. 48 bits: collision odds ~8e-11
+  at 217 files, ~2e-7 at 10,000. Full digests are computed internally; only the
+  display is truncated.
+- **Alphabetical by path**, so two runs diff line-by-line — the entire point.
+
+**This combination means `merkleokf` shares no logic with `sizeokf`.** Hashing
+raw bytes removes any need to duplicate `strip_frontmatter`, so there is no
+second copy to keep in sync.
 
 ## Behaviour
 
 ```
-$ sizeokf -L 1
-okf: 105,432 chars, 217 files
+$ merkleokf -L 1
+okf: 86c7544437e0, 217 files
 
-Chars    Files  Path
--------  -----  ---------------------
- 21,324     43  british-history/
- 19,030     38  ancient-world/
- 11,612     29  popular-culture/
-  7,849     15  american-history/
-    ...
-  1,773      1  index.md
-    460      1  log.md
+Hash          Files  Path
+------------  -----  ----------------------
+51766f25dfdd     15  american-history/
+15d3bec65739     38  ancient-world/
+5423a3e28d49     43  british-history/
+...
+55dc280ffc06      1  index.md
+59d43a1b974d      1  log.md
 ```
+
+Those are the **real** hashes for the current wiki, computed twice during design
+(a standalone prototype and a second independent script agreed). They are the
+verification anchors below.
 
 Rules, all to be stated in the README:
 
-- **Only `*.md` files count.** Non-Markdown (`.okflintrc.json`, `.DS_Store`) is
-  ignored entirely — neither listed nor counted.
-- **Characters, not bytes** — `len(str)` after UTF-8 decode, including newlines.
-  The wiki has 1,104 multi-byte characters, so this differs from `wc -c` by ~0.6%.
-- **Directory rows are always recursive**, regardless of `-L`. This is the thing
-  `tree --du -L 1` gets wrong (it reports 544 bytes for a 60K category).
-- **`-L N` limits which entities get a row**, exactly like `inspectokf -L N`:
-  `-L 1` lists the 13 categories plus `index.md`/`log.md` (15 rows); unlimited
-  lists every file too. Default unlimited, `N` must be ≥ 1.
-- **Sort is global across all listed rows**, largest first, ties broken
-  alphabetically by path so output is deterministic. (At `-L 1` — the common
-  case, and all this wiki supports since it is only one level deep — global and
-  per-parent sorting are identical.)
-- **Trailing `/` on directory rows** to distinguish them from files at a glance.
-- A directory containing no `.md` files still gets a row, with `0`.
+- **Directory digest construction**: children sorted by name, each contributing
+  a type tag, its name, and its digest — `b"d" + name + digest` for directories,
+  `b"f" + name + digest` for files. Names must be included or a rename is
+  invisible; type tags must be included or a file and a directory of the same
+  name collide; sorting must be explicit or the hash is not reproducible across
+  filesystems.
+- **Directory hashes are always full-depth recursive**, whatever `-L` says. `-L`
+  decides which entries get a row, never what they cover.
+- **`-L N`** lists entries at most `N` levels deep, exactly like `inspectokf -L N`.
+  Default unlimited; `N` must be ≥ 1.
+- **A file argument is allowed** — `merkleokf okf/index.md` prints that one
+  file's hash. `-L` is accepted but has no effect on a file.
+- **No decoding.** Files are read as bytes, so there is no encoding to get wrong
+  and no `UnicodeDecodeError` path. An unreadable file is reported on stderr and
+  contributes a zero digest rather than aborting the walk.
+- **Symlinks are not followed** into directories, avoiding cycles.
+- A directory with no Markdown still gets a row: the digest of an empty child
+  list, and `0` files.
 
 ## Implementation
 
-Mirror `inspectmd`'s two-module split (`parse.py` + `cli.py`):
+Mirror the `sizeokf` module split (`sizes.py` + `cli.py`), which mirrors
+`inspectmd`'s:
 
-**`sizeokf/src/sizeokf/sizes.py`** (new)
+**`merkleokf/src/merkleokf/merkle.py`** (new)
 
-- `strip_frontmatter(text: str) -> str` — a copy of the semantics in
-  `inspectmd/src/inspectmd/parse.py:60` (`split_frontmatter`), simplified to
-  return just the body since `sizeokf` needs no line offsets. Preserve all its
-  edge cases: strip a leading BOM; text not starting with `---` is unchanged; a
-  first line that is not exactly `---` after stripping is unchanged; an
-  **unterminated** block is treated as *no* frontmatter. The body starts at the
-  line after the closing `---`, so a blank line following it is counted — same
-  as `inspectmd`, and matches the 105,432 figure above.
-- `Entry` frozen dataclass: `path` (relative to the root), `is_dir`, `chars`,
-  `files`, `depth`.
-- `collect(root: Path, *, max_level: int | None) -> tuple[list[Entry], Entry]` —
-  one walk computing recursive totals for every directory, returning the listed
-  entries plus a root total for the summary line.
+- `DISPLAY_WIDTH = 12` — one named constant, so the truncation is not scattered.
+- `hash_file(path: Path) -> bytes` — SHA-256 over raw bytes.
+- `Entry` frozen dataclass: `path` (relative, directories end in `/`), `is_dir`,
+  `digest` (full bytes), `files`, `depth`.
+- `collect(root, *, max_level) -> tuple[list[Entry], Entry]` — one walk returning
+  the listed entries plus a root `Entry` for the summary line. Entries sorted by
+  path. Reuse the shape of `sizeokf/src/sizeokf/sizes.py` `collect`, which
+  already does recursive totals with a `max_level` listing cap.
 
-**`sizeokf/src/sizeokf/cli.py`** (rewrite)
+**`merkleokf/src/merkleokf/cli.py`** (rewrite)
 
-- `format_table(entries) -> str` — same column-width algorithm as
-  `inspectmd/src/inspectmd/cli.py:14` `format_table`: compute widths from
-  headers and rows, join with two spaces, emit a `---` rule row. Thousands
-  separators on the numeric columns; right-align them.
-- `_build_parser()` — add a `path` positional (`nargs="?"`, default `Path("okf")`)
-  and `-L`/`--level` (`type=int`, `metavar="N"`), keeping `--version`.
-- `main()` — validate `--level >= 1` **before** the path check, reusing the exact
-  message shape from `inspectokf/src/inspectokf/cli.py`:
-  `sizeokf: --level must be 1 or greater (got N)`, exit `2`. Then
-  `sizeokf: not a directory: <path>`, exit `2`. Print summary line, blank line,
-  table. Exit `0`.
-- Per-file read errors (`OSError`, `UnicodeDecodeError`) warn on stderr, count
-  the file as `0` chars, and do not abort the walk — one unreadable file must not
-  lose the other 216 results.
+- `format_table(entries)` — same column-width algorithm as
+  `sizeokf/src/sizeokf/cli.py:15` `format_table`: widths from headers and rows,
+  two-space join, `---` rule row. Columns `Hash`, `Files`, `Path`; `Files`
+  right-aligned, `Hash` and `Path` left.
+- `_build_parser()` — `path` positional (`nargs="?"`, default `Path("okf")`),
+  `-L`/`--level`, `--version`.
+- `main()` — validate `--level >= 1` first, reusing the exact message shape from
+  `sizeokf`/`inspectokf`: `merkleokf: --level must be 1 or greater (got N)`,
+  exit `2`. Then dispatch on the path: a file prints `<hash>  <name>`; a
+  directory prints the summary line, a blank line, then the table; anything else
+  is `merkleokf: not a file or directory: <path>`, exit `2`.
 
-**Tests** — mirror `inspectmd`'s split into two files:
+**Tests** — two files, mirroring `sizeokf`:
 
-- `sizeokf/tests/test_sizes.py` — `strip_frontmatter` edge cases (present,
-  absent, BOM, unterminated, `---` inside body, empty file, frontmatter-only
-  file); `collect` recursion, `.md`-only filtering, and depth limiting, built on
-  `tmp_path` fixtures.
-- `sizeokf/tests/test_cli.py` — keep the existing `--version`/`--help`/unknown-flag
-  tests; replace the two "does nothing" and "no positional" tests, which now
-  assert the opposite. Add: table renders with header and totals; `-L 1` and
-  `--level 1` agree; `--level 0`/`-1` exit `2` naming `--level`; missing
-  directory exits `2`; sort is descending with alphabetical tie-break; a
-  directory with no Markdown reports `0`.
+- `merkleokf/tests/test_merkle.py` — digest determinism (same tree, same hash);
+  **change propagation** (edit one leaf → its parent and the root move, siblings
+  do not) — the central property, tested on a `tmp_path` fixture; renaming a file
+  changes the parent hash; a file and a directory of the same name produce
+  different digests; non-`.md` files and dotfiles are ignored; `max_level` limits
+  listing but not coverage; empty directory.
+- `merkleokf/tests/test_cli.py` — keep `--version`/`--help`/unknown-flag; replace
+  the two scaffold tests; add table rendering, `-L 1` vs `--level 1` agreement,
+  `--level 0`/`-1` exit `2`, missing path exit `2`, and the single-file form.
 
 ## Docs
 
-The "scaffold, no behaviour yet" wording must go everywhere it appears:
+Remove "scaffold, no behaviour yet" everywhere it appears:
 
-- `sizeokf/README.md` — rewrite: drop the scaffold note, document the columns,
-  the frontmatter rule, `-L`, and exit codes.
-- `README.md` (root) — the `sizeokf/` table row.
-- `AGENTS.md` (root) — the `sizeokf/` repository-map paragraph.
-- `pi/spec.yaml` — the `Installed tools` bullet becomes
-  `` - `sizeokf` — Markdown content size, excluding frontmatter ``.
-- `pi/files/home/.pi/agent/AGENTS.md` — **new** section, alongside the existing
-  `inspectmd` and `inspectokf` ones: how to survey wiki size, starting shallow
-  with `sizeokf -L 1`, and that the number is content only, so it is comparable
-  across pages regardless of frontmatter bulk.
+- `merkleokf/README.md` — rewrite: columns, the raw-bytes/`*.md`-only rules, the
+  12-hex truncation and why, `-L`, the file form, exit codes.
+- `README.md` (root) — the `merkleokf/` table row.
+- `AGENTS.md` (root) — the `merkleokf/` repository-map paragraph, noting the
+  deliberate split from `sizeokf` (integrity vs prose) and that no code is shared.
+- `pi/spec.yaml` — bullet becomes
+  `` - `merkleokf` — wiki Merkle hash tree, for change detection ``.
+- `pi/files/home/.pi/agent/AGENTS.md` — **new** section after the `sizeokf` one:
+  run `merkleokf -L 1` before and after editing; a category whose hash moved is
+  where the edits landed, one whose hash did not is provably untouched. State
+  plainly that it hashes raw bytes, so frontmatter changes count.
 
-No `.cspell.json` change expected (`frontmatter` and `sizeokf` are both already
-listed) — the lint run confirms.
+No `.cspell.json` change expected — `merkleokf` and `Merkle` both already pass.
 
 ## Verification
 
 ```bash
-make test-sizeokf      # new suites, offline
+make test-merkleokf    # new suites, offline
 make lint              # ruff, markdownlint, cspell
 make validate          # REQUIRED: pi/ changed
 ```
 
-Then against the real wiki, checking the numbers derived during design:
+Then against the real wiki, checking the hashes derived during design — these
+are exact, not approximate:
 
 ```bash
-uv cache clean sizeokf && uv tool install --force --reinstall ./sizeokf
+uv cache clean merkleokf && uv tool install --force --reinstall ./merkleokf
 
-sizeokf -L 1                 # 15 rows; british-history/ first at 21,324
-sizeokf | head -3            # summary must read: okf: 105,432 chars, 217 files
-sizeokf -L 1 | wc -l         # 15 rows + summary + blank + 2 header lines
-sizeokf --level 1 okf        # identical to -L 1
-sizeokf -L 0 okf; echo $?    # our own message, exit 2
-sizeokf /no/such; echo $?    # "not a directory", exit 2
-sizeokf okf/science-nature   # 3,294 chars, 7 files
+merkleokf -L 1               # root 86c7544437e0, 217 files, 15 rows
+                             # american-history/ 51766f25dfdd, ancient-world/ 15d3bec65739
+merkleokf --level 1 okf      # identical to -L 1
+merkleokf -L 0 okf; echo $?  # our own message, exit 2
+merkleokf /no/such; echo $?  # exit 2
+merkleokf okf/index.md       # single-file form, one hash
 ```
 
-Cross-check the total independently — it must equal 105,432, i.e. raw minus
-frontmatter, **not** the 188,054 that `wc -c` reports:
+Then prove the property the tool exists for, on a copy so `okf/` is untouched:
 
 ```bash
-find okf -name '*.md' -exec cat {} + | wc -c    # 186,950 raw chars (differs: includes frontmatter)
+cp -r okf /tmp/mk && merkleokf -L 1 /tmp/mk > /tmp/before.txt
+printf '\nx\n' >> /tmp/mk/science-nature/dinosaurs.md
+merkleokf -L 1 /tmp/mk > /tmp/after.txt
+diff /tmp/before.txt /tmp/after.txt   # expect exactly 2 rows changed: root + science-nature/
+```
+
+Cross-check the root against git's own Merkle implementation, which should agree
+on *which* subtree moved even though the digests differ (git uses SHA-1 blob/tree
+objects):
+
+```bash
+GIT_INDEX_FILE=/tmp/mk.idx GIT_OBJECT_DIRECTORY=/tmp/mk.obj \
+  git add -Af okf && git ls-tree "$(git write-tree)" okf/
 ```
 
 Note `uv tool install --force` reuses a cached wheel when the version is
-unchanged — hence the `uv cache clean` above; this bit us on `inspectokf`.
+unchanged — hence `uv cache clean`; this bit us on `inspectokf`.
 
 Finally, on the host, since `pi/` changed:
 

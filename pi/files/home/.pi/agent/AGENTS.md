@@ -209,6 +209,26 @@ excluded**. Frontmatter is a large fraction of a generated page, so this number
 is much smaller than `wc -c` and is the one that is comparable across pages.
 Never use it to reason about frontmatter itself.
 
+### Confirming what changed with `merkleokf`
+
+After writing or updating pages, check that your edits landed where you intended
+— and only there:
+
+```bash
+merkleokf -L 1           # run before and after; compare the two listings
+merkleokf okf/<topic>    # then descend into the category whose hash moved
+merkleokf okf/<topic>/<page>.md   # a single file
+```
+
+Each row is a hash of that file or, for a folder, of everything beneath it. A
+folder whose hash is unchanged is **provably untouched**; a folder whose hash
+moved contains your edit. So one 15-row listing localises a change without
+re-reading a single page.
+
+Unlike `sizeokf`, this hashes **raw bytes — frontmatter included**. A timestamp
+or tag edit therefore counts as a change. That is intended: use `merkleokf` to
+ask *whether* something changed, and `sizeokf` to ask *how much prose* there is.
+
 ### Idempotency
 
 - Updates are **idempotent**. If a page for a topic already exists, update it in

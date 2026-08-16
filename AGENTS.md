@@ -55,12 +55,15 @@ sides. Host install is `make install-sizeokf`; the sandbox exposes `sizeokf`
 through the same `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and
 pytest. Run `make test-sizeokf` after touching it.
 
-`merkleokf/` is a sixth independent uv project, intended to own wiki change
-detection: a content hash per file and a Merkle hash per directory. It is
-currently a **scaffold** on the same terms as `sizeokf/` — the CLI parses
-`--help` and `--version` and does nothing else. Host install is
-`make install-merkleokf`; the sandbox exposes `merkleokf` through the same
-`setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest. Run
+`merkleokf/` is a sixth independent uv project: an installable CLI that prints a
+Merkle hash tree — a hash per `*.md` file and per directory — so a change to any
+page moves its parents' hashes and nothing else. Same `-L`/`--level` cap as the
+other CLIs; also accepts a single file. It hashes **raw bytes**, deliberately the
+opposite of `sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
+change", `sizeokf` answers "how much prose is here", and they share no code.
+Digests display as 12 hex characters; full digests are computed internally. Host
+install is `make install-merkleokf`; the sandbox exposes `merkleokf` through the
+same `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest. Run
 `make test-merkleokf` after touching it.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
