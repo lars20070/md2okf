@@ -78,9 +78,10 @@ kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
 each task's procedure lives in its own skill directory under `skills/`. Task
-skill today: `compile-okf`. Helper skill: `context7-docs`, installed by the kit
-via `@upstash/context7-pi`. A new task gets a new skill, not more rules in
-`AGENTS.md`.
+skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`, `size-okf`,
+`merkle-okf` — **a tool gets a skill, not an `AGENTS.md` section.** Helper skill:
+`context7-docs`, installed by the kit via `@upstash/context7-pi`. A new task gets
+a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds shell tests for that sandbox, in pairs: a host-side script
 (`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`

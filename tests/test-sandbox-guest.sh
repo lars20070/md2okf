@@ -94,6 +94,10 @@ check_file "${HOME}/.pi/agent/settings.json"
 check_file "${HOME}/.pi/agent/models.json"
 check_file "${HOME}/.pi/agent/skills/compile-okf/SKILL.md"
 check_exec "${HOME}/.pi/agent/skills/compile-okf/scripts/lint-okf.sh"
+check_file "${HOME}/.pi/agent/skills/inspect-md/SKILL.md"
+check_file "${HOME}/.pi/agent/skills/inspect-okf/SKILL.md"
+check_file "${HOME}/.pi/agent/skills/size-okf/SKILL.md"
+check_file "${HOME}/.pi/agent/skills/merkle-okf/SKILL.md"
 
 # Context7 native Pi package (pi/spec.yaml setup.install + settings.json
 # packages). Presence only — no live Context7 API call.

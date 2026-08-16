@@ -109,9 +109,11 @@ deterministic, and the fetched HTML is cached — see
 The instructions come in two parts. `AGENTS.md` holds what every task must
 respect: the OKF conventions, the directories the agent may write to, and the
 rule that `SPEC.md` outranks both. Each task's procedure lives in a skill of its
-own. Task skill today: `compile-okf`. The sandbox also installs the
-`context7-docs` skill via `@upstash/context7-pi` (library docs lookups). A new
-task gets a new directory rather than more rules in `AGENTS.md`.
+own. Task skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`,
+`size-okf`, `merkle-okf` — a tool gets a skill, not an `AGENTS.md` section. The
+sandbox also installs the `context7-docs` skill via `@upstash/context7-pi`
+(library docs lookups). A new task gets a new directory rather than more rules in
+`AGENTS.md`.
 
 A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
 `description`, then the instructions, plus any scripts it needs. Pi picks skills

@@ -18,8 +18,14 @@ directory per task, each with a `SKILL.md`.
 - Available skills:
   - `compile-okf` — compile a Markdown source document from `md/` into the wiki
     under `okf/`.
+  - `inspect-md` — map a long source under `md/` before reading it in ranges.
+  - `inspect-okf` — survey what the wiki already contains, before writing.
+  - `size-okf` — measure how much prose a page or category holds.
+  - `merkle-okf` — confirm which pages a run actually changed.
   - `context7-docs` — fetch current library/framework docs via Context7 (installed
     with `@upstash/context7-pi`; use before relying on training data for APIs).
+- Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`) are read
+  **when the work calls for them**, not only when a run names one.
 
 ## The OKF specification is the source of truth
 
@@ -148,86 +154,6 @@ content entry in an index.
 
 - Use **kebab-case** for all slugs, file names, and directory names
   (e.g. `capital-letters.md`, `numbers-and-dates/`).
-
-### Mapping long Markdown sources with `inspectmd`
-
-Before ranged reads of a long file under `md/`, run:
-
-```bash
-inspectmd md/<document>.md
-inspectmd -L 2 md/<document>.md
-inspectmd --section N md/<document>.md
-```
-
-The default table columns mean:
-
-| Column | Meaning |
-| --- | --- |
-| `Index` | Section number in document order (`0` = preamble when present). Pass this to `--section`. |
-| `Level` | Heading depth: `0` preamble, `1` = `#`, …, `6` = `######`. |
-| `Lines` | 1-based inclusive line range (`start-end`) for that section. |
-| `Characters` | Character count of that range (including newlines). |
-| `Slug` | Kebab-case slug from the heading title (same style as OKF file names). |
-| `Title` | Heading text as written (or `(preamble)` / `(empty)`). |
-
-`-L N` caps the map at level `N` (same `Level` column as above); omit it for every
-heading. `--section N` prints only `start:end  N chars` for a ranged read. The map
-is a plan for cuts and reads — not permission to paraphrase source prose.
-
-### Surveying the wiki with `inspectokf`
-
-Before writing or updating pages, survey what already exists. Start shallow and
-drill down — do not open with the full tree:
-
-```bash
-inspectokf -L 1          # top level only: the categories — start here
-inspectokf okf/<topic>   # then descend into the one category you need
-inspectokf               # every page in the wiki: hundreds of lines
-```
-
-Defaults to `okf/`, and to unlimited depth. Pass any existing directory (typically
-a wiki subfolder). `-L N` (or `--level N`) descends at most `N` directory levels;
-`N` must be 1 or greater. Output is the `tree` listing of that path.
-
-### Measuring the wiki with `sizeokf`
-
-`inspectokf` shows what exists; `sizeokf` shows how much is written. Use it to
-judge whether a page is thin, whether a category is unbalanced, or whether a
-source section is large enough to split:
-
-```bash
-sizeokf -L 1             # chars per category — start here
-sizeokf okf/<topic>      # then per page within one category
-```
-
-Same `-L`/`--level` and default `okf/` as `inspectokf`. Columns are `Chars`,
-`Files`, `Path`; rows are sorted largest first; folder totals are recursive at
-every depth.
-
-`Chars` counts Markdown **content only — the YAML frontmatter block is
-excluded**. Frontmatter is a large fraction of a generated page, so this number
-is much smaller than `wc -c` and is the one that is comparable across pages.
-Never use it to reason about frontmatter itself.
-
-### Confirming what changed with `merkleokf`
-
-After writing or updating pages, check that your edits landed where you intended
-— and only there:
-
-```bash
-merkleokf -L 1           # run before and after; compare the two listings
-merkleokf okf/<topic>    # then descend into the category whose hash moved
-merkleokf okf/<topic>/<page>.md   # a single file
-```
-
-Each row is a hash of that file or, for a folder, of everything beneath it. A
-folder whose hash is unchanged is **provably untouched**; a folder whose hash
-moved contains your edit. So one 15-row listing localises a change without
-re-reading a single page.
-
-Unlike `sizeokf`, this hashes **raw bytes — frontmatter included**. A timestamp
-or tag edit therefore counts as a change. That is intended: use `merkleokf` to
-ask *whether* something changed, and `sizeokf` to ask *how much prose* there is.
 
 ### Idempotency
 
