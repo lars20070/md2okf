@@ -81,6 +81,9 @@ check yamllint
 # setup.files shim (pi/spec.yaml): workspace-backed CLI on PATH.
 check inspectmd
 
+# pinned release binary (pi/spec.yaml): checksummed download, no package manager.
+check mq
+
 # Config delivery: pi/files/home/.pi/agent/ is copied at kit build time, not
 # mounted, so a layout change can leave Pi with no instructions and no skill.
 check_file "${HOME}/.pi/agent/AGENTS.md"

@@ -32,6 +32,7 @@ agentInstructions:
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and sizes)
+    - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
 # listed. Pointing Pi at a different provider means adding its host here too —
@@ -55,6 +56,11 @@ permissions:
       - "security.ubuntu.com:80"
       - "ports.ubuntu.com:80"
       - "download.docker.com:443"
+      # mq release binary: github.com redirects the download to this host.
+      - "github.com:443"
+      - "objects.githubusercontent.com:443"
+      # mq docs and language reference, for the agent to consult at runtime.
+      - "mqlang.org/book/"
 
 # Credentials declare WHAT the kit needs and how the proxy injects it — not
 # where it lives on the host (that comes from the user bindings / host env).
@@ -128,6 +134,39 @@ setup:
         uv tool install yamllint@1.38.0
       user: "1000"
       description: Install Python linters
+
+    # No apt/uv/npm package; fetched as a pinned, checksummed release binary.
+    - command: |
+        set -eu
+        MQ_VERSION=0.8.2
+
+        case "$(uname -m)" in
+          x86_64) MQ_TARGET=x86_64-unknown-linux-gnu ;;
+          aarch64) MQ_TARGET=aarch64-unknown-linux-gnu ;;
+          *)
+            echo "mq: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        base="https://github.com/harehare/mq/releases/download/v${MQ_VERSION}"
+        curl -fsSL -o "$tmp/mq" "${base}/mq-${MQ_TARGET}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="mq-${MQ_TARGET}/mq-${MQ_TARGET}" '$2 == f { print $1 }' \
+          "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/mq" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "mq: checksum mismatch for ${MQ_TARGET}" >&2
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/mq" "$HOME/.local/bin/mq"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install mq (Markdown query tool)
 
   # Workspace is not mounted during setup.install, so the CLI is a shim that
   # resolves inspectmd from ${WORKDIR} at invoke time (always tracks the tree).
