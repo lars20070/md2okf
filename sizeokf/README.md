@@ -60,8 +60,10 @@ byte-identical and easy to diff.
   which entries get a row, never how they are summed — unlike `tree --du -L 1`,
   which silently reports a directory's own inode size instead of its contents.
 - A folder with no Markdown in it still gets a row, showing `0`.
-- An unreadable file is reported on stderr, counted as `0`, and does not abort
-  the walk.
+- Symlinks are not followed, so directory cycles and links outside the root
+  cannot hang or escape the walk.
+- An unreadable file or directory is reported on stderr, counted as `0`, and
+  does not abort the walk.
 
 Exit codes: `0` ok, `2` usage or runtime error (missing directory, `--level`
 below `1`).

@@ -82,8 +82,25 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
     def walk(directory: Path, depth: int) -> tuple[int, int]:
         """Return ``(chars, files)`` for ``directory``, recording listed entries."""
         chars = files = 0
-        for child in sorted(directory.iterdir(), key=lambda p: p.name):
-            if child.is_dir():
+        try:
+            children = sorted(directory.iterdir(), key=lambda p: p.name)
+        except OSError as exc:
+            # Same skip policy as an unreadable file: warn and contribute zero.
+            print(f"sizeokf: skipping {directory}: {exc}", file=sys.stderr)
+            return 0, 0
+
+        for child in children:
+            try:
+                # is_dir() follows symlinks; skip them so cycles and links
+                # outside root cannot be scanned.
+                if child.is_symlink():
+                    continue
+                is_directory = child.is_dir()
+            except OSError as exc:
+                print(f"sizeokf: skipping {child}: {exc}", file=sys.stderr)
+                continue
+
+            if is_directory:
                 child_chars, child_files = walk(child, depth + 1)
                 chars += child_chars
                 files += child_files

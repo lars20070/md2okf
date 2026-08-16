@@ -89,3 +89,44 @@ def test_collect_empty_directory_reports_zero(tmp_path: Path):
     entries, total = collect(root)
     assert [(e.path, e.chars, e.files) for e in entries] == [("empty/", 0, 0)]
     assert total.chars == 0
+
+
+def test_collect_skips_symlinks(tmp_path: Path):
+    """Symlinks are ignored so cycles and escapes cannot be scanned."""
+    root = tmp_path / "okf"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.md").write_text("# secret\n", encoding="utf-8")
+    (root / "real").mkdir(parents=True)
+    (root / "real" / "page.md").write_text("# page\n", encoding="utf-8")
+    (root / "link-dir").symlink_to(outside)
+    (root / "link.md").symlink_to(outside / "secret.md")
+    (root / "cycle").symlink_to(root)
+
+    entries, total = collect(root)
+    assert total.files == 1
+    assert total.chars == len("# page\n")
+    assert sorted(e.path for e in entries) == ["real/", "real/page.md"]
+
+
+def test_collect_unreadable_directory_is_skipped(tmp_path: Path, monkeypatch):
+    """OSError from iterdir warns and contributes zero, matching file skips."""
+    root = tmp_path / "okf"
+    bad = root / "bad"
+    bad.mkdir(parents=True)
+    (root / "ok.md").write_text("# ok\n", encoding="utf-8")
+
+    real_iterdir = Path.iterdir
+
+    def flaky_iterdir(self: Path):
+        if self == bad:
+            raise PermissionError("denied")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", flaky_iterdir)
+    entries, total = collect(root)
+    assert total.files == 1
+    assert total.chars == len("# ok\n")
+    bad_row = next(e for e in entries if e.path == "bad/")
+    assert bad_row.chars == 0
+    assert bad_row.files == 0
