@@ -24,6 +24,7 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
 | `inspectokf/` | optional: wiki directory tree CLI (wraps `tree`) |
 | `sizeokf/` | optional: wiki size report CLI (scaffold, no behaviour yet) |
+| `merkleokf/` | optional: wiki Merkle hash tree CLI (scaffold, no behaviour yet) |
 
 ## Compile a wiki
 
@@ -145,6 +146,8 @@ make test-inspectokf     # pytest, the inspectokf CLI suite
 make install-inspectokf  # install the inspectokf CLI onto PATH
 make test-sizeokf        # pytest, the sizeokf CLI suite
 make install-sizeokf     # install the sizeokf CLI onto PATH
+make test-merkleokf      # pytest, the merkleokf CLI suite
+make install-merkleokf   # install the merkleokf CLI onto PATH
 make test-sandbox        # check the sandbox has the tools, config and key it promises
 make lint-okf            # lint the generated wiki
 ```
@@ -180,13 +183,14 @@ sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
 Python tooling is thin. There is no project at the repo root: `pdf2md/`,
-`web2md/`, `inspectmd/`, `inspectokf/`, and `sizeokf/` are independent uv
-projects, each with its own `pyproject.toml` and (where needed) `uv.lock`, and
-nothing shared between them. `pdf2md/` exists only to give `marker` a pinned
-venv; `web2md/` owns the scraper's dependencies and its pytest/ruff config;
-`inspectmd/`, `inspectokf/` and `sizeokf/` are installable stdlib-only CLIs with
-their own ruff and pytest. So the heavy dependencies (marker-pdf, torch) cannot
-reach the lint or test jobs at all, rather than being excluded by flag.
+`web2md/`, `inspectmd/`, `inspectokf/`, `sizeokf/`, and `merkleokf/` are
+independent uv projects, each with its own `pyproject.toml` and (where needed)
+`uv.lock`, and nothing shared between them. `pdf2md/` exists only to give
+`marker` a pinned venv; `web2md/` owns the scraper's dependencies and its
+pytest/ruff config; `inspectmd/`, `inspectokf/`, `sizeokf/` and `merkleokf/` are
+installable stdlib-only CLIs with their own ruff and pytest. So the heavy
+dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
+rather than being excluded by flag.
 
 `ruff` and `yamllint` belong to neither project; `make lint` runs them
 ephemerally at a pinned version with `uv tool run`, and checks each tracked

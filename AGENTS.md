@@ -53,6 +53,14 @@ same `setup.files` shim as its siblings. Own `pyproject.toml`, `uv.lock`, ruff
 and pytest. Run `make test-sizeokf` after touching it. Adding behaviour should
 not need anything outside `sizeokf/`.
 
+`merkleokf/` is a sixth independent uv project, intended to own wiki change
+detection: a content hash per file and a Merkle hash per directory. It is
+currently a **scaffold** on the same terms as `sizeokf/` — the CLI parses
+`--help` and `--version` and does nothing else. Host install is
+`make install-merkleokf`; the sandbox exposes `merkleokf` through the same
+`setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and pytest. Run
+`make test-merkleokf` after touching it.
+
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
 `pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,
 `skills/`) lives in `pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
@@ -84,6 +92,8 @@ make test-inspectokf     # pytest, the inspectokf CLI suite (offline)
 make install-inspectokf  # uv tool install ./inspectokf onto PATH
 make test-sizeokf        # pytest, the sizeokf CLI suite (offline)
 make install-sizeokf     # uv tool install ./sizeokf onto PATH
+make test-merkleokf      # pytest, the merkleokf CLI suite (offline)
+make install-merkleokf   # uv tool install ./merkleokf onto PATH
 make test-sandbox        # check the sandbox delivers what pi/spec.yaml promises
 make scrape              # fetch the website into md/ as one file (web2md)
 make wiki                # compile the OKF wiki via the sandbox runtime

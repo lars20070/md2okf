@@ -22,7 +22,7 @@ CSPELL ?= npx --yes cspell
 .DEFAULT_GOAL := lint
 .PHONY: lint lint-okf validate test test-web2md test-inspectmd install-inspectmd \
 	test-inspectokf install-inspectokf test-sizeokf install-sizeokf \
-	test-sandbox wiki scrape
+	test-merkleokf install-merkleokf test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, and
 # lint Python. Driving every check off `git ls-files` means a newly added file
@@ -68,7 +68,8 @@ validate:
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-web2md test-inspectmd test-inspectokf test-sizeokf test-sandbox
+test: test-web2md test-inspectmd test-inspectokf test-sizeokf test-merkleokf \
+	test-sandbox
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
@@ -108,6 +109,18 @@ test-sizeokf:
 # Install the sizeokf CLI onto the host PATH via uv tool.
 install-sizeokf:
 	uv tool install --force ./sizeokf
+
+# Unit-test merkleokf (merkleokf/tests/). Offline, stdlib-only subject under
+# test. Own project and lockfile — nothing shared with the other CLIs.
+# Currently a scaffold: the suite covers the parser contract, which is all
+# there is.
+test-merkleokf:
+	uv run --project merkleokf --group test pytest -c merkleokf/pyproject.toml \
+		merkleokf/tests
+
+# Install the merkleokf CLI onto the host PATH via uv tool.
+install-merkleokf:
+	uv tool install --force ./merkleokf
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that pi/spec.yaml promises.

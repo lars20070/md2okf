@@ -82,6 +82,7 @@ check yamllint
 check inspectmd
 check inspectokf
 check sizeokf
+check merkleokf
 
 # pinned release binary (pi/spec.yaml): checksummed download, no package manager.
 check mq
