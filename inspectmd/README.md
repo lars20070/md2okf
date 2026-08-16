@@ -21,7 +21,8 @@ inspectmd --section 3 md/GoogleStyleGuide.md
 uv tool run --from ./inspectmd inspectmd md/GoogleStyleGuide.md
 ```
 
-Exit codes: `0` ok, `2` usage or runtime error (missing file, bad `--section`).
+Exit codes: `0` ok, `2` usage or runtime error (missing file, bad `--section`, or
+a `--level` below `1`).
 
 ## Layout
 

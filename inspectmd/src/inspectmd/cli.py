@@ -106,6 +106,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # Checked before the path so the message is the same wherever it is run
+    # from, and so every `-L` in this repo rejects the same values.
+    level: int | None = args.level
+    if level is not None and level < 1:
+        print(f"inspectmd: --level must be 1 or greater (got {level})", file=sys.stderr)
+        return 2
+
     path: Path = args.file
     if not path.is_file():
         print(f"inspectmd: not a file: {path}", file=sys.stderr)

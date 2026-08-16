@@ -91,6 +91,15 @@ def test_main_level(flag: str, tmp_path: Path, capsys):
     assert "Gamma" not in out
 
 
+@pytest.mark.parametrize("level", ["0", "-1"])
+def test_main_level_below_one_rejected(level: str, tmp_path: Path, capsys):
+    """Same rule and message as the okf CLIs, so one `-L` contract covers all four."""
+    path = tmp_path / "doc.md"
+    path.write_text("# Alpha\n## Beta\n", encoding="utf-8")
+    assert main([str(path), "-L", level]) == 2
+    assert "--level" in capsys.readouterr().err
+
+
 def test_main_version(capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
