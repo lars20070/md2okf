@@ -59,9 +59,12 @@ permissions:
       - "security.ubuntu.com:80"
       - "ports.ubuntu.com:80"
       - "download.docker.com:443"
-      # mq release binary: github.com redirects the download to this host.
+      # mq release binary: github.com redirects to a GitHub CDN host.
+      # Today that is objects.githubusercontent.com; release-assets is also
+      # used for release downloads and must stay allowlisted.
       - "github.com:443"
       - "objects.githubusercontent.com:443"
+      - "release-assets.githubusercontent.com:443"
       # mq docs and language reference, for the agent to consult at runtime.
       - "mqlang.org/book/"
       # Context7 docs API (native @upstash/context7-pi extension).
