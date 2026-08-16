@@ -21,13 +21,13 @@ def test_format_table_columns():
     assert "1-2" in out
 
 
-def test_format_table_max_depth():
+def test_format_table_max_level():
     sections = [
         Section(1, 1, "Alpha", "alpha", 1, 1, 1),
         Section(2, 2, "Beta", "beta", 2, 2, 1),
         Section(3, 3, "Gamma", "gamma", 3, 3, 1),
     ]
-    out = format_table(sections, max_depth=2)
+    out = format_table(sections, max_level=2)
     assert "Alpha" in out
     assert "Beta" in out
     assert "Gamma" not in out
@@ -80,10 +80,11 @@ def test_main_empty_file(tmp_path: Path, capsys):
     assert "(no headings)" in out
 
 
-def test_main_max_depth(tmp_path: Path, capsys):
+@pytest.mark.parametrize("flag", ["--level", "-L"])
+def test_main_level(flag: str, tmp_path: Path, capsys):
     path = tmp_path / "doc.md"
     path.write_text("# Alpha\n## Beta\n### Gamma\n", encoding="utf-8")
-    assert main([str(path), "--max-depth", "1"]) == 0
+    assert main([str(path), flag, "1"]) == 0
     out = capsys.readouterr().out
     assert "Alpha" in out
     assert "Beta" not in out

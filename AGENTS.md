@@ -39,10 +39,11 @@ Markdown heading map (line ranges, sizes, kebab-case slugs). Host install is
 shared with `web2md/` or `pdf2md/`. Run `make test-inspectmd` after touching it.
 
 `inspectokf/` is a fourth independent uv project: an installable CLI that prints
-a wiki directory tree by wrapping `tree` (default path `okf/`). Host install is
-`make install-inspectokf`; the sandbox exposes `inspectokf` the same way. Own
-`pyproject.toml`, `uv.lock`, ruff and pytest. Run `make test-inspectokf` after
-touching it.
+a wiki directory tree by wrapping `tree` (default path `okf/`, unlimited depth
+unless `-L`/`--level` caps it). Host install is `make install-inspectokf`; the
+sandbox exposes `inspectokf` the same way. Own `pyproject.toml`, `uv.lock`, ruff
+and pytest. Run `make test-inspectokf` after touching it. Both inspect CLIs spell
+the depth cap `-L`/`--level`.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
 `pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,

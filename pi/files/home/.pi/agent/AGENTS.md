@@ -155,7 +155,7 @@ Before ranged reads of a long file under `md/`, run:
 
 ```bash
 inspectmd md/<document>.md
-inspectmd --max-depth 2 md/<document>.md
+inspectmd -L 2 md/<document>.md
 inspectmd --section N md/<document>.md
 ```
 
@@ -170,20 +170,24 @@ The default table columns mean:
 | `Slug` | Kebab-case slug from the heading title (same style as OKF file names). |
 | `Title` | Heading text as written (or `(preamble)` / `(empty)`). |
 
-`--section N` prints only `start:end  N chars` for a ranged read. The map is a
-plan for cuts and reads — not permission to paraphrase source prose.
+`-L N` caps the map at level `N` (same `Level` column as above); omit it for every
+heading. `--section N` prints only `start:end  N chars` for a ranged read. The map
+is a plan for cuts and reads — not permission to paraphrase source prose.
 
 ### Surveying the wiki with `inspectokf`
 
-Before writing or updating pages, survey what already exists:
+Before writing or updating pages, survey what already exists. Start shallow and
+drill down — do not open with the full tree:
 
 ```bash
-inspectokf
-inspectokf okf/<topic>
+inspectokf -L 1          # top level only: the categories — start here
+inspectokf okf/<topic>   # then descend into the one category you need
+inspectokf               # every page in the wiki: hundreds of lines
 ```
 
-Defaults to `okf/`. Pass any existing directory (typically a wiki subfolder).
-Output is the `tree` listing of that path.
+Defaults to `okf/`, and to unlimited depth. Pass any existing directory (typically
+a wiki subfolder). `-L N` (or `--level N`) descends at most `N` directory levels;
+`N` must be 1 or greater. Output is the `tree` listing of that path.
 
 ### Idempotency
 

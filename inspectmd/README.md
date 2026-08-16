@@ -14,7 +14,7 @@ and YAML frontmatter are skipped; text before the first heading is section 0.
 make install-inspectmd
 inspectmd --version
 inspectmd md/GoogleStyleGuide.md
-inspectmd --max-depth 2 md/TheRestIsHistory.md
+inspectmd -L 2 md/TheRestIsHistory.md
 inspectmd --section 3 md/GoogleStyleGuide.md
 
 # Without installing

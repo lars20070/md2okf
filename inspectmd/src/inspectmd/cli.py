@@ -11,16 +11,16 @@ from inspectmd import __version__
 from inspectmd.parse import Section, inspect_markdown
 
 
-def format_table(sections: Sequence[Section], *, max_depth: int | None = None) -> str:
+def format_table(sections: Sequence[Section], *, max_level: int | None = None) -> str:
     """Render sections as a fixed-width table.
 
-    When ``max_depth`` is set, only the preamble (level 0) and headings with
-    ``level <= max_depth`` are shown.
+    When ``max_level`` is set, only the preamble (level 0) and headings with
+    ``level <= max_level`` are shown.
     """
     visible = [
         s
         for s in sections
-        if max_depth is None or s.level == 0 or s.level <= max_depth
+        if max_level is None or s.level == 0 or s.level <= max_level
     ]
     if not visible:
         return "(no sections at this depth)\n"
@@ -92,7 +92,8 @@ Output columns (default table):
         help="print only section N as start:end and size",
     )
     parser.add_argument(
-        "--max-depth",
+        "-L",
+        "--level",
         type=int,
         metavar="N",
         help="show only headings at this level or above (1=H1, …)",
@@ -141,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write("(no headings)\n")
         return 0
 
-    sys.stdout.write(format_table(sections, max_depth=args.max_depth))
+    sys.stdout.write(format_table(sections, max_level=args.level))
     return 0
 
 
