@@ -21,6 +21,7 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |
+| `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
 
 ## Compile a wiki
 
@@ -105,8 +106,9 @@ deterministic, and the fetched HTML is cached — see
 The instructions come in two parts. `AGENTS.md` holds what every task must
 respect: the OKF conventions, the directories the agent may write to, and the
 rule that `SPEC.md` outranks both. Each task's procedure lives in a skill of its
-own. There is one today, `compile-wiki`, and a new task gets a new directory
-rather than more rules in `AGENTS.md`.
+own. Task skill today: `compile-wiki`. Helper skill: `inspectmd` (heading map
+before ranged reads). A new task gets a new directory rather than more rules in
+`AGENTS.md`.
 
 A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
 `description`, then the instructions, plus any scripts it needs. Pi picks skills
@@ -132,11 +134,13 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 ## Development
 
 ```bash
-make lint            # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make validate        # check pi/spec.yaml against the Sandbox Kit schema
-make test-web2md     # pytest, the web2md scraper suite
-make test-sandbox    # check the sandbox has the tools, config and key it promises
-make lint-okf        # lint the generated wiki
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make validate            # check pi/spec.yaml against the Sandbox Kit schema
+make test-web2md         # pytest, the web2md scraper suite
+make test-inspectmd      # pytest, the inspectmd CLI suite
+make install-inspectmd   # install the inspectmd CLI onto PATH
+make test-sandbox        # check the sandbox has the tools, config and key it promises
+make lint-okf            # lint the generated wiki
 ```
 
 markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
@@ -169,13 +173,15 @@ Once a sandbox exists, this should print `proxy-managed` rather than your key:
 sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
-Python tooling is thin. There is no project at the repo root: `pdf2md/` and
-`web2md/` are independent uv projects, each with its own `pyproject.toml` and
-`uv.lock` and nothing shared between them. `pdf2md/` exists only to give
-`marker` a pinned venv; `web2md/` owns the scraper's dependencies, its pytest
-config and the only `[tool.ruff]` in the repo. So the heavy dependencies
-(marker-pdf, torch) cannot reach the lint or test job at all, rather than being
-excluded by flag. The only first-party Python is the web2md scraper.
+Python tooling is thin. There is no project at the repo root: `pdf2md/`,
+`web2md/`, and `inspectmd/` are independent uv projects, each with its own
+`pyproject.toml` and (where needed) `uv.lock`, and nothing shared between them.
+`pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
+scraper's dependencies and its pytest/ruff config; `inspectmd/` is an
+installable stdlib-only CLI (`make install-inspectmd`, or `uv tool run --from
+./inspectmd inspectmd …`) with its own ruff and pytest. So the heavy
+dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
+rather than being excluded by flag.
 
 `ruff` and `yamllint` belong to neither project; `make lint` runs them
 ephemerally at a pinned version with `uv tool run`, and checks each tracked

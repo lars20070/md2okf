@@ -8,7 +8,8 @@
     "SPEC.md",
     "CLAUDE.md",
     "uv.lock",
-    "web2md/tests/**"
+    "web2md/tests/**",
+    "inspectmd/tests/**"
   ],
   "words": [
     "okf",
@@ -58,6 +59,10 @@
     "idempotently",
     "misordered",
     "scannable",
-    "writable"
+    "writable",
+    "inspectmd",
+    "uvx",
+    "hatchling",
+    "stdlib"
   ]
 }

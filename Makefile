@@ -8,10 +8,9 @@
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
 #                 project; the pin matches the sandbox (pi/spec.yaml).
-#   PYTEST        pytest launcher. Runs in the web2md project; `-c` points
-#                 pytest at that project's config, whose testpaths/pythonpath
-#                 are relative to it.
-#   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside both Python
+#   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
+#                 targets (`test-web2md`, `test-inspectmd`) which pass `-c`.
+#   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
 #                 projects), so ephemeral and pinned like ruff.
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
 MARKDOWNLINT ?= markdownlint-cli2
@@ -21,7 +20,8 @@ YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate test test-web2md test-sandbox wiki scrape
+.PHONY: lint lint-okf validate test test-web2md test-inspectmd install-inspectmd \
+	test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, and
 # lint Python. Driving every check off `git ls-files` means a newly added file
@@ -64,15 +64,28 @@ lint-okf:
 validate:
 	./scripts/validate-spec.sh
 
-# Both suites. Host-only: the sandbox half needs `sbx login`. CI runs
-# `test-web2md` on its own and does not invoke this target.
-test: test-web2md test-sandbox
+# Host pytest suites plus the sandbox check. Host-only for the sandbox half
+# (needs `sbx login`). CI runs each pytest job on its own and does not invoke
+# this target.
+test: test-web2md test-inspectmd test-sandbox
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
 # web2md/pyproject.toml, which also puts web2md/src/ on the import path.
 test-web2md:
-	$(PYTEST)
+	$(PYTEST) web2md/tests
+
+# Unit-test inspectmd (inspectmd/tests/). Offline, stdlib-only subject under
+# test. Own project and lockfile — nothing shared with web2md. The explicit
+# path keeps collection inside this suite when pytest is launched from the
+# repo root (bare `-c` would otherwise walk sibling projects).
+test-inspectmd:
+	uv run --project inspectmd --group test pytest -c inspectmd/pyproject.toml \
+		inspectmd/tests
+
+# Install the inspectmd CLI onto the host PATH via uv tool.
+install-inspectmd:
+	uv tool install --force ./inspectmd
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that pi/spec.yaml promises.

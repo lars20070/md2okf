@@ -31,6 +31,7 @@ agentInstructions:
     - `okf-lint` — OKF wiki linter (the compile-wiki skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
+    - `inspectmd` — Markdown heading map (line ranges and sizes)
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
 # listed. Pointing Pi at a different provider means adding its host here too —
@@ -127,3 +128,14 @@ setup:
         uv tool install yamllint@1.38.0
       user: "1000"
       description: Install Python linters
+
+  # Workspace is not mounted during setup.install, so the CLI is a shim that
+  # resolves inspectmd from ${WORKDIR} at invoke time (always tracks the tree).
+  files:
+    - path: /home/agent/.local/bin/inspectmd
+      mode: "0755"
+      description: Workspace-backed inspectmd CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/inspectmd" inspectmd "$@"

@@ -53,10 +53,10 @@ check_exec() {
 	fi
 }
 
-# The tool list must match BOTH lists in pi/spec.yaml: the setup.install steps
-# AND the agentInstructions prose at 27-33. That prose is the promise being
-# tested here, so a tool installed but not promised — or promised but not
-# installed — is itself the bug.
+# The tool list must match BOTH lists in pi/spec.yaml: the setup.install /
+# setup.files steps AND the agentInstructions "Installed tools" prose. That
+# prose is the promise being tested here, so a tool installed but not promised
+# — or promised but not installed — is itself the bug.
 
 # apt (pi/spec.yaml:77-87). `rg` is the command; `ripgrep` is the package.
 check curl
@@ -77,6 +77,9 @@ check cspell
 # uv (pi/spec.yaml:124-129).
 check ruff
 check yamllint
+
+# setup.files shim (pi/spec.yaml): workspace-backed CLI on PATH.
+check inspectmd
 
 # Config delivery: pi/files/home/.pi/agent/ is copied at kit build time, not
 # mounted, so a layout change can leave Pi with no instructions and no skill.
