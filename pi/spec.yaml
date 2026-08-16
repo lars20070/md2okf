@@ -33,6 +33,7 @@ agentInstructions:
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and sizes)
     - `inspectokf` — wiki directory tree (via `tree`)
+    - `sizeokf` — wiki size report (scaffold, no behaviour yet)
     - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
@@ -197,3 +198,11 @@ setup:
         #!/bin/sh
         set -eu
         exec uv tool run --from "${WORKDIR}/inspectokf" inspectokf "$@"
+
+    - path: /home/agent/.local/bin/sizeokf
+      mode: "0755"
+      description: Workspace-backed sizeokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "${WORKDIR}/sizeokf" sizeokf "$@"

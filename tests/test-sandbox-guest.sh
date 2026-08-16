@@ -81,6 +81,7 @@ check yamllint
 # setup.files shims (pi/spec.yaml): workspace-backed CLIs on PATH.
 check inspectmd
 check inspectokf
+check sizeokf
 
 # pinned release binary (pi/spec.yaml): checksummed download, no package manager.
 check mq

@@ -66,6 +66,7 @@
     "stdlib",
     "context7",
     "upstash",
-    "inspectokf"
+    "inspectokf",
+    "sizeokf"
   ]
 }
