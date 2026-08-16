@@ -33,7 +33,7 @@ agentInstructions:
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and sizes)
     - `inspectokf` — wiki directory tree (via `tree`)
-    - `sizeokf` — wiki size report (scaffold, no behaviour yet)
+    - `sizeokf` — Markdown content size, excluding frontmatter
     - `merkleokf` — wiki Merkle hash tree (scaffold, no behaviour yet)
     - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 

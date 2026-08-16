@@ -23,7 +23,7 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `web2md/` | optional: scrapes a documentation site into `md` |
 | `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
 | `inspectokf/` | optional: wiki directory tree CLI (wraps `tree`) |
-| `sizeokf/` | optional: wiki size report CLI (scaffold, no behaviour yet) |
+| `sizeokf/` | optional: wiki content-size CLI (excludes frontmatter) |
 | `merkleokf/` | optional: wiki Merkle hash tree CLI (scaffold, no behaviour yet) |
 
 ## Compile a wiki

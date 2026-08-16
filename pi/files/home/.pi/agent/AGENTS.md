@@ -189,6 +189,26 @@ Defaults to `okf/`, and to unlimited depth. Pass any existing directory (typical
 a wiki subfolder). `-L N` (or `--level N`) descends at most `N` directory levels;
 `N` must be 1 or greater. Output is the `tree` listing of that path.
 
+### Measuring the wiki with `sizeokf`
+
+`inspectokf` shows what exists; `sizeokf` shows how much is written. Use it to
+judge whether a page is thin, whether a category is unbalanced, or whether a
+source section is large enough to split:
+
+```bash
+sizeokf -L 1             # chars per category — start here
+sizeokf okf/<topic>      # then per page within one category
+```
+
+Same `-L`/`--level` and default `okf/` as `inspectokf`. Columns are `Chars`,
+`Files`, `Path`; rows are sorted largest first; folder totals are recursive at
+every depth.
+
+`Chars` counts Markdown **content only — the YAML frontmatter block is
+excluded**. Frontmatter is a large fraction of a generated page, so this number
+is much smaller than `wc -c` and is the one that is comparable across pages.
+Never use it to reason about frontmatter itself.
+
 ### Idempotency
 
 - Updates are **idempotent**. If a page for a topic already exists, update it in

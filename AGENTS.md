@@ -45,13 +45,15 @@ sandbox exposes `inspectokf` the same way. Own `pyproject.toml`, `uv.lock`, ruff
 and pytest. Run `make test-inspectokf` after touching it. Both inspect CLIs spell
 the depth cap `-L`/`--level`.
 
-`sizeokf/` is a fifth independent uv project, intended to own wiki size
-reporting. It is currently a **scaffold**: the CLI parses `--help` and
-`--version` and does nothing else, and the suite covers that parser contract.
-Host install is `make install-sizeokf`; the sandbox exposes `sizeokf` through the
-same `setup.files` shim as its siblings. Own `pyproject.toml`, `uv.lock`, ruff
-and pytest. Run `make test-sizeokf` after touching it. Adding behaviour should
-not need anything outside `sizeokf/`.
+`sizeokf/` is a fifth independent uv project: an installable CLI that reports
+Markdown content size per file and per folder (recursive), **excluding YAML
+frontmatter** — which is 43.6% of the current wiki, so byte counters like `du`
+and `wc -c` roughly double the real figure. Same `-L`/`--level` depth cap as the
+inspect CLIs. It carries its own `strip_frontmatter` rather than importing
+`inspectmd`'s, under the zero-overlap rule; the two are pinned by tests on both
+sides. Host install is `make install-sizeokf`; the sandbox exposes `sizeokf`
+through the same `setup.files` shim. Own `pyproject.toml`, `uv.lock`, ruff and
+pytest. Run `make test-sizeokf` after touching it.
 
 `merkleokf/` is a sixth independent uv project, intended to own wiki change
 detection: a content hash per file and a Merkle hash per directory. It is
