@@ -16,7 +16,7 @@ directory per task, each with a `SKILL.md`.
   skill tells you the procedure; this file tells you the conventions that
   procedure has to respect.
 - Available skills:
-  - `compile-wiki` — compile a Markdown source document from `md/` into the wiki
+  - `compile-okf` — compile a Markdown source document from `md/` into the wiki
     under `okf/`.
   - `context7-docs` — fetch current library/framework docs via Context7 (installed
     with `@upstash/context7-pi`; use before relying on training data for APIs).

@@ -28,7 +28,7 @@ agentInstructions:
     These commands are on PATH. Use them; do not reinstall them.
 
     - `curl`, `jq`, `python3`, `rg` (ripgrep), `shellcheck`, `tree`
-    - `okf-lint` — OKF wiki linter (the compile-wiki skill wraps it)
+    - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and sizes)

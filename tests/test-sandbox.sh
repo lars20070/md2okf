@@ -31,5 +31,5 @@ fi
 # globals in the user prefix, neither of which is on a non-login PATH. The
 # relative path resolves because `sbx exec` runs with the repo root as its cwd.
 # `</dev/null` stops the guest blocking on an stdin pipe that never reaches EOF
-# (scripts/compile-wiki.sh:42-46).
+# (scripts/compile-okf.sh:42-46).
 sbx exec "${kit_name}" -- sh -lc './tests/test-sandbox-guest.sh' </dev/null

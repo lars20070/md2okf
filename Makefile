@@ -129,7 +129,7 @@ test-sandbox:
 
 # Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
 wiki:
-	./scripts/compile-wiki.sh
+	./scripts/compile-okf.sh
 
 # Fetch the website into md/ as one file.
 scrape:

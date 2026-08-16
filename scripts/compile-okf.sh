@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Compile the OKF wiki with the SANDBOXED Pi runtime (Docker Sandbox / sbx).
 #
-# Usage: compile-wiki.sh [md-folder]
+# Usage: compile-okf.sh [md-folder]
 #   md-folder  source folder of *.md documents
 #              (default: md/)
 #
@@ -48,6 +48,6 @@ shopt -s nullglob
 for document in "${markdown_folder}"/*.md; do
 	echo "Compiling document ${document}"
 	sbx exec "${kit_name}" -- pi \
-		-p "Load the compile-wiki skill: read ~/.pi/agent/skills/compile-wiki/SKILL.md, then follow it to compile ${document} into the OKF wiki under okf/." \
+		-p "Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile ${document} into the OKF wiki under okf/." \
 		</dev/null
 done

@@ -109,7 +109,7 @@ deterministic, and the fetched HTML is cached — see
 The instructions come in two parts. `AGENTS.md` holds what every task must
 respect: the OKF conventions, the directories the agent may write to, and the
 rule that `SPEC.md` outranks both. Each task's procedure lives in a skill of its
-own. Task skill today: `compile-wiki`. The sandbox also installs the
+own. Task skill today: `compile-okf`. The sandbox also installs the
 `context7-docs` skill via `@upstash/context7-pi` (library docs lookups). A new
 task gets a new directory rather than more rules in `AGENTS.md`.
 
@@ -128,7 +128,7 @@ edit reaches Pi on the next fresh sandbox — which `make wiki` always builds.
 the spec. Rules live in `okf/.okflintrc.json`, tracked and un-ignored by name so
 it survives the `okf/*` rule in `.gitignore`.
 
-The sandbox installs okf-lint at a pinned version, and the `compile-wiki` skill
+The sandbox installs okf-lint at a pinned version, and the `compile-okf` skill
 wraps it in `scripts/lint-okf.sh`. The agent lints its own output and fixes what
 the linter reports before it finishes. On the host, `make lint-okf` runs the
 same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because

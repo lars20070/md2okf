@@ -92,8 +92,8 @@ check mq
 check_file "${HOME}/.pi/agent/AGENTS.md"
 check_file "${HOME}/.pi/agent/settings.json"
 check_file "${HOME}/.pi/agent/models.json"
-check_file "${HOME}/.pi/agent/skills/compile-wiki/SKILL.md"
-check_exec "${HOME}/.pi/agent/skills/compile-wiki/scripts/lint-okf.sh"
+check_file "${HOME}/.pi/agent/skills/compile-okf/SKILL.md"
+check_exec "${HOME}/.pi/agent/skills/compile-okf/scripts/lint-okf.sh"
 
 # Context7 native Pi package (pi/spec.yaml setup.install + settings.json
 # packages). Presence only — no live Context7 API call.

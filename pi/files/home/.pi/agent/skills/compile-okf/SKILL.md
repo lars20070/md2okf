@@ -1,5 +1,5 @@
 ---
-name: compile-wiki
+name: compile-okf
 description: Compile one Markdown source document from md/ into the OKF wiki under okf/. Use when a run asks you to create or update the wiki from a source document.
 ---
 
@@ -83,7 +83,7 @@ strength of your own reading alone.
   lists are written, lint the whole wiki:
 
   ```bash
-  ~/.pi/agent/skills/compile-wiki/scripts/lint-okf.sh
+  ~/.pi/agent/skills/compile-okf/scripts/lint-okf.sh
   ```
 
   The script lints `./okf` by default; pass a path to lint somewhere else. Your

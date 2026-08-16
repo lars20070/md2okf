@@ -78,8 +78,9 @@ kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
 each task's procedure lives in its own skill directory under `skills/`. Task
-skill today: `compile-wiki`. Helper skill: `inspectmd`. A new task gets a new
-skill, not more rules in `AGENTS.md`.
+skill today: `compile-okf`. Helper skill: `context7-docs`, installed by the kit
+via `@upstash/context7-pi`. A new task gets a new skill, not more rules in
+`AGENTS.md`.
 
 `tests/` holds shell tests for that sandbox, in pairs: a host-side script
 (`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`
@@ -107,7 +108,7 @@ make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 
 ```bash
 ./scripts/bash.sh                            # shell into the existing sandbox
-./scripts/compile-wiki.sh md/other-books     # compile a different source folder
+./scripts/compile-okf.sh md/other-books      # compile a different source folder
 sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
 ```
 
