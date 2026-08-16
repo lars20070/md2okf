@@ -60,7 +60,20 @@ def format_section_range(section: Section) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="inspectmd",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Print a Markdown heading map with line ranges and sizes.",
+        epilog="""\
+Output columns (default table):
+  Index       Section number in document order (0 = preamble when present).
+              Pass this value to --section.
+  Level       Heading depth: 0 for the preamble, 1 for #, 2 for ##, …, 6 for ######.
+  Lines       1-based inclusive line range of the section (start-end).
+  Characters  Character count of that range (including newlines).
+  Slug        Kebab-case slug derived from the heading title (OKF file-name style).
+  Title       Heading text as written (or "(preamble)" / "(empty)").
+
+--section N prints only "start:end  N chars" for ranged reads.
+""",
     )
     parser.add_argument(
         "file",

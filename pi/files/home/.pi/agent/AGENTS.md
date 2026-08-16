@@ -149,6 +149,30 @@ content entry in an index.
 - Use **kebab-case** for all slugs, file names, and directory names
   (e.g. `capital-letters.md`, `numbers-and-dates/`).
 
+### Mapping long Markdown sources with `inspectmd`
+
+Before ranged reads of a long file under `md/`, run:
+
+```bash
+inspectmd md/<document>.md
+inspectmd --max-depth 2 md/<document>.md
+inspectmd --section N md/<document>.md
+```
+
+The default table columns mean:
+
+| Column | Meaning |
+| --- | --- |
+| `Index` | Section number in document order (`0` = preamble when present). Pass this to `--section`. |
+| `Level` | Heading depth: `0` preamble, `1` = `#`, …, `6` = `######`. |
+| `Lines` | 1-based inclusive line range (`start-end`) for that section. |
+| `Characters` | Character count of that range (including newlines). |
+| `Slug` | Kebab-case slug from the heading title (same style as OKF file names). |
+| `Title` | Heading text as written (or `(preamble)` / `(empty)`). |
+
+`--section N` prints only `start:end  N chars` for a ranged read. The map is a
+plan for cuts and reads — not permission to paraphrase source prose.
+
 ### Idempotency
 
 - Updates are **idempotent**. If a page for a topic already exists, update it in
