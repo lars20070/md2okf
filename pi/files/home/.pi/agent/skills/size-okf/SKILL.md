@@ -17,8 +17,9 @@ sizeokf                  # every file and folder (large)
 ```
 
 - Default path: `okf/`. Pass any existing directory.
-- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 1).
-  Default: unlimited. Folder **totals** are always recursive.
+- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
+  `0` = walk root only). Default: unlimited. Folder **totals** are always
+  recursive.
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

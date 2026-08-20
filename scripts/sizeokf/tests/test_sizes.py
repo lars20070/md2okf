@@ -81,6 +81,14 @@ def test_collect_max_level_limits_listing_not_totals(tmp_path: Path):
     assert total.files == 2
 
 
+def test_collect_max_level_zero_lists_root_only(tmp_path: Path):
+    entries, total = collect(_wiki(tmp_path), max_level=0)
+    deep, deep_total = collect(_wiki(tmp_path))
+    assert [e.path for e in entries] == ["okf/"]
+    assert total.words == deep_total.words
+    assert total.files == deep_total.files
+
+
 def test_collect_sorts_largest_first_then_alphabetically(tmp_path: Path):
     root = tmp_path / "okf"
     root.mkdir()

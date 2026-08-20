@@ -96,6 +96,15 @@ def test_max_level_limits_listing_not_coverage(tmp_path: Path):
     assert _by_path(shallow)["okf/alpha/"] == _by_path(deep)["okf/alpha/"]
 
 
+def test_max_level_zero_lists_root_only(tmp_path: Path):
+    root = _wiki(tmp_path)
+    entries, root_entry = collect(root, max_level=0)
+    deep, deep_root = collect(root)
+    assert [e.path for e in entries] == ["okf/"]
+    assert root_entry.digest == deep_root.digest
+    assert root_entry.files == deep_root.files
+
+
 def test_empty_directory_reports_zero_files(tmp_path: Path):
     root = tmp_path / "okf"
     (root / "empty").mkdir(parents=True)

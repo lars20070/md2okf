@@ -43,11 +43,19 @@ def test_main_level_spellings_agree(flag: str, tmp_path: Path, capsys):
     assert "okf/cat/" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("level", ["0", "-1"])
-def test_main_level_below_one_rejected(level: str, tmp_path: Path, capsys):
+def test_main_level_zero_root_only(tmp_path: Path, capsys):
     root = _wiki(tmp_path)
-    assert main([str(root), "-L", level]) == 2
-    assert "--level" in capsys.readouterr().err
+    assert main([str(root), "-L", "0"]) == 0
+    paths = [ln.split()[-1] for ln in capsys.readouterr().out.splitlines() if "okf/" in ln]
+    assert paths == ["okf/"]
+
+
+def test_main_level_below_zero_rejected(tmp_path: Path, capsys):
+    root = _wiki(tmp_path)
+    assert main([str(root), "-L", "-1"]) == 2
+    err = capsys.readouterr().err
+    assert "--level" in err
+    assert "0 or greater" in err
 
 
 def test_main_single_file(tmp_path: Path, capsys):

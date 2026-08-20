@@ -57,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--level",
         type=int,
         metavar="N",
-        help="list entries at most N directory levels deep (default: unlimited)",
+        help="list entries at most N directory levels deep (default: unlimited; 0 = walk root only)",
     )
     return parser
 
@@ -69,8 +69,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Checked before the path so the message is the same wherever it is run from.
     level: int | None = args.level
-    if level is not None and level < 1:
-        print(f"sizeokf: --level must be 1 or greater (got {level})", file=sys.stderr)
+    if level is not None and level < 0:
+        print(f"sizeokf: --level must be 0 or greater (got {level})", file=sys.stderr)
         return 2
 
     path: Path = args.path

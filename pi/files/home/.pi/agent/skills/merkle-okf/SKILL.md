@@ -17,9 +17,9 @@ merkleokf okf/<topic>/<page>.md    # a single file
 ```
 
 - Default path: `okf/`. Pass a directory or a single Markdown file.
-- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 1;
-  ignored for a file). Default: unlimited. Digests always cover the full
-  subtree.
+- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
+  `0` = walk root only; ignored for a file). Default: unlimited. Digests always
+  cover the full subtree.
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

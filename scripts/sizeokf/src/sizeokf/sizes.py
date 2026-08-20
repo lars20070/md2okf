@@ -79,8 +79,8 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
 
     ``listed_entries`` always includes ``root_total``. Every directory total is
     recursive regardless of ``max_level``; the level only decides which non-root
-    entries get listed. ``max_level=1`` lists the entries directly inside
-    ``root``, matching ``inspectokf -L 1``.
+    entries get listed. ``max_level=0`` lists only the walk root; ``max_level=1``
+    lists the entries directly inside ``root``, matching ``inspectokf -L 1``.
     """
     entries: list[Entry] = []
     prefix = f"{root.name}/"

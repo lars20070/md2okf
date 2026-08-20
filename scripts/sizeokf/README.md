@@ -17,6 +17,7 @@ Stdlib only at runtime.
 make install-clis
 sizeokf --version
 sizeokf                        # every file and folder in okf/
+sizeokf -L 0                   # walk root only
 sizeokf -L 1                   # top level only: the categories
 sizeokf --level 2 okf
 sizeokf okf/science-nature     # any subfolder
@@ -65,7 +66,7 @@ byte-identical and easy to diff.
   does not abort the walk.
 
 Exit codes: `0` ok, `2` usage or runtime error (missing directory, `--level`
-below `1`).
+below `0`).
 
 ## Layout
 

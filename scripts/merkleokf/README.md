@@ -18,6 +18,7 @@ Stdlib only at runtime.
 make install-clis
 merkleokf --version
 merkleokf                      # every file and folder in okf/
+merkleokf -L 0                 # walk root only
 merkleokf -L 1                 # top level only: the categories
 merkleokf --level 2 okf
 merkleokf okf/science-nature   # any subfolder
@@ -84,7 +85,7 @@ output of a full listing, which is a poor trade for a tool meant to be read.
 | `pyproject.toml` | hatchling build, ruff, pytest — own project, nothing shared |
 
 Exit codes: `0` ok, `2` usage or runtime error (path is neither file nor
-directory, `--level` below `1`).
+directory, `--level` below `0`).
 
 ## Tests
 
