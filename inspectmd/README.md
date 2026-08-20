@@ -11,7 +11,7 @@ and YAML frontmatter are skipped; text before the first heading is section 0.
 
 ```bash
 # Install onto PATH (host)
-make install-inspectmd
+make install-clis
 inspectmd --version
 inspectmd md/GoogleStyleGuide.md
 inspectmd -L 2 md/TheRestIsHistory.md
@@ -35,7 +35,7 @@ a `--level` below `1`).
 ## Tests
 
 ```bash
-make test-inspectmd
+make test-clis
 
 # The same, directly:
 uv run --project inspectmd --group test pytest -c inspectmd/pyproject.toml

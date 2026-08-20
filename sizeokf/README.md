@@ -13,7 +13,7 @@ Stdlib only at runtime.
 
 ```bash
 # Install onto PATH (host)
-make install-sizeokf
+make install-clis
 sizeokf --version
 sizeokf                        # every file and folder in okf/
 sizeokf -L 1                   # top level only: the categories
@@ -84,7 +84,7 @@ tests on both sides.
 ## Tests
 
 ```bash
-make test-sizeokf
+make test-clis
 
 # The same, directly:
 uv run --project sizeokf --group test pytest -c sizeokf/pyproject.toml

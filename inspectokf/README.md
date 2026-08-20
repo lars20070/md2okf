@@ -11,7 +11,7 @@ Stdlib only at runtime. Requires `tree` on PATH (installed in the sandbox).
 
 ```bash
 # Install onto PATH (host)
-make install-inspectokf
+make install-clis
 inspectokf --version
 inspectokf
 inspectokf okf/
@@ -37,7 +37,7 @@ below `1`, `tree` missing, or `tree` failed).
 ## Tests
 
 ```bash
-make test-inspectokf
+make test-clis
 
 # The same, directly:
 uv run --project inspectokf --group test pytest -c inspectokf/pyproject.toml

@@ -15,7 +15,7 @@ Stdlib only at runtime.
 
 ```bash
 # Install onto PATH (host)
-make install-merkleokf
+make install-clis
 merkleokf --version
 merkleokf                      # every file and folder in okf/
 merkleokf -L 1                 # top level only: the categories
@@ -90,7 +90,7 @@ directory, `--level` below `1`).
 ## Tests
 
 ```bash
-make test-merkleokf
+make test-clis
 
 # The same, directly:
 uv run --project merkleokf --group test pytest -c merkleokf/pyproject.toml

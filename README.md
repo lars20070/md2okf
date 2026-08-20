@@ -142,14 +142,8 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
 make validate            # check pi/spec.yaml against the Sandbox Kit schema
 make test-web2md         # pytest, the web2md scraper suite
-make test-inspectmd      # pytest, the inspectmd CLI suite
-make install-inspectmd   # install the inspectmd CLI onto PATH
-make test-inspectokf     # pytest, the inspectokf CLI suite
-make install-inspectokf  # install the inspectokf CLI onto PATH
-make test-sizeokf        # pytest, the sizeokf CLI suite
-make install-sizeokf     # install the sizeokf CLI onto PATH
-make test-merkleokf      # pytest, the merkleokf CLI suite
-make install-merkleokf   # install the merkleokf CLI onto PATH
+make test-clis           # pytest, the four host CLI suites
+make install-clis        # install the four host CLIs onto PATH
 make test-sandbox        # check the sandbox has the tools, config and key it promises
 make lint-okf            # lint the generated wiki
 ```
