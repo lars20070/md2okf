@@ -32,6 +32,7 @@
     "sandboxed",
     "shellcheck",
     "nullglob",
+    "nolog",
     "pytest",
     "pyproject",
     "pipefail",

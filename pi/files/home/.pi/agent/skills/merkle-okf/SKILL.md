@@ -20,6 +20,8 @@ merkleokf okf/<topic>/<page>.md    # a single file
 - `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
   `0` = walk root only; ignored for a file). Default: unlimited. Digests always
   cover the full subtree.
+- `--nolog` omits `okf/log.md` from the listing and digests (nested `log.md`
+  still hashed; ignored for a single file).
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

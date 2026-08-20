@@ -20,6 +20,8 @@ sizeokf                  # every file and folder (large)
 - `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
   `0` = walk root only). Default: unlimited. Folder **totals** are always
   recursive.
+- `--nolog` omits `okf/log.md` from the listing and totals (nested `log.md`
+  still counted).
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

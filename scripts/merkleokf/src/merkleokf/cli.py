@@ -82,6 +82,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "(default: unlimited; 0 = walk root only; ignored for a file)"
         ),
     )
+    parser.add_argument(
+        "--nolog",
+        action="store_true",
+        help="ignore okf/log.md (omit from listing and digests; ignored for a file)",
+    )
     return parser
 
 
@@ -106,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"merkleokf: not a file or directory: {path}", file=sys.stderr)
         return 2
 
-    entries, _ = collect(path, max_level=level)
+    entries, _ = collect(path, max_level=level, nolog=args.nolog)
     sys.stdout.write(format_table(entries))
     return 0
 

@@ -100,11 +100,33 @@ def test_main_version(capsys):
     assert capsys.readouterr().out == f"merkleokf {__version__}\n"
 
 
+def test_main_single_file_nolog_still_hashes_log(tmp_path: Path, capsys):
+    root = _wiki(tmp_path)
+    log = root / "log.md"
+    log.write_text("# log\n", encoding="utf-8")
+    assert main([str(log), "--nolog"]) == 0
+    out = capsys.readouterr().out.rstrip("\n")
+    digest, name = out.split("  ")
+    assert name == "log.md"
+    assert len(digest) == DISPLAY_WIDTH
+
+
+def test_main_nolog_omits_okf_log(tmp_path: Path, capsys):
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# log\n", encoding="utf-8")
+    assert main([str(root), "--nolog"]) == 0
+    out = capsys.readouterr().out
+    assert "okf/log.md" not in out
+    assert "okf/index.md" in out
+
+
 def test_main_help(capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["--help"])
     assert exc_info.value.code == 0
-    assert "usage: merkleokf" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "usage: merkleokf" in out
+    assert "--nolog" in out
 
 
 def test_main_unknown_flag(capsys):

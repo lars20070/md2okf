@@ -19,6 +19,7 @@ sizeokf --version
 sizeokf                        # every file and folder in okf/
 sizeokf -L 0                   # walk root only
 sizeokf -L 1                   # top level only: the categories
+sizeokf --nolog                # omit okf/log.md from listing and totals
 sizeokf --level 2 okf
 sizeokf okf/science-nature     # any subfolder
 
@@ -59,6 +60,8 @@ byte-identical and easy to diff.
 - **Folder totals are always recursive**, whatever `-L` is set to. `-L` decides
   which entries get a row, never how they are summed — unlike `tree --du -L 1`,
   which silently reports a directory's own inode size instead of its contents.
+- **`--nolog`** omits only `okf/log.md` from the listing and from all totals.
+  Nested `log.md` files and `log.md` under other root names are still counted.
 - A folder with no Markdown in it still gets a row, showing `0`.
 - Symlinks are not followed, so directory cycles and links outside the root
   cannot hang or escape the walk.
