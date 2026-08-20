@@ -40,12 +40,13 @@ def test_leaf_change_propagates_to_root_and_only_its_parent(tmp_path: Path):
 
     assert root_after.digest != root_before.digest
     b, a = _by_path(before), _by_path(after)
-    assert a["alpha/"] != b["alpha/"]
-    assert a["alpha/one.md"] != b["alpha/one.md"]
+    assert a["okf/alpha/"] != b["okf/alpha/"]
+    assert a["okf/alpha/one.md"] != b["okf/alpha/one.md"]
     # Everything else is provably untouched.
-    assert a["beta/"] == b["beta/"]
-    assert a["alpha/two.md"] == b["alpha/two.md"]
-    assert a["index.md"] == b["index.md"]
+    assert a["okf/beta/"] == b["okf/beta/"]
+    assert a["okf/alpha/two.md"] == b["okf/alpha/two.md"]
+    assert a["okf/index.md"] == b["okf/index.md"]
+    assert a["okf/"] != b["okf/"]
 
 
 def test_rename_changes_the_parent_digest(tmp_path: Path):
@@ -88,18 +89,18 @@ def test_max_level_limits_listing_not_coverage(tmp_path: Path):
     shallow, shallow_root = collect(root, max_level=1)
     deep, deep_root = collect(root)
 
-    assert sorted(_by_path(shallow)) == ["alpha/", "beta/", "index.md"]
+    assert sorted(_by_path(shallow)) == ["okf/", "okf/alpha/", "okf/beta/", "okf/index.md"]
     assert shallow_root.digest == deep_root.digest
     assert shallow_root.files == deep_root.files == 5
     # The nested pages are unlisted but still cover the directory digest.
-    assert _by_path(shallow)["alpha/"] == _by_path(deep)["alpha/"]
+    assert _by_path(shallow)["okf/alpha/"] == _by_path(deep)["okf/alpha/"]
 
 
 def test_empty_directory_reports_zero_files(tmp_path: Path):
     root = tmp_path / "okf"
     (root / "empty").mkdir(parents=True)
     entries, root_entry = collect(root)
-    assert [(e.path, e.files) for e in entries] == [("empty/", 0)]
+    assert [(e.path, e.files) for e in entries] == [("okf/", 0), ("okf/empty/", 0)]
     assert root_entry.files == 0
 
 

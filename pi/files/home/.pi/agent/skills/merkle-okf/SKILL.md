@@ -34,13 +34,14 @@ localise anything.
 
 ## Reading the output
 
-Summary line (`name: <hash>, N files`), then a table:
+A table (no summary line). The walk root is always the first path listed when
+sorted alphabetically:
 
 | Column | Meaning |
 | --- | --- |
 | `Hash` | First 12 hex characters of the SHA-256 digest (Merkle digest for folders). |
 | `Files` | Markdown files covered. Always `1` for a file. |
-| `Path` | Relative to the hashed directory. Folders end in `/`. |
+| `Path` | Rooted at the hashed directory's name (e.g. `okf/…`). Folders end in `/`. |
 
 Rows are sorted alphabetically so two runs diff line by line.
 

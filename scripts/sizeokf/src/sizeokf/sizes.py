@@ -47,7 +47,7 @@ class Entry:
     """One listed file or directory, with its content size."""
 
     path: str
-    """Display path, relative to the walked root. Directories end in ``/``."""
+    """Display path, rooted at the walk target's name. Directories end in ``/``."""
 
     is_dir: bool
     words: int
@@ -57,7 +57,7 @@ class Entry:
     """Number of Markdown files counted. Always 1 for a file."""
 
     depth: int
-    """1 for entries directly inside the root."""
+    """1 for entries directly inside the root; 0 for the root itself."""
 
 
 def _measure_file(path: Path) -> int:
@@ -77,11 +77,13 @@ def _measure_file(path: Path) -> int:
 def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], Entry]:
     """Walk ``root``, returning ``(listed_entries, root_total)``.
 
-    Every directory total is recursive regardless of ``max_level``; the level
-    only decides which entries get listed. ``max_level=1`` lists the entries
-    directly inside ``root``, matching ``inspectokf -L 1``.
+    ``listed_entries`` always includes ``root_total``. Every directory total is
+    recursive regardless of ``max_level``; the level only decides which non-root
+    entries get listed. ``max_level=1`` lists the entries directly inside
+    ``root``, matching ``inspectokf -L 1``.
     """
     entries: list[Entry] = []
+    prefix = f"{root.name}/"
 
     def walk(directory: Path, depth: int) -> tuple[int, int]:
         """Return ``(words, files)`` for ``directory``, recording listed entries."""
@@ -111,7 +113,7 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                 if max_level is None or depth <= max_level:
                     entries.append(
                         Entry(
-                            path=f"{child.relative_to(root)}/",
+                            path=f"{prefix}{child.relative_to(root)}/",
                             is_dir=True,
                             words=child_words,
                             files=child_files,
@@ -125,7 +127,7 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                 if max_level is None or depth <= max_level:
                     entries.append(
                         Entry(
-                            path=str(child.relative_to(root)),
+                            path=f"{prefix}{child.relative_to(root)}",
                             is_dir=False,
                             words=child_words,
                             files=1,
@@ -135,7 +137,8 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
         return words, files
 
     total_words, total_files = walk(root, 1)
-    total = Entry(path=f"{root.name}/", is_dir=True, words=total_words, files=total_files, depth=0)
+    total = Entry(path=prefix, is_dir=True, words=total_words, files=total_files, depth=0)
+    entries.append(total)
 
     # Largest first; ties broken by path so repeated runs are byte-identical.
     entries.sort(key=lambda e: (-e.words, e.path))

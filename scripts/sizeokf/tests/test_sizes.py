@@ -66,7 +66,7 @@ def test_collect_counts_only_markdown(tmp_path: Path):
 
 def test_collect_directory_total_is_recursive(tmp_path: Path):
     entries, _ = collect(_wiki(tmp_path))
-    cat = next(e for e in entries if e.path == "cat/")
+    cat = next(e for e in entries if e.path == "okf/cat/")
     assert cat.is_dir
     assert cat.words == count_words(BODY)
     assert cat.files == 1
@@ -74,9 +74,9 @@ def test_collect_directory_total_is_recursive(tmp_path: Path):
 
 def test_collect_max_level_limits_listing_not_totals(tmp_path: Path):
     entries, total = collect(_wiki(tmp_path), max_level=1)
-    assert sorted(e.path for e in entries) == ["cat/", "index.md"]
+    assert sorted(e.path for e in entries) == ["okf/", "okf/cat/", "okf/index.md"]
     # The nested page is not listed, but its words still reach both totals.
-    cat = next(e for e in entries if e.path == "cat/")
+    cat = next(e for e in entries if e.path == "okf/cat/")
     assert cat.words == count_words(BODY)
     assert total.files == 2
 
@@ -88,14 +88,22 @@ def test_collect_sorts_largest_first_then_alphabetically(tmp_path: Path):
     (root / "b-tie.md").write_text(" ".join(["y"] * 5) + "\n", encoding="utf-8")
     (root / "a-tie.md").write_text(" ".join(["z"] * 5) + "\n", encoding="utf-8")
     entries, _ = collect(root)
-    assert [e.path for e in entries] == ["big.md", "a-tie.md", "b-tie.md"]
+    assert [e.path for e in entries] == [
+        "okf/",
+        "okf/big.md",
+        "okf/a-tie.md",
+        "okf/b-tie.md",
+    ]
 
 
 def test_collect_empty_directory_reports_zero(tmp_path: Path):
     root = tmp_path / "okf"
     (root / "empty").mkdir(parents=True)
     entries, total = collect(root)
-    assert [(e.path, e.words, e.files) for e in entries] == [("empty/", 0, 0)]
+    assert [(e.path, e.words, e.files) for e in entries] == [
+        ("okf/", 0, 0),
+        ("okf/empty/", 0, 0),
+    ]
     assert total.words == 0
 
 
@@ -114,7 +122,7 @@ def test_collect_skips_symlinks(tmp_path: Path):
     entries, total = collect(root)
     assert total.files == 1
     assert total.words == count_words("# page\n")
-    assert sorted(e.path for e in entries) == ["real/", "real/page.md"]
+    assert sorted(e.path for e in entries) == ["okf/", "okf/real/", "okf/real/page.md"]
 
 
 def test_collect_unreadable_directory_is_skipped(tmp_path: Path, monkeypatch):
@@ -135,6 +143,6 @@ def test_collect_unreadable_directory_is_skipped(tmp_path: Path, monkeypatch):
     entries, total = collect(root)
     assert total.files == 1
     assert total.words == count_words("# ok\n")
-    bad_row = next(e for e in entries if e.path == "bad/")
+    bad_row = next(e for e in entries if e.path == "okf/bad/")
     assert bad_row.words == 0
     assert bad_row.files == 0

@@ -28,22 +28,21 @@ uv tool run --from ./scripts/merkleokf merkleokf -L 1 okf
 ```
 
 ```text
-okf: 86c7544437e0, 217 files
-
 Hash          Files  Path
-------------  -----  ----------------------
-51766f25dfdd     15  american-history/
-15d3bec65739     38  ancient-world/
-5423a3e28d49     43  british-history/
-55dc280ffc06      1  index.md
-59d43a1b974d      1  log.md
+------------  -----  --------------------------
+86c7544437e0    217  okf/
+51766f25dfdd     15  okf/american-history/
+15d3bec65739     38  okf/ancient-world/
+5423a3e28d49     43  okf/british-history/
+55dc280ffc06      1  okf/index.md
+59d43a1b974d      1  okf/log.md
 ```
 
 | Column | Meaning |
 | --- | --- |
 | `Hash` | First 12 hex characters of the SHA-256 digest. Merkle digest for folders. |
 | `Files` | Markdown files covered. Always `1` for a file. |
-| `Path` | Relative to the hashed directory. Folders end in `/`. |
+| `Path` | Rooted at the hashed directory name. Folders end in `/`. Walk root always listed. |
 
 Rows are sorted alphabetically so two runs diff line by line — the entire point.
 A subfolder hashed on its own gives the same digest as its row in the parent's

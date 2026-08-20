@@ -45,7 +45,7 @@ class Entry:
     """One listed file or directory, with its digest."""
 
     path: str
-    """Display path, relative to the walked root. Directories end in ``/``."""
+    """Display path, rooted at the walk target's name. Directories end in ``/``."""
 
     is_dir: bool
     digest: bytes
@@ -55,17 +55,19 @@ class Entry:
     """Markdown files covered. Always 1 for a file."""
 
     depth: int
-    """1 for entries directly inside the root."""
+    """1 for entries directly inside the root; 0 for the root itself."""
 
 
 def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], Entry]:
     """Walk ``root``, returning ``(listed_entries, root_entry)``.
 
-    Directory digests always cover the full subtree regardless of ``max_level``;
-    the level only decides which entries get listed. ``max_level=1`` lists the
-    entries directly inside ``root``, matching ``inspectokf -L 1``.
+    ``listed_entries`` always includes ``root_entry``. Directory digests always
+    cover the full subtree regardless of ``max_level``; the level only decides
+    which non-root entries get listed. ``max_level=1`` lists the entries
+    directly inside ``root``, matching ``inspectokf -L 1``.
     """
     entries: list[Entry] = []
+    prefix = f"{root.name}/"
 
     def walk(directory: Path, depth: int) -> tuple[bytes, int]:
         """Return ``(digest, files)`` for ``directory``, recording listed entries."""
@@ -89,7 +91,7 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                 # apart; the name keeps a pure rename from being invisible.
                 acc.update(b"d" + child.name.encode("utf-8") + digest)
                 listed = Entry(
-                    path=f"{child.relative_to(root)}/",
+                    path=f"{prefix}{child.relative_to(root)}/",
                     is_dir=True,
                     digest=digest,
                     files=child_files,
@@ -100,7 +102,7 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                 files += 1
                 acc.update(b"f" + child.name.encode("utf-8") + digest)
                 listed = Entry(
-                    path=str(child.relative_to(root)),
+                    path=f"{prefix}{child.relative_to(root)}",
                     is_dir=False,
                     digest=digest,
                     files=1,
@@ -116,12 +118,13 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
 
     root_digest, root_files = walk(root, 1)
     root_entry = Entry(
-        path=f"{root.name}/",
+        path=prefix,
         is_dir=True,
         digest=root_digest,
         files=root_files,
         depth=0,
     )
+    entries.append(root_entry)
 
     # Alphabetical, so two runs diff line by line — the whole point of hashing.
     entries.sort(key=lambda e: e.path)

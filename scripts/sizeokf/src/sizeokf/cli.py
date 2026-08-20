@@ -78,8 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sizeokf: not a directory: {path}", file=sys.stderr)
         return 2
 
-    entries, total = collect(path, max_level=level)
-    sys.stdout.write(f"{path.name}: {total.words:,} words, {total.files:,} files\n\n")
+    entries, _ = collect(path, max_level=level)
     sys.stdout.write(format_table(entries))
     return 0
 

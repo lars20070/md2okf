@@ -18,15 +18,16 @@ def _wiki(tmp_path: Path) -> Path:
     return root
 
 
-def test_main_prints_summary_and_table(tmp_path: Path, capsys):
+def test_main_prints_table_with_rooted_paths(tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root)]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("okf: 5 words, 2 files\n\n")
+    assert not out.startswith("okf: ")
     assert "Words" in out
     assert "Files" in out
-    assert "cat/" in out
-    assert "index.md" in out
+    assert "okf/" in out
+    assert "okf/cat/" in out
+    assert "okf/index.md" in out
 
 
 def test_main_excludes_frontmatter_from_the_count(tmp_path: Path, capsys):
@@ -36,14 +37,19 @@ def test_main_excludes_frontmatter_from_the_count(tmp_path: Path, capsys):
     (root / "page.md").write_text(FRONTMATTER_DOC, encoding="utf-8")
     assert len(FRONTMATTER_DOC) == 52
     assert main([str(root)]) == 0
-    assert "okf: 3 words, 1 files" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "okf/" in out
+    assert "okf/page.md" in out
+    # Both the root and the page row report 3 words.
+    data_rows = [ln for ln in out.splitlines() if "okf/" in ln]
+    assert all(ln.lstrip().startswith("3") for ln in data_rows)
 
 
 def test_main_level_limits_rows(tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root), "-L", "1"]) == 0
     out = capsys.readouterr().out
-    assert "cat/" in out
+    assert "okf/cat/" in out
     assert "page.md" not in out
 
 
@@ -51,7 +57,7 @@ def test_main_level_limits_rows(tmp_path: Path, capsys):
 def test_main_level_spellings_agree(flag: str, tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root), flag, "1"]) == 0
-    assert "cat/" in capsys.readouterr().out
+    assert "okf/cat/" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("level", ["0", "-1"])
@@ -72,18 +78,20 @@ def test_main_no_markdown(tmp_path: Path, capsys):
     (root / "notes.txt").write_text("ignored", encoding="utf-8")
     assert main([str(root)]) == 0
     out = capsys.readouterr().out
-    assert "okf: 0 words, 0 files" in out
-    assert "(no Markdown files)" in out
+    assert "Words" in out
+    assert "okf/" in out
+    assert "(no Markdown files)" not in out
 
 
 def test_main_empty_dir(tmp_path: Path, capsys):
-    """A fresh empty okf/ root succeeds with zero totals."""
+    """A fresh empty okf/ root succeeds with a single root row."""
     root = tmp_path / "okf"
     root.mkdir()
     assert main([str(root)]) == 0
     out = capsys.readouterr().out
-    assert "okf: 0 words, 0 files" in out
-    assert "(no Markdown files)" in out
+    assert "Words" in out
+    assert "okf/" in out
+    assert "(no Markdown files)" not in out
 
 
 def test_main_version(capsys):

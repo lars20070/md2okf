@@ -29,13 +29,13 @@ written, not what exists.
 
 ## Reading the output
 
-Summary line, then a table:
+A table (no summary line). The walk root is always listed:
 
 | Column | Meaning |
 | --- | --- |
 | `Words` | Whitespace-split words of Markdown **content**, frontmatter excluded. Recursive for folders. |
 | `Files` | Markdown files counted. Always `1` for a file. |
-| `Path` | Relative to the measured directory. Folders end in `/`. |
+| `Path` | Rooted at the measured directory's name (e.g. `okf/…`). Folders end in `/`. |
 
 Rows are sorted largest first.
 

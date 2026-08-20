@@ -103,8 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"merkleokf: not a file or directory: {path}", file=sys.stderr)
         return 2
 
-    entries, root = collect(path, max_level=level)
-    sys.stdout.write(f"{escape_display_path(path.name)}: {short(root.digest)}, {root.files:,} files\n\n")
+    entries, _ = collect(path, max_level=level)
     sys.stdout.write(format_table(entries))
     return 0
 

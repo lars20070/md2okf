@@ -17,22 +17,22 @@ def _wiki(tmp_path: Path) -> Path:
     return root
 
 
-def test_main_prints_summary_and_table(tmp_path: Path, capsys):
+def test_main_prints_table_with_rooted_paths(tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root)]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("okf: ")
-    assert ", 2 files\n\n" in out
+    assert not out.startswith("okf: ")
     assert "Hash" in out
-    assert "cat/" in out
-    assert "index.md" in out
+    assert "okf/" in out
+    assert "okf/cat/" in out
+    assert "okf/index.md" in out
 
 
 def test_main_level_limits_rows(tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root), "-L", "1"]) == 0
     out = capsys.readouterr().out
-    assert "cat/" in out
+    assert "okf/cat/" in out
     assert "page.md" not in out
 
 
@@ -40,7 +40,7 @@ def test_main_level_limits_rows(tmp_path: Path, capsys):
 def test_main_level_spellings_agree(flag: str, tmp_path: Path, capsys):
     root = _wiki(tmp_path)
     assert main([str(root), flag, "1"]) == 0
-    assert "cat/" in capsys.readouterr().out
+    assert "okf/cat/" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("level", ["0", "-1"])
@@ -65,7 +65,7 @@ def test_main_file_hash_matches_the_table_row(tmp_path: Path, capsys):
     main([str(root / "index.md")])
     single = capsys.readouterr().out.split("  ")[0]
     main([str(root), "-L", "1"])
-    row = next(ln for ln in capsys.readouterr().out.splitlines() if ln.endswith("index.md"))
+    row = next(ln for ln in capsys.readouterr().out.splitlines() if ln.endswith("okf/index.md"))
     assert row.startswith(single)
 
 
@@ -80,8 +80,9 @@ def test_main_no_markdown(tmp_path: Path, capsys):
     (root / "notes.txt").write_text("ignored", encoding="utf-8")
     assert main([str(root)]) == 0
     out = capsys.readouterr().out
-    assert ", 0 files" in out
-    assert "(no Markdown files)" in out
+    assert "Hash" in out
+    assert "okf/" in out
+    assert "(no Markdown files)" not in out
 
 
 def test_main_version(capsys):

@@ -26,22 +26,21 @@ uv tool run --from ./scripts/sizeokf sizeokf -L 1 okf
 ```
 
 ```text
-okf: 18,742 words, 217 files
-
  Words  Files  Path
-------  -----  ----------------------
- 3,821     43  british-history/
- 3,410     38  ancient-world/
- 2,088     29  popular-culture/
-   312      1  index.md
-    81      1  log.md
+------  -----  --------------------------
+18,742    217  okf/
+ 3,821     43  okf/british-history/
+ 3,410     38  okf/ancient-world/
+ 2,088     29  okf/popular-culture/
+   312      1  okf/index.md
+    81      1  okf/log.md
 ```
 
 | Column | Meaning |
 | --- | --- |
 | `Words` | Whitespace-split words of content, frontmatter excluded. Recursive for folders. |
 | `Files` | Markdown files counted. Always `1` for a file. |
-| `Path` | Relative to the measured directory. Folders end in `/`. |
+| `Path` | Rooted at the measured directory name. Folders end in `/`. Walk root always listed. |
 
 Rows are sorted largest first, ties broken alphabetically, so repeated runs are
 byte-identical and easy to diff.
