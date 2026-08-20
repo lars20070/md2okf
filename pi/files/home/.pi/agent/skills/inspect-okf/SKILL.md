@@ -19,7 +19,8 @@ inspectokf               # every page: hundreds of lines — avoid opening with 
 - Default path: `okf/`. Pass any existing directory (typically a wiki subfolder).
 - `-L`/`--level N` descends at most `N` directory levels (`N` ≥ 1). Default:
   unlimited.
-- Output is the `tree` listing of that path.
+- Output is the `tree` listing of that path. An empty or dotfile-only directory
+  exits `0` with `0 directories, 0 files` and does not require `tree`.
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

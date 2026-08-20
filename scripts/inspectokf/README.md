@@ -5,7 +5,8 @@ Default path is `okf/`; pass any existing directory (typically a wiki subfolder)
 Depth is unlimited unless `-L`/`--level` caps it — `-L 1` lists the categories
 without their pages, which is the cheap way to orient on a large wiki.
 
-Stdlib only at runtime. Requires `tree` on PATH (installed in the sandbox).
+Stdlib only at runtime. Requires `tree` on PATH (installed in the sandbox),
+except for empty or dotfile-only directories, which exit `0` without calling `tree`.
 
 ## Commands
 
@@ -23,8 +24,9 @@ inspectokf --level 2 okf
 uv tool run --from ./scripts/inspectokf inspectokf okf
 ```
 
-Exit codes: `0` ok, `2` usage or runtime error (missing directory, a `--level`
-below `1`, `tree` missing, or `tree` failed).
+Exit codes: `0` ok (including an empty or dotfile-only directory), `2` usage or
+runtime error (missing directory, a `--level` below `1`, `tree` missing, or
+`tree` failed).
 
 ## Layout
 
