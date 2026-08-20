@@ -104,6 +104,7 @@ make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ./scripts/bash.sh                            # shell into the existing sandbox
 ./scripts/pi.sh                              # interactive Pi in the existing sandbox
 ./scripts/compile-okf.sh md/other-books      # compile a different source folder
+# Per document: Ralph loop until `merkleokf --nolog -L 0` is unchanged (RALPH_MAX=10)
 sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
 ```
 

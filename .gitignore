@@ -20,3 +20,6 @@ web2md/cache/
 okf/*
 !okf/
 !okf/.okflintrc.json
+
+# Pi session transcripts from make wiki
+logs/

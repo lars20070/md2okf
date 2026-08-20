@@ -105,6 +105,51 @@ def test_max_level_zero_lists_root_only(tmp_path: Path):
     assert root_entry.files == deep_root.files
 
 
+def test_nolog_skips_okf_log_only(tmp_path: Path):
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
+    (root / "alpha" / "log.md").write_text("# nested log\n", encoding="utf-8")
+
+    with_log, root_with = collect(root)
+    without_log, root_without = collect(root, nolog=True)
+    paths_with = _by_path(with_log)
+    paths_without = _by_path(without_log)
+
+    assert "okf/log.md" in paths_with
+    assert "okf/log.md" not in paths_without
+    assert "okf/alpha/log.md" in paths_without
+    assert root_without.files == root_with.files - 1
+    assert root_without.digest != root_with.digest
+
+    (root / "log.md").unlink()
+    _, baseline = collect(root)
+    assert root_without.digest == baseline.digest
+    assert root_without.files == baseline.files
+
+
+def test_nolog_ignores_log_under_other_roots(tmp_path: Path):
+    root = _wiki(tmp_path, name="wiki")
+    (root / "log.md").write_text("# counted\n", encoding="utf-8")
+    entries, root_entry = collect(root, nolog=True)
+    assert "wiki/log.md" in _by_path(entries)
+    assert root_entry.files == 6  # 5 from _wiki + log.md
+
+
+def test_nolog_keeps_log_under_a_nested_okf_directory(tmp_path: Path):
+    """The exclusion is anchored to the walk root, not to every directory named okf."""
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
+    (root / "nested" / "okf").mkdir(parents=True)
+    (root / "nested" / "okf" / "log.md").write_text("# deep log\n", encoding="utf-8")
+
+    entries, root_entry = collect(root, nolog=True)
+    paths = _by_path(entries)
+
+    assert "okf/log.md" not in paths
+    assert "okf/nested/okf/log.md" in paths
+    assert root_entry.files == 6  # 5 from _wiki + the nested log.md
+
+
 def test_empty_directory_reports_zero_files(tmp_path: Path):
     root = tmp_path / "okf"
     (root / "empty").mkdir(parents=True)

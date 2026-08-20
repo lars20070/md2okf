@@ -90,6 +90,52 @@ def test_collect_max_level_zero_lists_root_only(tmp_path: Path):
     assert total.files == deep_total.files
 
 
+def test_collect_nolog_skips_okf_log_only(tmp_path: Path):
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log one two\n", encoding="utf-8")  # 5 words
+    (root / "cat" / "log.md").write_text("# nested log\n", encoding="utf-8")  # 2 words
+
+    with_log, total_with = collect(root)
+    without_log, total_without = collect(root, nolog=True)
+    paths_with = {e.path for e in with_log}
+    paths_without = {e.path for e in without_log}
+
+    assert "okf/log.md" in paths_with
+    assert "okf/log.md" not in paths_without
+    assert "okf/cat/log.md" in paths_without
+    assert total_without.files == total_with.files - 1
+    assert total_without.words == total_with.words - 5
+
+    # Same totals as a tree that never had okf/log.md.
+    (root / "log.md").unlink()
+    _, baseline = collect(root)
+    assert total_without.files == baseline.files
+    assert total_without.words == baseline.words
+
+
+def test_collect_nolog_ignores_log_under_other_roots(tmp_path: Path):
+    root = tmp_path / "wiki"
+    root.mkdir()
+    (root / "log.md").write_text("# counted\n", encoding="utf-8")
+    entries, total = collect(root, nolog=True)
+    assert total.files == 1
+    assert "wiki/log.md" in {e.path for e in entries}
+
+
+def test_collect_nolog_keeps_log_under_a_nested_okf_directory(tmp_path: Path):
+    """The exclusion is anchored to the walk root, not to every directory named okf."""
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
+    (root / "nested" / "okf").mkdir(parents=True)
+    (root / "nested" / "okf" / "log.md").write_text("# deep log\n", encoding="utf-8")
+
+    entries, total = collect(root, nolog=True)
+    paths = {e.path for e in entries}
+
+    assert "okf/log.md" not in paths
+    assert "okf/nested/okf/log.md" in paths
+
+
 def test_collect_sorts_largest_first_then_alphabetically(tmp_path: Path):
     root = tmp_path / "okf"
     root.mkdir()

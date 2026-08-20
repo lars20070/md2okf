@@ -74,13 +74,19 @@ def _measure_file(path: Path) -> int:
     return count_words(strip_frontmatter(text))
 
 
-def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], Entry]:
+def collect(
+    root: Path, *, max_level: int | None = None, nolog: bool = False
+) -> tuple[list[Entry], Entry]:
     """Walk ``root``, returning ``(listed_entries, root_total)``.
 
     ``listed_entries`` always includes ``root_total``. Every directory total is
     recursive regardless of ``max_level``; the level only decides which non-root
     entries get listed. ``max_level=0`` lists only the walk root; ``max_level=1``
     lists the entries directly inside ``root``, matching ``inspectokf -L 1``.
+
+    When ``nolog`` is true, ``okf/log.md`` is omitted entirely (not listed and
+    not counted). Nested ``log.md`` files and ``log.md`` under other roots are
+    still measured.
     """
     entries: list[Entry] = []
     prefix = f"{root.name}/"
@@ -121,6 +127,10 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                         )
                     )
             elif child.suffix == ".md":
+                # Anchored to the walk root, not to any directory named "okf":
+                # a nested okf/ keeps its own log.md, as the docstring promises.
+                if nolog and child.name == "log.md" and root.name == "okf" and child.parent == root:
+                    continue
                 child_words = _measure_file(child)
                 words += child_words
                 files += 1

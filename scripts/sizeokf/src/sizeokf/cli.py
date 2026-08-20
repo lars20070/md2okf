@@ -59,6 +59,11 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="list entries at most N directory levels deep (default: unlimited; 0 = walk root only)",
     )
+    parser.add_argument(
+        "--nolog",
+        action="store_true",
+        help="ignore okf/log.md (omit from listing and totals)",
+    )
     return parser
 
 
@@ -78,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sizeokf: not a directory: {path}", file=sys.stderr)
         return 2
 
-    entries, _ = collect(path, max_level=level)
+    entries, _ = collect(path, max_level=level, nolog=args.nolog)
     sys.stdout.write(format_table(entries))
     return 0
 

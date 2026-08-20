@@ -113,7 +113,18 @@ def test_main_help(capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["--help"])
     assert exc_info.value.code == 0
-    assert "usage: sizeokf" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "usage: sizeokf" in out
+    assert "--nolog" in out
+
+
+def test_main_nolog_omits_okf_log(tmp_path: Path, capsys):
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# log entry\n", encoding="utf-8")
+    assert main([str(root), "--nolog"]) == 0
+    out = capsys.readouterr().out
+    assert "okf/log.md" not in out
+    assert "okf/index.md" in out
 
 
 def test_main_unknown_flag(capsys):
