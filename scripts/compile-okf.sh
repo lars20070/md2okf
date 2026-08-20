@@ -7,6 +7,9 @@ set -euo pipefail
 #   md-folder  source folder of *.md documents
 #              (default: md/)
 #
+# Env: RALPH_MAX  max Pi iterations per document when the wiki hash keeps
+#                 changing (default: 10)
+#
 # Model and provider come from the kit's own config (pi/files/home/.pi/agent/
 # settings.json + models.json), delivered to ~/.pi/agent/ in the VM — no
 # --provider/--model flags here. OPENROUTER_API_KEY is proxy-managed by sbx
@@ -44,10 +47,33 @@ sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 # piped stdin to merge it into the prompt. Run from a terminal, that pipe never
 # reaches EOF, so Pi blocks before its first API call and the compile hangs
 # forever with no output and no OpenRouter activity.
+#
+# Ralph loop: re-run Pi on the same document until merkleokf --nolog -L 0
+# reports an unchanged wiki root hash (log.md excluded). Cap with RALPH_MAX
+# (default 10) so a runaway compile fails instead of looping forever.
+wiki_root_hash() {
+	sbx exec "${kit_name}" -- merkleokf --nolog -L 0 okf/ | awk 'NR==3 {print $1}'
+}
+
+max_iterations="${RALPH_MAX:-10}"
 shopt -s nullglob
 for document in "${markdown_folder}"/*.md; do
-	echo "Compiling document ${document}"
-	sbx exec "${kit_name}" -- pi \
-		-p "Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile ${document} into the OKF wiki under okf/." \
-		</dev/null
+	prev_hash="$(wiki_root_hash)"
+	iteration=0
+	while true; do
+		iteration=$((iteration + 1))
+		if ((iteration > max_iterations)); then
+			echo "Error: Ralph loop hit ${max_iterations} iterations for ${document}" >&2
+			exit 1
+		fi
+		echo "Compiling document ${document} (iteration ${iteration})"
+		sbx exec "${kit_name}" -- pi \
+			-p "Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile ${document} into the OKF wiki under okf/." \
+			</dev/null
+		curr_hash="$(wiki_root_hash)"
+		if [[ "${curr_hash}" == "${prev_hash}" ]]; then
+			break
+		fi
+		prev_hash="${curr_hash}"
+	done
 done
