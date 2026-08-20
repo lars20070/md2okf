@@ -20,7 +20,7 @@ inspectokf -L 1
 inspectokf --level 2 okf
 
 # Without installing
-uv tool run --from ./inspectokf inspectokf okf
+uv tool run --from ./scripts/inspectokf inspectokf okf
 ```
 
 Exit codes: `0` ok, `2` usage or runtime error (missing directory, a `--level`
@@ -40,5 +40,5 @@ below `1`, `tree` missing, or `tree` failed).
 make test-clis
 
 # The same, directly:
-uv run --project inspectokf --group test pytest -c inspectokf/pyproject.toml
+uv run --project scripts/inspectokf --group test pytest -c scripts/inspectokf/pyproject.toml
 ```

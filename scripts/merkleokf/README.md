@@ -24,7 +24,7 @@ merkleokf okf/science-nature   # any subfolder
 merkleokf okf/index.md         # a single file
 
 # Without installing
-uv tool run --from ./merkleokf merkleokf -L 1 okf
+uv tool run --from ./scripts/merkleokf merkleokf -L 1 okf
 ```
 
 ```text
@@ -93,5 +93,5 @@ directory, `--level` below `1`).
 make test-clis
 
 # The same, directly:
-uv run --project merkleokf --group test pytest -c merkleokf/pyproject.toml
+uv run --project scripts/merkleokf --group test pytest -c scripts/merkleokf/pyproject.toml
 ```

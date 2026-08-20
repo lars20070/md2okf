@@ -21,7 +21,7 @@ sizeokf --level 2 okf
 sizeokf okf/science-nature     # any subfolder
 
 # Without installing
-uv tool run --from ./sizeokf sizeokf -L 1 okf
+uv tool run --from ./scripts/sizeokf sizeokf -L 1 okf
 ```
 
 ```text
@@ -87,5 +87,5 @@ tests on both sides.
 make test-clis
 
 # The same, directly:
-uv run --project sizeokf --group test pytest -c sizeokf/pyproject.toml
+uv run --project scripts/sizeokf --group test pytest -c scripts/sizeokf/pyproject.toml
 ```

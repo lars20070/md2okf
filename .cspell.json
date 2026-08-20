@@ -9,7 +9,10 @@
     "CLAUDE.md",
     "uv.lock",
     "web2md/tests/**",
-    "inspectmd/tests/**"
+    "scripts/inspectmd/tests/**",
+    "scripts/inspectokf/tests/**",
+    "scripts/sizeokf/tests/**",
+    "scripts/merkleokf/tests/**"
   ],
   "words": [
     "okf",

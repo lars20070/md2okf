@@ -18,7 +18,7 @@ inspectmd -L 2 md/TheRestIsHistory.md
 inspectmd --section 3 md/GoogleStyleGuide.md
 
 # Without installing
-uv tool run --from ./inspectmd inspectmd md/GoogleStyleGuide.md
+uv tool run --from ./scripts/inspectmd inspectmd md/GoogleStyleGuide.md
 ```
 
 Exit codes: `0` ok, `2` usage or runtime error (missing file, bad `--section`, or
@@ -38,5 +38,5 @@ a `--level` below `1`).
 make test-clis
 
 # The same, directly:
-uv run --project inspectmd --group test pytest -c inspectmd/pyproject.toml
+uv run --project scripts/inspectmd --group test pytest -c scripts/inspectmd/pyproject.toml
 ```

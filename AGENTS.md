@@ -32,19 +32,19 @@ which output filename live in two constants at the top of `web2md/src/web2md.py`
 `pythonpath` in `web2md/pyproject.toml`. Run `make test-web2md` after touching
 either directory; the suite is offline and needs no network.
 
-`inspectmd/` is a third independent uv project: an installable CLI that prints a
+`scripts/inspectmd/` is a third independent uv project: an installable CLI that prints a
 Markdown heading map (line ranges, sizes, kebab-case slugs). The sandbox
 exposes the same `inspectmd` command via a `setup.files` shim. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `web2md/` or
 `pdf2md/`.
 
-`inspectokf/` is a fourth independent uv project: an installable CLI that prints
+`scripts/inspectokf/` is a fourth independent uv project: an installable CLI that prints
 a wiki directory tree by wrapping `tree` (default path `okf/`, unlimited depth
 unless `-L`/`--level` caps it). The sandbox exposes `inspectokf` the same way.
 Own `pyproject.toml`, `uv.lock`, ruff and pytest. Both inspect CLIs spell the
 depth cap `-L`/`--level`.
 
-`sizeokf/` is a fifth independent uv project: an installable CLI that reports
+`scripts/sizeokf/` is a fifth independent uv project: an installable CLI that reports
 Markdown content size per file and per folder (recursive), **excluding YAML
 frontmatter** — which is 43.6% of the current wiki, so byte counters like `du`
 and `wc -c` roughly double the real figure. Same `-L`/`--level` depth cap as the
@@ -53,11 +53,11 @@ inspect CLIs. It carries its own `strip_frontmatter` rather than importing
 sides. The sandbox exposes `sizeokf` through the same `setup.files` shim. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest.
 
-`merkleokf/` is a sixth independent uv project: an installable CLI that prints a
+`scripts/merkleokf/` is a sixth independent uv project: an installable CLI that prints a
 Merkle hash tree — a hash per `*.md` file and per directory — so a change to any
 page moves its parents' hashes and nothing else. Same `-L`/`--level` cap as the
 other CLIs; also accepts a single file. It hashes **raw bytes**, deliberately the
-opposite of `sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
+opposite of `scripts/sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
 change", `sizeokf` answers "how much prose is here", and they share no code.
 Digests display as 12 hex characters; full digests are computed internally. The
 sandbox exposes `merkleokf` through the same `setup.files` shim. Own
@@ -118,7 +118,7 @@ as `make wiki`, `make test-sandbox` and `scripts/bash.sh` require an active
 
 ## Always validate the sandbox kit spec before finishing
 
-Whenever you change anything under `pi/` or `scripts/`, you MUST validate the Pi
+Whenever you change anything under `pi/` or `scripts/*.sh`, you MUST validate the Pi
 Sandbox Kit spec before considering the task complete:
 
 ```bash

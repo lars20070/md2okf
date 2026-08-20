@@ -80,21 +80,21 @@ test-web2md:
 # subjects under test (inspectokf mocks tree). Explicit suite paths keep
 # collection inside each project when pytest is launched from the repo root.
 test-clis:
-	uv run --project inspectmd --group test pytest -c inspectmd/pyproject.toml \
-		inspectmd/tests
-	uv run --project inspectokf --group test pytest -c inspectokf/pyproject.toml \
-		inspectokf/tests
-	uv run --project sizeokf --group test pytest -c sizeokf/pyproject.toml \
-		sizeokf/tests
-	uv run --project merkleokf --group test pytest -c merkleokf/pyproject.toml \
-		merkleokf/tests
+	uv run --project scripts/inspectmd --group test pytest -c scripts/inspectmd/pyproject.toml \
+		scripts/inspectmd/tests
+	uv run --project scripts/inspectokf --group test pytest -c scripts/inspectokf/pyproject.toml \
+		scripts/inspectokf/tests
+	uv run --project scripts/sizeokf --group test pytest -c scripts/sizeokf/pyproject.toml \
+		scripts/sizeokf/tests
+	uv run --project scripts/merkleokf --group test pytest -c scripts/merkleokf/pyproject.toml \
+		scripts/merkleokf/tests
 
 # Install the four host CLIs onto PATH via uv tool.
 install-clis:
-	uv tool install --force ./inspectmd
-	uv tool install --force ./inspectokf
-	uv tool install --force ./sizeokf
-	uv tool install --force ./merkleokf
+	uv tool install --force ./scripts/inspectmd
+	uv tool install --force ./scripts/inspectokf
+	uv tool install --force ./scripts/sizeokf
+	uv tool install --force ./scripts/merkleokf
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that pi/spec.yaml promises.
