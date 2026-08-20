@@ -22,7 +22,7 @@ cd "${repo_root}"
 markdown_folder="${1:-md}"
 kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 # __DOCUMENT__ is replaced with the source path for each Pi run.
-compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/."
+compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/. Cluster the episodes into 10 to 20 topics in order to avoid a flat wiki structure"
 # Appended to compile_prompt on Ralph loop iterations after the first, so Pi
 # knows it may be resuming unfinished work rather than starting the document
 # over from scratch.
@@ -54,9 +54,10 @@ sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 # pipe never reaches EOF, so Pi blocks before its first API call and the
 # compile hangs forever with no output and no OpenRouter activity.
 #
-# `--mode json` streams session events as JSON lines; a one-line jq filter
-# prints each tool start so the host can watch progress. --session-dir keeps
-# transcripts on the mounted workspace across `sbx rm`.
+# `--mode json` streams session events as JSON lines; a jq filter prints each
+# tool start and assistant message_end text/thinking so the host can watch
+# progress. --session-dir keeps transcripts on the mounted workspace across
+# `sbx rm`.
 #
 # Ralph loop: re-run Pi on the same document until merkleokf --nolog -L 0
 # reports an unchanged wiki root hash (log.md excluded). Cap with RALPH_MAX
@@ -64,6 +65,20 @@ sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 wiki_root_hash() {
 	sbx exec "${kit_name}" -- merkleokf --nolog -L 0 okf/ | awk 'NR==3 {print $1}'
 }
+
+# Host-side view of pi --mode json: tool starts + assistant prose/thinking.
+pi_event_filter='fromjson? // empty
+| if .type == "tool_execution_start" then
+    ("\(.toolName) \(.args|tostring)")[:120]
+  elif .type == "message_end" and .message.role == "assistant" then
+    (.message.content // []
+     | map(
+         select(.type == "text" or .type == "thinking")
+         | if .type == "thinking" then "[thinking]\n\(.thinking)" else .text end
+       )
+     | join("\n\n")
+     | select(length > 0))
+  else empty end'
 
 session_dir="${repo_root}/logs/sessions"
 mkdir -p "${session_dir}"
@@ -88,8 +103,8 @@ for document in "${markdown_folder}"/*.md; do
 			--mode json \
 			--session-dir "${session_dir}" \
 			"${iteration_prompt}" \
-			</dev/null \
-			| jq --unbuffered -R -r 'fromjson? // empty | select(.type=="tool_execution_start") | ("\(.toolName) \(.args|tostring)")[:120]'
+			</dev/null |
+			jq --unbuffered -R -r "${pi_event_filter}"
 		curr_hash="$(wiki_root_hash)"
 		echo "${prev_hash} -> ${curr_hash}"
 		if [[ "${curr_hash}" == "${prev_hash}" ]]; then
