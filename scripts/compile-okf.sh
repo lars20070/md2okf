@@ -23,6 +23,10 @@ markdown_folder="${1:-md}"
 kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 # __DOCUMENT__ is replaced with the source path for each Pi run.
 compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/."
+# Appended to compile_prompt on Ralph loop iterations after the first, so Pi
+# knows it may be resuming unfinished work rather than starting the document
+# over from scratch.
+continuation_prompt="This is a follow-up pass on this document: okf/ may already hold partial work from a previous pass. Compare the source against what is on disk and continue at the first gap — do not start over."
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
@@ -68,9 +72,13 @@ for document in "${markdown_folder}"/*.md; do
 			echo "Error: Ralph loop hit ${max_iterations} iterations for ${document}" >&2
 			exit 1
 		fi
+		iteration_prompt="${compile_prompt//__DOCUMENT__/${document}}"
+		if ((iteration > 1)); then
+			iteration_prompt="${iteration_prompt} ${continuation_prompt}"
+		fi
 		echo "Compiling document ${document} (iteration ${iteration})"
 		sbx exec "${kit_name}" -- pi \
-			-p "${compile_prompt//__DOCUMENT__/${document}}" \
+			-p "${iteration_prompt}" \
 			</dev/null
 		curr_hash="$(wiki_root_hash)"
 		if [[ "${curr_hash}" == "${prev_hash}" ]]; then
