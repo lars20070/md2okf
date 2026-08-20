@@ -1,7 +1,7 @@
 [project]
 name = "sizeokf"
 version = "0.1.0"
-description = "Report sizes for an OKF wiki folder"
+description = "Report content word counts for an OKF wiki folder"
 requires-python = ">=3.12"
 dependencies = []
 

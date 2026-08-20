@@ -45,13 +45,12 @@ Own `pyproject.toml`, `uv.lock`, ruff and pytest. Both inspect CLIs spell the
 depth cap `-L`/`--level`.
 
 `scripts/sizeokf/` is a fifth independent uv project: an installable CLI that reports
-Markdown content size per file and per folder (recursive), **excluding YAML
-frontmatter** — which is 43.6% of the current wiki, so byte counters like `du`
-and `wc -c` roughly double the real figure. Same `-L`/`--level` depth cap as the
-inspect CLIs. It carries its own `strip_frontmatter` rather than importing
-`inspectmd`'s, under the zero-overlap rule; the two are pinned by tests on both
-sides. The sandbox exposes `sizeokf` through the same `setup.files` shim. Own
-`pyproject.toml`, `uv.lock`, ruff and pytest.
+Markdown content **word counts** per file and per folder (recursive), **excluding
+YAML frontmatter**. Same `-L`/`--level` depth cap as the inspect CLIs. It carries
+its own `strip_frontmatter` rather than importing `inspectmd`'s, under the
+zero-overlap rule; the two are pinned by tests on both sides. The sandbox
+exposes `sizeokf` through the same `setup.files` shim. Own `pyproject.toml`,
+`uv.lock`, ruff and pytest.
 
 `scripts/merkleokf/` is a sixth independent uv project: an installable CLI that prints a
 Merkle hash tree — a hash per `*.md` file and per directory — so a change to any

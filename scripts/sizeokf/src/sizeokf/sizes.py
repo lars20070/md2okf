@@ -1,9 +1,8 @@
 """Measure Markdown content size, excluding YAML frontmatter.
 
-Only ``*.md`` files count. A file's size is the number of characters after its
-leading frontmatter block is removed — characters, not bytes, so the figure is
-comparable across pages regardless of how much non-ASCII text they carry. A
-directory's size is the sum over every Markdown file beneath it, recursively.
+Only ``*.md`` files count. A file's size is the number of whitespace-split words
+after its leading frontmatter block is removed. A directory's size is the sum
+over every Markdown file beneath it, recursively.
 """
 
 from __future__ import annotations
@@ -38,6 +37,11 @@ def strip_frontmatter(text: str) -> str:
     return text
 
 
+def count_words(text: str) -> int:
+    """Count whitespace-separated tokens in ``text``."""
+    return len(text.split())
+
+
 @dataclass(frozen=True)
 class Entry:
     """One listed file or directory, with its content size."""
@@ -46,8 +50,8 @@ class Entry:
     """Display path, relative to the walked root. Directories end in ``/``."""
 
     is_dir: bool
-    chars: int
-    """Characters of Markdown content, frontmatter excluded. Recursive for directories."""
+    words: int
+    """Whitespace-split words of Markdown content, frontmatter excluded. Recursive for directories."""
 
     files: int
     """Number of Markdown files counted. Always 1 for a file."""
@@ -57,7 +61,7 @@ class Entry:
 
 
 def _measure_file(path: Path) -> int:
-    """Characters of content in one Markdown file, frontmatter excluded.
+    """Words of content in one Markdown file, frontmatter excluded.
 
     A file that cannot be read is reported on stderr and counted as zero rather
     than aborting the walk — one unreadable page must not cost the rest.
@@ -67,7 +71,7 @@ def _measure_file(path: Path) -> int:
     except (OSError, UnicodeDecodeError) as exc:
         print(f"sizeokf: skipping {path}: {exc}", file=sys.stderr)
         return 0
-    return len(strip_frontmatter(text))
+    return count_words(strip_frontmatter(text))
 
 
 def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], Entry]:
@@ -80,8 +84,8 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
     entries: list[Entry] = []
 
     def walk(directory: Path, depth: int) -> tuple[int, int]:
-        """Return ``(chars, files)`` for ``directory``, recording listed entries."""
-        chars = files = 0
+        """Return ``(words, files)`` for ``directory``, recording listed entries."""
+        words = files = 0
         try:
             children = sorted(directory.iterdir(), key=lambda p: p.name)
         except OSError as exc:
@@ -101,38 +105,38 @@ def collect(root: Path, *, max_level: int | None = None) -> tuple[list[Entry], E
                 continue
 
             if is_directory:
-                child_chars, child_files = walk(child, depth + 1)
-                chars += child_chars
+                child_words, child_files = walk(child, depth + 1)
+                words += child_words
                 files += child_files
                 if max_level is None or depth <= max_level:
                     entries.append(
                         Entry(
                             path=f"{child.relative_to(root)}/",
                             is_dir=True,
-                            chars=child_chars,
+                            words=child_words,
                             files=child_files,
                             depth=depth,
                         )
                     )
             elif child.suffix == ".md":
-                child_chars = _measure_file(child)
-                chars += child_chars
+                child_words = _measure_file(child)
+                words += child_words
                 files += 1
                 if max_level is None or depth <= max_level:
                     entries.append(
                         Entry(
                             path=str(child.relative_to(root)),
                             is_dir=False,
-                            chars=child_chars,
+                            words=child_words,
                             files=1,
                             depth=depth,
                         )
                     )
-        return chars, files
+        return words, files
 
-    total_chars, total_files = walk(root, 1)
-    total = Entry(path=f"{root.name}/", is_dir=True, chars=total_chars, files=total_files, depth=0)
+    total_words, total_files = walk(root, 1)
+    total = Entry(path=f"{root.name}/", is_dir=True, words=total_words, files=total_files, depth=0)
 
     # Largest first; ties broken by path so repeated runs are byte-identical.
-    entries.sort(key=lambda e: (-e.chars, e.path))
+    entries.sort(key=lambda e: (-e.words, e.path))
     return entries, total

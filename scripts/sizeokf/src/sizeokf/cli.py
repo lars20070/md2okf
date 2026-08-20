@@ -16,8 +16,8 @@ def format_table(entries: Sequence[Entry]) -> str:
     if not entries:
         return "(no Markdown files)\n"
 
-    headers = ("Chars", "Files", "Path")
-    rows = [(f"{e.chars:,}", f"{e.files:,}", e.path) for e in entries]
+    headers = ("Words", "Files", "Path")
+    rows = [(f"{e.words:,}", f"{e.files:,}", e.path) for e in entries]
 
     widths = [len(h) for h in headers]
     for row in rows:
@@ -38,7 +38,7 @@ def format_table(entries: Sequence[Entry]) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sizeokf",
-        description="Report Markdown content size for an OKF wiki folder, excluding YAML frontmatter.",
+        description="Report Markdown content word counts for an OKF wiki folder, excluding YAML frontmatter.",
     )
     parser.add_argument(
         "path",
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     entries, total = collect(path, max_level=level)
-    sys.stdout.write(f"{path.name}: {total.chars:,} chars, {total.files:,} files\n\n")
+    sys.stdout.write(f"{path.name}: {total.words:,} words, {total.files:,} files\n\n")
     sys.stdout.write(format_table(entries))
     return 0
 

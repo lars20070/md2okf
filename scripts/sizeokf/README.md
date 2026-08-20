@@ -1,11 +1,12 @@
 # sizeokf
 
 Report how much Markdown **content** an OKF wiki holds, per file and per folder,
-with YAML frontmatter excluded. Folder totals are recursive.
+as whitespace-split word counts with YAML frontmatter excluded. Folder totals
+are recursive.
 
-Frontmatter is a large share of a generated wiki — 43.6% of the current `okf/` —
-so `du`, `wc -c` and `ls` all overstate the actual prose by roughly a factor of
-two. This reports what a reader would actually read.
+Frontmatter is a large share of a generated wiki, so `du`, `wc -c` and `ls` all
+overstate the actual prose. This reports what a reader would actually read, in
+words.
 
 Stdlib only at runtime.
 
@@ -25,20 +26,20 @@ uv tool run --from ./scripts/sizeokf sizeokf -L 1 okf
 ```
 
 ```text
-okf: 105,432 chars, 217 files
+okf: 18,742 words, 217 files
 
- Chars  Files  Path
+ Words  Files  Path
 ------  -----  ----------------------
-21,324     43  british-history/
-19,030     38  ancient-world/
-11,612     29  popular-culture/
- 1,773      1  index.md
-   460      1  log.md
+ 3,821     43  british-history/
+ 3,410     38  ancient-world/
+ 2,088     29  popular-culture/
+   312      1  index.md
+    81      1  log.md
 ```
 
 | Column | Meaning |
 | --- | --- |
-| `Chars` | Characters of content, frontmatter excluded. Recursive for folders. |
+| `Words` | Whitespace-split words of content, frontmatter excluded. Recursive for folders. |
 | `Files` | Markdown files counted. Always `1` for a file. |
 | `Path` | Relative to the measured directory. Folders end in `/`. |
 
@@ -49,9 +50,8 @@ byte-identical and easy to diff.
 
 - **Only `*.md` files.** Anything else — `.okflintrc.json`, `.DS_Store` — is
   neither listed nor counted.
-- **Characters, not bytes.** `len(str)` after a UTF-8 decode, newlines included.
-  The current wiki has 1,104 multi-byte characters, so this differs from
-  `wc -c` by about 0.6%.
+- **Words, not characters or bytes.** `len(text.split())` after a UTF-8 decode
+  and frontmatter strip. Punctuation stays attached to tokens.
 - **Frontmatter is the leading `---` … `---` block only.** It must open on line
   one. An unterminated block is treated as no frontmatter, matching how
   `inspectmd` maps headings. The body begins after the closing `---`, so a blank

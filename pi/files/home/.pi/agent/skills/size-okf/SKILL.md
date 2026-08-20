@@ -5,13 +5,13 @@ description: Measure how much Markdown prose a page or category holds, excluding
 
 # Measure wiki content with `sizeokf`
 
-Use the `sizeokf` CLI (on `PATH`) to count content characters under `okf/`. The
+Use the `sizeokf` CLI (on `PATH`) to count content words under `okf/`. The
 skill name is `size-okf`; the binary is `sizeokf` — never shell the skill id.
 
 ## Invocation
 
 ```bash
-sizeokf -L 1             # chars per category — start here
+sizeokf -L 1             # words per category — start here
 sizeokf okf/<topic>      # then per page within one category
 sizeokf                  # every file and folder (large)
 ```
@@ -33,7 +33,7 @@ Summary line, then a table:
 
 | Column | Meaning |
 | --- | --- |
-| `Chars` | Characters of Markdown **content**, frontmatter excluded. Recursive for folders. |
+| `Words` | Whitespace-split words of Markdown **content**, frontmatter excluded. Recursive for folders. |
 | `Files` | Markdown files counted. Always `1` for a file. |
 | `Path` | Relative to the measured directory. Folders end in `/`. |
 
