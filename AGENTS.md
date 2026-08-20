@@ -102,6 +102,7 @@ make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 
 ```bash
 ./scripts/bash.sh                            # shell into the existing sandbox
+./scripts/pi.sh                              # interactive Pi in the existing sandbox
 ./scripts/compile-okf.sh md/other-books      # compile a different source folder
 sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
 ```
@@ -112,8 +113,8 @@ does not call it. `make test-sandbox` is host-only for the other reason — it
 needs an sbx runtime — and reuses the existing sandbox rather than rebuilding
 it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
 from your shell (see the README for the two-step setup). Runtime commands such
-as `make wiki`, `make test-sandbox` and `scripts/bash.sh` require an active
-`sbx login` session; `make validate` is static and does not.
+as `make wiki`, `make test-sandbox`, `scripts/bash.sh` and `scripts/pi.sh`
+require an active `sbx login` session; `make validate` is static and does not.
 
 ## Always validate the sandbox kit spec before finishing
 

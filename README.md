@@ -162,10 +162,11 @@ tests the sandbox you have, which may be older than your last `pi/` edit. To
 check the current kit from scratch, throw the sandbox away first with
 `sbx rm --force md2okf`; building the next one takes minutes.
 
-To look inside the sandbox:
+To look inside the sandbox, or to chat with Pi against the mounted workspace:
 
 ```bash
-./scripts/bash.sh   # reuses the sandbox and whatever a run left behind
+./scripts/bash.sh   # interactive shell; reuses the sandbox and whatever a run left behind
+./scripts/pi.sh     # interactive Pi in the same reused sandbox
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
