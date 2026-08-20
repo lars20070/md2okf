@@ -82,8 +82,9 @@ def test_collect_max_level_limits_listing_not_totals(tmp_path: Path):
 
 
 def test_collect_max_level_zero_lists_root_only(tmp_path: Path):
-    entries, total = collect(_wiki(tmp_path), max_level=0)
-    deep, deep_total = collect(_wiki(tmp_path))
+    root = _wiki(tmp_path)
+    entries, total = collect(root, max_level=0)
+    deep, deep_total = collect(root)
     assert [e.path for e in entries] == ["okf/"]
     assert total.words == deep_total.words
     assert total.files == deep_total.files
