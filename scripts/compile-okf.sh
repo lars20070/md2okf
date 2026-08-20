@@ -22,7 +22,7 @@ cd "${repo_root}"
 markdown_folder="${1:-md}"
 kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
 # __DOCUMENT__ is replaced with the source path for each Pi run.
-compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/. Cluster the episodes into 10 to 20 topics in order to avoid a flat wiki structure"
+compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/."
 # Appended to compile_prompt on Ralph loop iterations after the first, so Pi
 # knows it may be resuming unfinished work rather than starting the document
 # over from scratch.
