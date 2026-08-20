@@ -3,6 +3,8 @@ name: worldbuilding-wiki
 description: Construct and maintain a fictional-world knowledge base as a conformant Open Knowledge Format (OKF) v0.1 bundle — a git-backed tree of markdown concepts — that keeps a world internally consistent across many stories, captures narrative arcs, character tension, open plots and unwritten futures, and checks new drafts against canon. Use this skill whenever the user mentions a story bible, series bible, worldbuilding wiki, canon, continuity, lore database, plot threads, character arcs, shared universe, or OKF bundle, or wants to track characters/locations/factions/timelines across multiple novels or short stories — and also when they ask you to write, review, or continue a story set in an existing world, since the first job there is loading and respecting canon.
 ---
 
+<!-- cspell:words Ostreve Aldric Edran Callen -->
+
 # Worldbuilding Wiki (OKF v0.1)
 
 Build a fictional world's canon as an **OKF knowledge bundle**: a directory of markdown concepts with YAML frontmatter, cross-linked with standard markdown links, readable by a human with `cat` and by an agent without an SDK.
@@ -51,7 +53,7 @@ State the plan and confirm before writing files. The wrong ontology is expensive
 
 ## Bundle structure
 
-```
+```text
 world/
 ├── index.md                  # bundle root index; carries okf_version
 ├── log.md                    # chronological history of canon changes
@@ -107,7 +109,8 @@ Layer OKF's recommended fields on top (`title`, `description`, `tags`, `timestam
 
 Two traps: `timestamp` is the ISO 8601 real-world last-modified time, never an in-world date — keep those in separate fields like `in_world_date`. And `resource` is for a canonical URI of an underlying asset (a published story's URL, say); leave it out entirely for the abstract concepts that make up most of a fictional world.
 
-**Character**
+**Character** — the fullest shape; the other types trim from here.
+
 ```yaml
 ---
 type: Character
@@ -130,6 +133,7 @@ provenance: human
 ```
 
 **Event** — `sort_key` is a plain number so chronology sorts reliably whatever the in-world calendar does.
+
 ```yaml
 ---
 type: Event
@@ -149,6 +153,7 @@ provenance: human
 ```
 
 **World Rule** — the invariants that must never be contradicted.
+
 ```yaml
 ---
 type: World Rule
@@ -164,6 +169,7 @@ provenance: human
 ```
 
 **Story** — the concept that *sources* other concepts.
+
 ```yaml
 ---
 type: Story
@@ -181,6 +187,7 @@ provenance: human
 ```
 
 **Canon Decision** — write one for every retcon or contested ruling.
+
 ```yaml
 ---
 type: Canon Decision
@@ -198,13 +205,13 @@ Quote ambiguous scalars (`"NO"`, `"742 TR"`) so YAML does not coerce them into b
 
 ---
 
-# Narrative structure: the four folders that hold what moves
+## Narrative structure: the four folders that hold what moves
 
 Entity folders answer *what exists*. These four answer *what is happening, what is unresolved, and what is coming*. Each comes from a body of practice that already solved the problem: arcs from story-craft's promise/progress/payoff, threads from the serial "dangling plot," fronts from tabletop RPG design, relationships from Dramatica's relationship throughline and Egri's unity of opposites.
 
 Create them lazily. A short story needs none; a five-book series needs all four.
 
-## `arcs/` — the shape of a change
+### `arcs/` — the shape of a change
 
 An arc is a change tracked over story-time: a character who ends different from how they began, a plot that escalates, a theme that turns. Entity pages cannot hold this, because an entity page describes a *state* and an arc describes a *trajectory*. Arcs routinely span several stories, which is why they need their own concept rather than living inside one story's notes.
 
@@ -247,7 +254,7 @@ Planned: [Mara spares the Regent](/events/mara-spares-the-regent.md) —
 [1] [The Drowned City](/stories/the-drowned-city.md) — ch. 1, ch. 9.
 ```
 
-## `threads/` — open questions and unfired setups
+### `threads/` — open questions and unfired setups
 
 A thread is anything the story has opened and not yet closed. Two kinds share the folder because they share a lifecycle — raised, dangling, resolved:
 
@@ -303,7 +310,7 @@ provenance: human
 ---
 ```
 
-## `fronts/` — pressure that is ticking
+### `fronts/` — pressure that is ticking
 
 Threads are open. Fronts are *advancing*. This structure is borrowed wholesale from tabletop RPG design (Apocalypse World and Dungeon World's Fronts, Blades in the Dark's clocks), because it is the only well-documented format for representing a future that arrives whether or not anyone intervenes.
 
@@ -344,7 +351,7 @@ defence. Book 3 territory.
 
 Start with **one** front holding all simmering pressure. Split it only when two threats genuinely advance on independent schedules.
 
-## `relationships/` — a pair, and how it changes
+### `relationships/` — a pair, and how it changes
 
 Tension lives between characters, not inside them, and it *moves* — enemies become allies, siblings become rivals. A field on a character page can hold "brother of Edran"; it cannot hold "hostile allies since the siege, and the question of Book 2 is whether that becomes trust."
 
@@ -387,7 +394,7 @@ Whether respect becomes trust is the question of Book 2. See
 [1] [The Drowned City](/stories/the-drowned-city.md) — ch. 1, ch. 20.
 ```
 
-## Reading order vs. world order
+### Reading order vs. world order
 
 `events/` holds the world's chronology: what happened, in the order it happened. That is not the order the reader learns it — a flashback in ch.7 may describe the earliest event in the world.
 
@@ -466,6 +473,7 @@ After processing each chapter, report two lists to the author: what you extracte
 Every directory gets an `index.md` for progressive disclosure — it lets an agent see what exists before opening thirty files. Index files carry **no frontmatter**, with exactly one exception: the bundle-root index may declare the version.
 
 Root `index.md`:
+
 ```markdown
 ---
 okf_version: "0.1"
@@ -526,7 +534,8 @@ Add a scoped `log.md` inside a subdirectory only if that area changes often enou
 Put these in `continuity/dashboard.md` (a concept — give it `type: Register`). They are the mechanical half of continuity enforcement and cost nothing to run.
 
 **Conformance — the three hard rules:**
-````
+
+````markdown
 ```dataview
 TABLE type FROM ""
 WHERE !type AND !contains(file.name, "index") AND !contains(file.name, "log")
@@ -534,7 +543,8 @@ WHERE !type AND !contains(file.name, "index") AND !contains(file.name, "log")
 ````
 
 **Uncited canon:**
-````
+
+````markdown
 ```dataview
 TABLE canon, established_in
 FROM "characters" OR "locations" OR "factions" OR "events"
@@ -543,7 +553,8 @@ WHERE canon = "hard" AND !established_in
 ````
 
 **The dead, for cross-checking against drafts:**
-````
+
+````markdown
 ```dataview
 TABLE death_date, established_in
 FROM "characters"
@@ -553,7 +564,8 @@ SORT death_date ASC
 ````
 
 **Unfired Chekhov's guns:**
-````
+
+````markdown
 ```dataview
 TABLE raised_in, element, intended_payoff
 FROM "threads"
@@ -562,7 +574,8 @@ WHERE thread_kind = "setup" AND fired = false
 ````
 
 **Threads left dangling:**
-````
+
+````markdown
 ```dataview
 TABLE raised_in, last_touched
 FROM "threads"
@@ -572,7 +585,8 @@ SORT last_touched ASC
 ````
 
 **Arcs with no payoff written:**
-````
+
+````markdown
 ```dataview
 TABLE subject, value_start, value_end, payoff_event
 FROM "arcs"
@@ -581,7 +595,8 @@ WHERE tense = "open"
 ````
 
 **Clocks nearly full:**
-````
+
+````markdown
 ```dataview
 TABLE clock_filled, clock_segments, doom
 FROM "fronts"
@@ -591,7 +606,8 @@ SORT clock_filled DESC
 ````
 
 **AI-proposed content awaiting review:**
-````
+
+````markdown
 ```dataview
 TABLE type, timestamp FROM ""
 WHERE provenance = "ai-proposed"
@@ -599,7 +615,8 @@ WHERE provenance = "ai-proposed"
 ````
 
 **Timeline, for spotting impossible orderings:**
-````
+
+````markdown
 ```dataview
 TABLE in_world_date, location, participants, established_in
 FROM "events"
@@ -696,6 +713,6 @@ A concept type you create but never query is pure overhead. If nothing ever runs
 
 If the user starts refining taxonomy before any prose exists, say so plainly and steer them back to writing. The bundle exists to serve the stories.
 
-# Citations
+## Citations
 
 [1] [Open Knowledge Format specification, Version 0.1](https://raw.githubusercontent.com/lars20070/md2okf/refs/heads/master/SPEC.md)
