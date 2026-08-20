@@ -136,7 +136,7 @@ def test_frontmatter_offset_in_inspect_markdown():
     assert sections[0].index == 0
 
 
-def test_chars_include_newlines():
+def test_words_are_whitespace_split():
     text = "# A\nabc\n"
     sections = parse_sections(text)
-    assert sections[0].chars == len("# A\nabc\n")
+    assert sections[0].words == 3  # "#", "A", "abc"

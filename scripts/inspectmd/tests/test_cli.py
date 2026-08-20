@@ -36,7 +36,7 @@ def test_format_table_max_level():
 
 def test_format_section_range():
     s = Section(3, 2, "Intro", "intro", 16, 42, 891)
-    assert format_section_range(s) == "16:42  891 chars\n"
+    assert format_section_range(s) == "16:42  891 words\n"
 
 
 def test_main_success(tmp_path: Path, capsys):
@@ -55,7 +55,7 @@ def test_main_section(tmp_path: Path, capsys):
     assert main([str(path), "--section", "0"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("1:")
-    assert "chars" in out
+    assert "words" in out
 
 
 def test_main_missing_file(capsys):

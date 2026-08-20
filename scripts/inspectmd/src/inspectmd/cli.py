@@ -25,7 +25,7 @@ def format_table(sections: Sequence[Section], *, max_level: int | None = None) -
     if not visible:
         return "(no sections at this depth)\n"
 
-    headers = ("Index", "Level", "Lines", "Characters", "Slug", "Title")
+    headers = ("Index", "Level", "Lines", "Words", "Slug", "Title")
     rows: list[tuple[str, str, str, str, str, str]] = []
     for s in visible:
         rows.append(
@@ -33,7 +33,7 @@ def format_table(sections: Sequence[Section], *, max_level: int | None = None) -
                 str(s.index),
                 str(s.level),
                 f"{s.start}-{s.end}",
-                str(s.chars),
+                str(s.words),
                 s.slug,
                 s.title,
             )
@@ -53,26 +53,26 @@ def format_table(sections: Sequence[Section], *, max_level: int | None = None) -
 
 
 def format_section_range(section: Section) -> str:
-    """One section as ``start:end`` plus size, for a ranged read."""
-    return f"{section.start}:{section.end}  {section.chars} chars\n"
+    """One section as ``start:end`` plus word count, for a ranged read."""
+    return f"{section.start}:{section.end}  {section.words} words\n"
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="inspectmd",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Print a Markdown heading map with line ranges and sizes.",
+        description="Print a Markdown heading map with line ranges and word counts.",
         epilog="""\
 Output columns (default table):
   Index       Section number in document order (0 = preamble when present).
               Pass this value to --section.
   Level       Heading depth: 0 for the preamble, 1 for #, 2 for ##, …, 6 for ######.
   Lines       1-based inclusive line range of the section (start-end).
-  Characters  Character count of that range (including newlines).
+  Words       Whitespace-split word count of that range.
   Slug        Kebab-case slug derived from the heading title (OKF file-name style).
   Title       Heading text as written (or "(preamble)" / "(empty)").
 
---section N prints only "start:end  N chars" for ranged reads.
+--section N prints only "start:end  N words" for ranged reads.
 """,
     )
     parser.add_argument(
@@ -89,7 +89,7 @@ Output columns (default table):
         "--section",
         type=int,
         metavar="N",
-        help="print only section N as start:end and size",
+        help="print only section N as start:end and word count",
     )
     parser.add_argument(
         "-L",
@@ -142,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     summary = (
-        f"{path.name}: {line_count} lines, {len(text)} chars, {len(sections)} sections"
+        f"{path.name}: {line_count} lines, {len(text.split())} words, "
+        f"{len(sections)} sections"
     )
     sys.stdout.write(summary + "\n")
     if not sections:

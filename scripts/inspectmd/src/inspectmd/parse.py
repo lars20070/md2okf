@@ -41,8 +41,13 @@ class Section:
     end: int
     """1-based inclusive line number."""
 
-    chars: int
-    """Character count of the section's lines, including newlines between them."""
+    words: int
+    """Whitespace-split word count of the section's lines."""
+
+
+def count_words(text: str) -> int:
+    """Count whitespace-separated tokens in ``text``."""
+    return len(text.split())
 
 
 def slugify(title: str) -> str:
@@ -145,8 +150,8 @@ def parse_sections(text: str, *, line_offset: int = 0) -> list[Section]:
 
     sections: list[Section] = []
 
-    def chars_between(start_i: int, end_i: int) -> int:
-        return sum(len(lines[j]) for j in range(start_i, end_i + 1))
+    def text_between(start_i: int, end_i: int) -> str:
+        return "".join(lines[j] for j in range(start_i, end_i + 1))
 
     first_heading_i = headings[0][0] if headings else None
 
@@ -161,7 +166,7 @@ def parse_sections(text: str, *, line_offset: int = 0) -> list[Section]:
                     slug="preamble",
                     start=line_offset + 1,
                     end=line_offset + len(lines),
-                    chars=len(body),
+                    words=count_words(body),
                 )
             )
         return sections
@@ -177,7 +182,7 @@ def parse_sections(text: str, *, line_offset: int = 0) -> list[Section]:
                     slug="preamble",
                     start=line_offset + 1,
                     end=line_offset + first_heading_i,
-                    chars=len(preamble_text),
+                    words=count_words(preamble_text),
                 )
             )
 
@@ -194,7 +199,7 @@ def parse_sections(text: str, *, line_offset: int = 0) -> list[Section]:
                 slug=display_slug,
                 start=line_offset + start_i + 1,
                 end=line_offset + end_i + 1,
-                chars=chars_between(start_i, end_i),
+                words=count_words(text_between(start_i, end_i)),
             )
         )
 

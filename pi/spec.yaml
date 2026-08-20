@@ -31,7 +31,7 @@ agentInstructions:
     - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
-    - `inspectmd` — Markdown heading map (line ranges and sizes)
+    - `inspectmd` — Markdown heading map (line ranges and word counts)
     - `inspectokf` — wiki directory tree (via `tree`)
     - `sizeokf` — Markdown content size, excluding frontmatter
     - `merkleokf` — wiki Merkle hash tree, for change detection

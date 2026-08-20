@@ -33,7 +33,7 @@ which output filename live in two constants at the top of `web2md/src/web2md.py`
 either directory; the suite is offline and needs no network.
 
 `scripts/inspectmd/` is a third independent uv project: an installable CLI that prints a
-Markdown heading map (line ranges, sizes, kebab-case slugs). The sandbox
+Markdown heading map (line ranges, word counts, kebab-case slugs). The sandbox
 exposes the same `inspectmd` command via a `setup.files` shim. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `web2md/` or
 `pdf2md/`.

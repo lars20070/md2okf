@@ -1,7 +1,7 @@
 [project]
 name = "inspectmd"
 version = "0.1.0"
-description = "Print a Markdown heading map with line ranges and sizes"
+description = "Print a Markdown heading map with line ranges and word counts"
 requires-python = ">=3.12"
 dependencies = []
 

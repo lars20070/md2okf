@@ -1,6 +1,6 @@
 # inspectmd
 
-Print a Markdown heading map: 1-based line ranges, character sizes, and
+Print a Markdown heading map: 1-based line ranges, word counts, and
 kebab-case slugs. Use it to plan ranged reads and page boundaries before opening
 a long source under `md/`.
 
