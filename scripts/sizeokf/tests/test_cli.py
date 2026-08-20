@@ -76,6 +76,16 @@ def test_main_no_markdown(tmp_path: Path, capsys):
     assert "(no Markdown files)" in out
 
 
+def test_main_empty_dir(tmp_path: Path, capsys):
+    """A fresh empty okf/ root succeeds with zero totals."""
+    root = tmp_path / "okf"
+    root.mkdir()
+    assert main([str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "okf: 0 words, 0 files" in out
+    assert "(no Markdown files)" in out
+
+
 def test_main_version(capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
