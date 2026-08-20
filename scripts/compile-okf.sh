@@ -49,10 +49,14 @@ sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 # relative path inside the VM and Pi resolves it directly.
 #
 # `</dev/null` is REQUIRED, not tidiness.
-# `sbx exec` hands the guest process a pipe for stdin, and Pi's print mode reads
-# piped stdin to merge it into the prompt. Run from a terminal, that pipe never
-# reaches EOF, so Pi blocks before its first API call and the compile hangs
-# forever with no output and no OpenRouter activity.
+# `sbx exec` hands the guest process a pipe for stdin, and Pi's non-interactive
+# modes read piped stdin to merge it into the prompt. Run from a terminal, that
+# pipe never reaches EOF, so Pi blocks before its first API call and the
+# compile hangs forever with no output and no OpenRouter activity.
+#
+# `--mode json` streams session events as JSON lines; a one-line jq filter
+# prints each tool start so the host can watch progress. --session-dir keeps
+# transcripts on the mounted workspace across `sbx rm`.
 #
 # Ralph loop: re-run Pi on the same document until merkleokf --nolog -L 0
 # reports an unchanged wiki root hash (log.md excluded). Cap with RALPH_MAX
@@ -60,6 +64,9 @@ sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
 wiki_root_hash() {
 	sbx exec "${kit_name}" -- merkleokf --nolog -L 0 okf/ | awk 'NR==3 {print $1}'
 }
+
+session_dir="${repo_root}/logs/sessions"
+mkdir -p "${session_dir}"
 
 max_iterations="${RALPH_MAX:-10}"
 shopt -s nullglob
@@ -78,9 +85,13 @@ for document in "${markdown_folder}"/*.md; do
 		fi
 		echo "Compiling document ${document} (iteration ${iteration})"
 		sbx exec "${kit_name}" -- pi \
-			-p "${iteration_prompt}" \
-			</dev/null
+			--mode json \
+			--session-dir "${session_dir}" \
+			"${iteration_prompt}" \
+			</dev/null \
+			| jq --unbuffered -R -r 'fromjson? // empty | select(.type=="tool_execution_start") | ("\(.toolName) \(.args|tostring)")[:120]'
 		curr_hash="$(wiki_root_hash)"
+		echo "${prev_hash} -> ${curr_hash}"
 		if [[ "${curr_hash}" == "${prev_hash}" ]]; then
 			break
 		fi

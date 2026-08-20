@@ -65,9 +65,10 @@ make wiki
 The driver throws the old sandbox away and builds a fresh one, so the current
 kit and secrets apply. It then runs Pi for each `md/*.md` file, re-running the
 same document (Ralph loop) until `merkleokf --nolog -L 0` reports an unchanged
-wiki root hash, capped by `RALPH_MAX` (default 10). `okf/` is
-gitignored apart from `okf/.okflintrc.json`, so the wiki itself stays out of the
-repo. `md/` is tracked, and ships with one sample document.
+wiki root hash, capped by `RALPH_MAX` (default 10). Each run streams tool names
+live (`pi --mode json`) and writes session transcripts under `logs/sessions/`.
+`okf/` is gitignored apart from `okf/.okflintrc.json`, so the wiki itself stays
+out of the repo. `md/` is tracked, and ships with one sample document.
 
 ### What lands in okf/
 
