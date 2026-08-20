@@ -21,6 +21,8 @@ cd "${repo_root}"
 
 markdown_folder="${1:-md}"
 kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
+# __DOCUMENT__ is replaced with the source path for each Pi run.
+compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/."
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
@@ -68,7 +70,7 @@ for document in "${markdown_folder}"/*.md; do
 		fi
 		echo "Compiling document ${document} (iteration ${iteration})"
 		sbx exec "${kit_name}" -- pi \
-			-p "Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile ${document} into the OKF wiki under okf/." \
+			-p "${compile_prompt//__DOCUMENT__/${document}}" \
 			</dev/null
 		curr_hash="$(wiki_root_hash)"
 		if [[ "${curr_hash}" == "${prev_hash}" ]]; then
