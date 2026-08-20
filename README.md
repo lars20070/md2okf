@@ -89,6 +89,43 @@ frontmatter. Slugs are kebab-case. Links are bundle-absolute, so
 the spec version the agent read. Pages are updated in place, not duplicated, so
 compiling the same document twice is safe.
 
+## Architecture
+
+A shell driver on the host runs a coding agent inside a microVM, repeatedly,
+until a hash of the output stops moving. The host drives; everything else
+happens inside the sandbox. The agent's only writable output is `okf/`,
+and `SPEC.md` outranks every instruction file.
+
+<!-- cspell:disable -->
+
+```mermaid
+flowchart LR
+  MD["md/*.md<br/>source documents"]
+  DRV["scripts/compile-okf.sh<br/>make wiki"]
+  KIT["pi/spec.yaml<br/>+ pi/files/"]
+  SPEC["SPEC.md"]
+  OKF["okf/<br/>the wiki"]
+
+  subgraph VM["sbx microVM"]
+    PI["Pi agent<br/>compile-okf skill"]
+    TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
+    LINT["okf-lint"]
+  end
+
+  KIT ~~~ SPEC
+  MD --> DRV
+  KIT -->|"builds"| VM
+  DRV -->|"sbx exec"| PI
+  SPEC -.->|"read first, outranks all"| PI
+  PI -->|"reads"| MD
+  PI -->|"writes"| OKF
+  TOOLS -.->|"survey + verify"| PI
+  PI --> LINT
+  LINT -.->|"must pass"| OKF
+```
+
+<!-- cspell:enable -->
+
 ## Getting Markdown in
 
 `md/` wants clean, structured Markdown, and a source document is rarely that.
