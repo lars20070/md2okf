@@ -135,6 +135,21 @@ def test_nolog_ignores_log_under_other_roots(tmp_path: Path):
     assert root_entry.files == 6  # 5 from _wiki + log.md
 
 
+def test_nolog_keeps_log_under_a_nested_okf_directory(tmp_path: Path):
+    """The exclusion is anchored to the walk root, not to every directory named okf."""
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
+    (root / "nested" / "okf").mkdir(parents=True)
+    (root / "nested" / "okf" / "log.md").write_text("# deep log\n", encoding="utf-8")
+
+    entries, root_entry = collect(root, nolog=True)
+    paths = _by_path(entries)
+
+    assert "okf/log.md" not in paths
+    assert "okf/nested/okf/log.md" in paths
+    assert root_entry.files == 6  # 5 from _wiki + the nested log.md
+
+
 def test_empty_directory_reports_zero_files(tmp_path: Path):
     root = tmp_path / "okf"
     (root / "empty").mkdir(parents=True)

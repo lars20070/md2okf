@@ -127,7 +127,9 @@ def collect(
                         )
                     )
             elif child.suffix == ".md":
-                if nolog and child.name == "log.md" and child.parent.name == "okf":
+                # Anchored to the walk root, not to any directory named "okf":
+                # a nested okf/ keeps its own log.md, as the docstring promises.
+                if nolog and child.name == "log.md" and root.name == "okf" and child.parent == root:
                     continue
                 child_words = _measure_file(child)
                 words += child_words

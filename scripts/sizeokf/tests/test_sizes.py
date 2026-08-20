@@ -122,6 +122,20 @@ def test_collect_nolog_ignores_log_under_other_roots(tmp_path: Path):
     assert "wiki/log.md" in {e.path for e in entries}
 
 
+def test_collect_nolog_keeps_log_under_a_nested_okf_directory(tmp_path: Path):
+    """The exclusion is anchored to the walk root, not to every directory named okf."""
+    root = _wiki(tmp_path)
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
+    (root / "nested" / "okf").mkdir(parents=True)
+    (root / "nested" / "okf" / "log.md").write_text("# deep log\n", encoding="utf-8")
+
+    entries, total = collect(root, nolog=True)
+    paths = {e.path for e in entries}
+
+    assert "okf/log.md" not in paths
+    assert "okf/nested/okf/log.md" in paths
+
+
 def test_collect_sorts_largest_first_then_alphabetically(tmp_path: Path):
     root = tmp_path / "okf"
     root.mkdir()
