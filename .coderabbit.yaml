@@ -7,7 +7,7 @@ tone_instructions: "Be concise and focus on critical issues only. Do not comment
 early_access: false
 enable_free_tier: true
 reviews:
-  profile: chill
+  profile: quiet
   request_changes_workflow: false
   high_level_summary: true
   high_level_summary_in_walkthrough: false
