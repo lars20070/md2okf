@@ -31,9 +31,9 @@ agentInstructions:
     - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
-    - `inspectmd` — Markdown heading map (line ranges and sizes)
+    - `inspectmd` — Markdown heading map (line ranges and word counts)
     - `inspectokf` — wiki directory tree (via `tree`)
-    - `sizeokf` — Markdown content size, excluding frontmatter
+    - `sizeokf` — Markdown content word counts, excluding frontmatter
     - `merkleokf` — wiki Merkle hash tree, for change detection
     - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
 
@@ -193,7 +193,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/inspectmd" inspectmd "$@"
+        exec uv tool run --from "${WORKDIR}/scripts/inspectmd" inspectmd "$@"
 
     - path: /home/agent/.local/bin/inspectokf
       mode: "0755"
@@ -201,7 +201,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/inspectokf" inspectokf "$@"
+        exec uv tool run --from "${WORKDIR}/scripts/inspectokf" inspectokf "$@"
 
     - path: /home/agent/.local/bin/sizeokf
       mode: "0755"
@@ -209,7 +209,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/sizeokf" sizeokf "$@"
+        exec uv tool run --from "${WORKDIR}/scripts/sizeokf" sizeokf "$@"
 
     - path: /home/agent/.local/bin/merkleokf
       mode: "0755"
@@ -217,4 +217,4 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/merkleokf" merkleokf "$@"
+        exec uv tool run --from "${WORKDIR}/scripts/merkleokf" merkleokf "$@"

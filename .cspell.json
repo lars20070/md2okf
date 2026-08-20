@@ -9,7 +9,10 @@
     "CLAUDE.md",
     "uv.lock",
     "web2md/tests/**",
-    "inspectmd/tests/**"
+    "scripts/inspectmd/tests/**",
+    "scripts/inspectokf/tests/**",
+    "scripts/sizeokf/tests/**",
+    "scripts/merkleokf/tests/**"
   ],
   "words": [
     "okf",
@@ -69,6 +72,21 @@
     "inspectokf",
     "sizeokf",
     "merkleokf",
-    "Merkle"
+    "Merkle",
+    "worldbuilding",
+    "retcon",
+    "retconned",
+    "retcons",
+    "uncited",
+    "wikilinks",
+    "outlinks",
+    "dataview",
+    "throughline",
+    "plannable",
+    "leyline",
+    "Dragonsteel",
+    "Holocron",
+    "Dramatica",
+    "Egri"
   ]
 }

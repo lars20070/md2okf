@@ -15,16 +15,12 @@ reads it at the start of every run, so the spec outranks anything written here.
 | `md/` | source documents, one Pi run each |
 | `okf/` | the generated wiki |
 | `Makefile` | every task worth running; `make wiki` compiles |
-| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation |
+| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
 | `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
 | `SPEC.md` | the OKF specification the wiki is built against |
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |
-| `inspectmd/` | optional: Markdown heading map CLI for ranged reads |
-| `inspectokf/` | optional: wiki directory tree CLI (wraps `tree`) |
-| `sizeokf/` | optional: wiki content-size CLI (excludes frontmatter) |
-| `merkleokf/` | optional: wiki Merkle hash tree CLI, for change detection |
 
 ## Compile a wiki
 
@@ -142,14 +138,8 @@ same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
 make validate            # check pi/spec.yaml against the Sandbox Kit schema
 make test-web2md         # pytest, the web2md scraper suite
-make test-inspectmd      # pytest, the inspectmd CLI suite
-make install-inspectmd   # install the inspectmd CLI onto PATH
-make test-inspectokf     # pytest, the inspectokf CLI suite
-make install-inspectokf  # install the inspectokf CLI onto PATH
-make test-sizeokf        # pytest, the sizeokf CLI suite
-make install-sizeokf     # install the sizeokf CLI onto PATH
-make test-merkleokf      # pytest, the merkleokf CLI suite
-make install-merkleokf   # install the merkleokf CLI onto PATH
+make test-clis           # pytest, the four host CLI suites
+make install-clis        # install the four host CLIs onto PATH
 make test-sandbox        # check the sandbox has the tools, config and key it promises
 make lint-okf            # lint the generated wiki
 ```
@@ -157,11 +147,11 @@ make lint-okf            # lint the generated wiki
 markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
 `uv tool run` and cspell via `npx`, so none of them needs a separate install.
 
-Touch anything under `pi/` or `scripts/` and run `make validate` before you call
-the job done. It checks the kit spec against the schema bundled in your `sbx`
-binary, and needs no Docker, no login and no network. CI runs the same check in
-its `validate-kit` job, so catching a break locally saves a red build. The
-current kit requires sbx 0.38.0 or newer.
+Touch anything under `pi/` or `scripts/*.sh` and run `make validate` before you
+call the job done. It checks the kit spec against the schema bundled in your
+`sbx` binary, and needs no Docker, no login and no network. CI runs the same
+check in its `validate-kit` job, so catching a break locally saves a red build.
+The current kit requires sbx 0.38.0 or newer.
 
 `make test-sandbox` asks the other question: does the sandbox actually have
 every tool `pi/spec.yaml` installs, the agent config copied in from
@@ -172,10 +162,11 @@ tests the sandbox you have, which may be older than your last `pi/` edit. To
 check the current kit from scratch, throw the sandbox away first with
 `sbx rm --force md2okf`; building the next one takes minutes.
 
-To look inside the sandbox:
+To look inside the sandbox, or to chat with Pi against the mounted workspace:
 
 ```bash
-./scripts/bash.sh   # reuses the sandbox and whatever a run left behind
+./scripts/bash.sh   # interactive shell; reuses the sandbox and whatever a run left behind
+./scripts/pi.sh     # interactive Pi in the same reused sandbox
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
@@ -185,11 +176,12 @@ sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
 Python tooling is thin. There is no project at the repo root: `pdf2md/`,
-`web2md/`, `inspectmd/`, `inspectokf/`, `sizeokf/`, and `merkleokf/` are
-independent uv projects, each with its own `pyproject.toml` and (where needed)
-`uv.lock`, and nothing shared between them. `pdf2md/` exists only to give
-`marker` a pinned venv; `web2md/` owns the scraper's dependencies and its
-pytest/ruff config; `inspectmd/`, `inspectokf/`, `sizeokf/` and `merkleokf/` are
+`web2md/`, `scripts/inspectmd/`, `scripts/inspectokf/`, `scripts/sizeokf/`, and
+`scripts/merkleokf/` are independent uv projects, each with its own
+`pyproject.toml` and (where needed) `uv.lock`, and nothing shared between them.
+`pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
+scraper's dependencies and its pytest/ruff config; `scripts/inspectmd/`,
+`scripts/inspectokf/`, `scripts/sizeokf/` and `scripts/merkleokf/` are
 installable stdlib-only CLIs with their own ruff and pytest. So the heavy
 dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
 rather than being excluded by flag.

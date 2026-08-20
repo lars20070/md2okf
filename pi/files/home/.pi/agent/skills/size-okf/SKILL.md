@@ -5,20 +5,21 @@ description: Measure how much Markdown prose a page or category holds, excluding
 
 # Measure wiki content with `sizeokf`
 
-Use the `sizeokf` CLI (on `PATH`) to count content characters under `okf/`. The
+Use the `sizeokf` CLI (on `PATH`) to count content words under `okf/`. The
 skill name is `size-okf`; the binary is `sizeokf` — never shell the skill id.
 
 ## Invocation
 
 ```bash
-sizeokf -L 1             # chars per category — start here
+sizeokf -L 1             # words per category — start here
 sizeokf okf/<topic>      # then per page within one category
 sizeokf                  # every file and folder (large)
 ```
 
 - Default path: `okf/`. Pass any existing directory.
-- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 1).
-  Default: unlimited. Folder **totals** are always recursive.
+- `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
+  `0` = walk root only). Default: unlimited. Folder **totals** are always
+  recursive.
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow
@@ -29,13 +30,13 @@ written, not what exists.
 
 ## Reading the output
 
-Summary line, then a table:
+A table (no summary line). The walk root is always listed:
 
 | Column | Meaning |
 | --- | --- |
-| `Chars` | Characters of Markdown **content**, frontmatter excluded. Recursive for folders. |
+| `Words` | Whitespace-split words of Markdown **content**, frontmatter excluded. Recursive for folders. |
 | `Files` | Markdown files counted. Always `1` for a file. |
-| `Path` | Relative to the measured directory. Folders end in `/`. |
+| `Path` | Rooted at the measured directory's name (e.g. `okf/…`). Folders end in `/`. |
 
 Rows are sorted largest first.
 

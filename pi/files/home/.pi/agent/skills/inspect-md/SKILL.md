@@ -20,7 +20,7 @@ inspectmd --section N md/<document>.md
 - Requires a Markdown **file** path (not a directory).
 - `-L`/`--level N` caps the map at heading level `N` (`N` ≥ 1). Omit for every
   heading.
-- `--section N` prints only `start:end  N chars` for a ranged read.
+- `--section N` prints only `start:end  N words` for a ranged read.
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow
@@ -40,7 +40,7 @@ tools).
 | `Index` | Section number in document order (`0` = preamble when present). Pass this to `--section`. |
 | `Level` | Heading depth: `0` preamble, `1` = `#`, …, `6` = `######`. |
 | `Lines` | 1-based inclusive line range (`start-end`) for that section. |
-| `Characters` | Character count of that range (including newlines). |
+| `Words` | Whitespace-split word count of that range. |
 | `Slug` | Kebab-case slug from the heading title (same style as OKF file names). |
 | `Title` | Heading text as written (or `(preamble)` / `(empty)`). |
 

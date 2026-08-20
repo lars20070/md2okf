@@ -1,0 +1,40 @@
+[project]
+name = "inspectmd"
+version = "0.1.0"
+description = "Print a Markdown heading map with line ranges and word counts"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+inspectmd = "inspectmd.cli:entrypoint"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+test = ["pytest>=8.4"]
+
+# Paths are relative to this file, so they resolve wherever the project is
+# invoked from. pythonpath keeps `import inspectmd` working without an install.
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+# Same rule set as web2md: owned here under the zero-overlap rule, not shared.
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "RET", "PT", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# A test's name is its documentation; a docstring on each of them would be noise.
+# Fixtures and helpers are still expected to explain themselves.
+"tests/*" = ["D100", "D103"]
