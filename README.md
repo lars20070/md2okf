@@ -186,16 +186,15 @@ deterministic, and the fetched HTML is cached — see
 
 ## Set up the OpenRouter key
 
-sbx keeps the key out of the virtual machine. It holds the real string on the
+`sbx` keeps the key out of the virtual machine. It holds the real string on the
 host and swaps it into requests at its proxy, so inside the sandbox
 `$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
-
 echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
 
-# And again as a custom secret, to work around a known sbx bug:
+# And again as a custom secret, to work around a known sbx issue:
 # https://github.com/docker/sbx-releases/issues/25
 sbx secret set-custom --sandbox md2okf \
   --host openrouter.ai \
