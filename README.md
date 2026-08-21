@@ -150,7 +150,7 @@ okf/
 Content pages carry `type`, `title`, `description` and `tags` in their
 frontmatter. Slugs are kebab-case. Links are bundle-absolute, so
 `/glossary/verb.md` rather than `glossary/verb.md`. The root `index.md` names
-the spec version the agent read. Pages are updated in place, not duplicated, so
+the spec version the agent reads. Pages are updated in place, not duplicated, so
 compiling the same document twice is safe.
 
 ## Getting Markdown in
