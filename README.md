@@ -14,8 +14,8 @@ is a tree of Markdown files with YAML frontmatter and nothing else — no schema
 registry, no server, nothing to install. The agent takes one source document per
 run and folds it into the wiki already on disk, so documents accumulate rather
 than overwrite. [SPEC.md](SPEC.md) is the OKF specification the wiki is built
-against; the agent reads it at the start of every run, and it outranks anything
-written here.
+against; the agent reads it at the start of every run, and it outranks any
+other instructions.
 
 ## Contents
 
@@ -32,8 +32,9 @@ written here.
 
 ## Requirements
 
-- macOS with [Homebrew](https://brew.sh) — the install commands below are `brew`
-  commands.
+- macOS with [Homebrew](https://brew.sh), or
+  Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
+  required.
 - [sbx](https://github.com/docker/sbx-releases) 0.38.0 or newer — the Docker
   Sandboxes CLI. The kit under `pi/` uses the finalized kit-spec v2 grammar,
   which older releases reject.
@@ -43,11 +44,25 @@ written here.
 
 ## Quickstart
 
-Install the sandbox CLI and sign in:
+Install the sandbox CLI and sign in.
+
+[macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
 
 ```bash
+brew trust docker/tap
 brew install docker/tap/sbx
 sbx login
+ln -s /path_to_sbxclaude_repo/scripts/sbxclaude ~/.local/bin/sbxclaude
+```
+
+[Linux:](https://docs.docker.com/ai/sandboxes/install/#linux)
+
+```bash
+curl -fsSL https://get.docker.com | sudo REPO_ONLY=1 sh
+sudo apt-get install docker-sbx
+sudo usermod -aG kvm "$USER" && newgrp kvm
+sbx login
+ln -s /path_to_sbxclaude_repo/scripts/sbxclaude ~/.local/bin/sbxclaude
 ```
 
 Hand sbx your OpenRouter key once — see [Set up the OpenRouter
@@ -128,9 +143,9 @@ flowchart LR
 | `md/` | source documents, one agent run each |
 | `okf/` | the generated wiki |
 | `Makefile` | every task worth running; `make wiki` compiles |
-| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
+| `scripts/` | what the Makefile or the agent call — compile, sandbox shell, sbx kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
 | `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
-| `SPEC.md` | the OKF specification the wiki is built against |
+| `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) the wiki is built against |
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |
