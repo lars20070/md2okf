@@ -1,100 +1,95 @@
 # md2okf
 
-Drop Markdown files into `md/`, run `make wiki`, and the Pi coding agent writes
-an OKF knowledge base into `okf/`. It takes one source document per run and
-folds it into the wiki: a page per topic, an index in every directory, links
-between them, and a log of what each run changed.
+[![CI](https://github.com/lars20070/md2okf/actions/workflows/ci.yml/badge.svg)](https://github.com/lars20070/md2okf/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-OKF, the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf), is a tree of Markdown files with YAML
-frontmatter and nothing else. No schema registry, no server, nothing to install.
-`SPEC.md` at the repo root is the OKF specification this wiki is built against. The agent
-reads it at the start of every run, so the spec outranks anything written here.
+Compile Markdown documents into an OKF knowledge base with a coding agent.
 
-| Path | Description |
-| --- | --- |
-| `md/` | source documents, one Pi run each |
-| `okf/` | the generated wiki |
-| `Makefile` | every task worth running; `make wiki` compiles |
-| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
-| `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
-| `SPEC.md` | the OKF specification the wiki is built against |
-| `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
-| `pdf2md/` | optional: converts a PDF into `md` |
-| `web2md/` | optional: scrapes a documentation site into `md` |
+Drop Markdown files into `md/`, run `make wiki`, and the [Pi coding
+agent](https://pi.dev) writes a wiki into `okf/`: a page per topic, an index in
+every directory, links between them, and a log of what each run changed. OKF,
+the [Open Knowledge
+Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf),
+is a tree of Markdown files with YAML frontmatter and nothing else — no schema
+registry, no server, nothing to install. The agent takes one source document per
+run and folds it into the wiki already on disk, so documents accumulate rather
+than overwrite. [SPEC.md](SPEC.md) is the OKF specification the wiki is built
+against; the agent reads it at the start of every run, and it outranks anything
+written here.
 
-## Compile a wiki
+## Contents
 
-### Set up, once
+- [Requirements](#requirements)
+- [Quickstart](#quickstart)
+- [How it works](#how-it-works)
+- [What lands in okf/](#what-lands-in-okf)
+- [Getting Markdown in](#getting-markdown-in)
+- [Set up the OpenRouter key](#set-up-the-openrouter-key)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Getting help](#getting-help)
+- [License](#license)
+
+## Requirements
+
+- macOS with [Homebrew](https://brew.sh) — the install commands below are `brew`
+  commands.
+- [sbx](https://github.com/docker/sbx-releases) 0.38.0 or newer — the Docker
+  Sandboxes CLI. The kit under `pi/` uses the finalized kit-spec v2 grammar,
+  which older releases reject.
+- An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
+  agent runs on.
+- `make`, `git`, and `jq`, which the compile driver uses on the host.
+
+## Quickstart
+
+Install the sandbox CLI and sign in:
 
 ```bash
 brew install docker/tap/sbx
 sbx login
 ```
 
-The kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or
-newer. Run `brew upgrade sbx` if an older installation reports unknown fields
-from `pi/spec.yaml`. `sbx login` opens a browser to sign in with a Docker
-account; the sandbox runtime requires that host session.
-
-sbx keeps the OpenRouter key out of the virtual machine. It holds the real
-string on the host and swaps it into requests at its proxy, so inside the
-sandbox `$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
+Hand sbx your OpenRouter key once — see [Set up the OpenRouter
+key](#set-up-the-openrouter-key). Then put your Markdown in `md/` and compile:
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-...
-
-echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
-
-# And again as a custom secret, to work around a known sbx bug. https://github.com/docker/sbx-releases/issues/25
-sbx secret set-custom --sandbox md2okf \
-  --host openrouter.ai \
-  --env OPENROUTER_API_KEY \
-  --value "$OPENROUTER_API_KEY"
-```
-
-`md2okf` is the kit's name, which comes from `pi/spec.yaml`.
-
-### Run it
-
-Put your Markdown in `md/`, then:
-
-```bash
+cp my-document.md md/
 make wiki
 ```
 
-The driver throws the old sandbox away and builds a fresh one, so the current
-kit and secrets apply. It then runs Pi for each `md/*.md` file, re-running the
-same document (Ralph loop) until `merkleokf --nolog -L 0` reports an unchanged
-wiki root hash, capped by `RALPH_MAX` (default 10). Each run streams tool names
-and assistant text/thinking at turn end (`pi --mode json`) and writes session
-transcripts under `logs/sessions/`.
-`okf/` is gitignored apart from `okf/.okflintrc.json`, so the wiki itself stays
-out of the repo. `md/` is tracked, and ships with one sample document.
-
-### What lands in okf/
+Each document gets its own agent run, and each run reports the wiki's root hash
+before and after (tool calls and agent prose stream in between):
 
 ```text
-okf/
-├── index.md          # root index, the only one carrying frontmatter
-├── log.md            # what each run changed, newest first
-├── <page>.md         # a content page at the wiki root
-└── <topic>/          # one directory per topic, nested as deep as it needs
-    ├── index.md      # a plain link list for this directory
-    └── <page>.md     # a content page within the topic
+Compiling document md/my-document.md (iteration 1)
+7f3c1a9d4e02 -> b481d05c6a17
+Compiling document md/my-document.md (iteration 2)
+b481d05c6a17 -> b481d05c6a17
 ```
 
-Content pages carry `type`, `title`, `description` and `tags` in their
-frontmatter. Slugs are kebab-case. Links are bundle-absolute, so
-`/glossary/verb.md` rather than `glossary/verb.md`. The root `index.md` names
-the spec version the agent read. Pages are updated in place, not duplicated, so
-compiling the same document twice is safe.
+The wiki lands in `okf/`, which is gitignored apart from `okf/.okflintrc.json`,
+so the generated pages stay out of the repo. `md/` is tracked and ships with
+sample documents, so `make wiki` has something to compile straight away.
 
-## Architecture
+## How it works
 
-A shell driver on the host runs a coding agent inside a microVM, repeatedly,
-until a hash of the output stops moving. The host drives; everything else
-happens inside the sandbox. The agent's only writable output is `okf/`,
-and `SPEC.md` outranks every instruction file.
+A shell driver on the host runs the agent inside a microVM, repeatedly, until a
+hash of the output stops moving. The host drives; everything else happens inside
+the sandbox.
+
+`make wiki` throws the old sandbox away and builds a fresh one, so the current
+kit — the `pi/` directory that declares the sandbox image, its network
+allowlist and the agent's config — always applies. It then runs the agent once
+per `md/*.md` file, re-running the same document (a *Ralph loop*) until
+`merkleokf --nolog -L 0` reports an unchanged wiki root hash. `merkleokf` prints
+a Merkle hash tree, one hash per file and per directory, so a change to any page
+moves the root hash and an unchanged root means the run added nothing. The loop
+is capped by `RALPH_MAX` (default 10). The agent's only writable output is
+`okf/`, [okf-lint](https://github.com/thisismydesign/okf-lint) must pass before
+it finishes, and `SPEC.md` outranks every instruction file. Each run streams
+tool names and assistant text as it goes, and writes a session transcript under
+`logs/sessions/`.
 
 <!-- cspell:disable -->
 
@@ -107,7 +102,7 @@ flowchart LR
   OKF["okf/<br/>the wiki"]
 
   subgraph VM["sbx microVM"]
-    PI["Pi agent<br/>compile-okf skill"]
+    PI["Pi agent with<br/>compile-okf skill"]
     TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
     LINT["okf-lint"]
   end
@@ -126,6 +121,38 @@ flowchart LR
 
 <!-- cspell:enable -->
 
+### Repository layout
+
+| Path | Description |
+| --- | --- |
+| `md/` | source documents, one agent run each |
+| `okf/` | the generated wiki |
+| `Makefile` | every task worth running; `make wiki` compiles |
+| `scripts/` | what the Makefile calls — compile, sandbox shell, kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
+| `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
+| `SPEC.md` | the OKF specification the wiki is built against |
+| `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
+| `pdf2md/` | optional: converts a PDF into `md` |
+| `web2md/` | optional: scrapes a documentation site into `md` |
+
+## What lands in okf/
+
+```text
+okf/
+├── index.md          # root index, the only one carrying frontmatter
+├── log.md            # what each run changed, newest first
+├── <page>.md         # a content page at the wiki root
+└── <topic>/          # one directory per topic, nested as deep as it needs
+    ├── index.md      # a plain link list for this directory
+    └── <page>.md     # a content page within the topic
+```
+
+Content pages carry `type`, `title`, `description` and `tags` in their
+frontmatter. Slugs are kebab-case. Links are bundle-absolute, so
+`/glossary/verb.md` rather than `glossary/verb.md`. The root `index.md` names
+the spec version the agent read. Pages are updated in place, not duplicated, so
+compiling the same document twice is safe.
+
 ## Getting Markdown in
 
 `md/` wants clean, structured Markdown, and a source document is rarely that.
@@ -133,101 +160,63 @@ Two helpers produce it. Both are optional, and neither is part of `make wiki`.
 
 **From a PDF.** `marker` converts one with the help of a language model, either
 a local Ollama model or a cloud model through OpenRouter. Expect to check the
-output. The step is manual and not wired into `make` —
-[pdf2md/README.md](pdf2md/README.md) has the commands.
+output, and run the step by hand — see
+[the pdf2md guide](pdf2md/README.md).
 
 **From a website.** `make scrape` walks a documentation site and writes one
 Markdown document into `md/`. No model is involved, so the result is
 deterministic, and the fetched HTML is cached — see
-[web2md/README.md](web2md/README.md).
+[the web2md guide](web2md/README.md).
 
-## How the agent knows what to do
+## Set up the OpenRouter key
 
-The instructions come in two parts. `AGENTS.md` holds what every task must
-respect: the OKF conventions, the directories the agent may write to, and the
-rule that `SPEC.md` outranks both. Each task's procedure lives in a skill of its
-own. Task skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`,
-`size-okf`, `merkle-okf` — a tool gets a skill, not an `AGENTS.md` section. The
-sandbox also installs the `context7-docs` skill via `@upstash/context7-pi`
-(library docs lookups). A new task gets a new directory rather than more rules in
-`AGENTS.md`.
+sbx keeps the key out of the virtual machine. It holds the real string on the
+host and swaps it into requests at its proxy, so inside the sandbox
+`$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
 
-A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
-`description`, then the instructions, plus any scripts it needs. Pi picks skills
-up from `~/.pi/agent/skills/`.
+```bash
+export OPENROUTER_API_KEY=sk-or-...
 
-The kit is `pi/`, and the config it carries lives in `pi/files/home/.pi/agent/`.
-That config is copied into the sandbox when the kit is built, not mounted, so an
-edit reaches Pi on the next fresh sandbox — which `make wiki` always builds.
-[pi/README.md](pi/README.md) covers the model and provider settings.
+echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
 
-## Linting the wiki
+# And again as a custom secret, to work around a known sbx bug:
+# https://github.com/docker/sbx-releases/issues/25
+sbx secret set-custom --sandbox md2okf \
+  --host openrouter.ai \
+  --env OPENROUTER_API_KEY \
+  --value "$OPENROUTER_API_KEY"
+```
 
-[okf-lint](https://github.com/thisismydesign/okf-lint) checks the wiki against
-the spec. Rules live in `okf/.okflintrc.json`, tracked and un-ignored by name so
-it survives the `okf/*` rule in `.gitignore`.
+`md2okf` is the kit's name, which comes from `pi/spec.yaml`. `make wiki` reads
+the key from `sbx secret`, never from your shell environment. To point the agent
+at a different provider, see [the pi kit guide](pi/README.md).
 
-The sandbox installs okf-lint at a pinned version, and the `compile-okf` skill
-wraps it in `scripts/lint-okf.sh`. The agent lints its own output and fixes what
-the linter reports before it finishes. On the host, `make lint-okf` runs the
-same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
-`okf/` is generated.
+## Troubleshooting
+
+**`sbx` reports unknown fields from `pi/spec.yaml`.** Your sbx is older than
+0.38.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
+
+**A runtime command fails to authenticate.** `make wiki`, `make test-sandbox`,
+`./scripts/bash.sh` and `./scripts/pi.sh` need an active `sbx login` session.
+
+**`Error: Ralph loop hit 10 iterations`.** The wiki root hash kept changing.
+Raise the cap for one run with `RALPH_MAX=20 make wiki`, or read
+`logs/sessions/` to see what the agent was doing.
 
 ## Development
 
-```bash
-make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
-make validate            # check pi/spec.yaml against the Sandbox Kit schema
-make test-web2md         # pytest, the web2md scraper suite
-make test-clis           # pytest, the four host CLI suites
-make install-clis        # install the four host CLIs onto PATH
-make test-sandbox        # check the sandbox has the tools, config and key it promises
-make lint-okf            # lint the generated wiki
-```
+Lint, tests, the sandbox checks, the helper CLIs and the per-subproject layout
+are covered in [the contributing guide](CONTRIBUTING.md). The short version:
+`make lint` checks the source tree, `make validate` checks the sandbox kit spec,
+and CI runs both on every pull request. There is no package to install —
+`make wiki` is the entry point, and `make install-clis` puts the helper CLIs on
+your PATH.
 
-markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
-`uv tool run` and cspell via `npx`, so none of them needs a separate install.
+## Getting help
 
-Touch anything under `pi/` or `scripts/*.sh` and run `make validate` before you
-call the job done. It checks the kit spec against the schema bundled in your
-`sbx` binary, and needs no Docker, no login and no network. CI runs the same
-check in its `validate-kit` job, so catching a break locally saves a red build.
-The current kit requires sbx 0.38.0 or newer.
+Questions, bugs and feature requests belong in [the issue
+tracker](https://github.com/lars20070/md2okf/issues).
 
-`make test-sandbox` asks the other question: does the sandbox actually have
-every tool `pi/spec.yaml` installs, the agent config copied in from
-`pi/files/`, and a proxy-managed key? It needs an `sbx login` session. Like
-`./scripts/bash.sh` below it reuses the sandbox — fast, and nothing a compile
-left behind is lost — and only builds one if none exists. That also means it
-tests the sandbox you have, which may be older than your last `pi/` edit. To
-check the current kit from scratch, throw the sandbox away first with
-`sbx rm --force md2okf`; building the next one takes minutes.
+## License
 
-To look inside the sandbox, or to chat with Pi against the mounted workspace:
-
-```bash
-./scripts/bash.sh   # interactive shell; reuses the sandbox and whatever a run left behind
-./scripts/pi.sh     # interactive Pi in the same reused sandbox
-```
-
-Once a sandbox exists, this should print `proxy-managed` rather than your key:
-
-```bash
-sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
-```
-
-Python tooling is thin. There is no project at the repo root: `pdf2md/`,
-`web2md/`, `scripts/inspectmd/`, `scripts/inspectokf/`, `scripts/sizeokf/`, and
-`scripts/merkleokf/` are independent uv projects, each with its own
-`pyproject.toml` and (where needed) `uv.lock`, and nothing shared between them.
-`pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
-scraper's dependencies and its pytest/ruff config; `scripts/inspectmd/`,
-`scripts/inspectokf/`, `scripts/sizeokf/` and `scripts/merkleokf/` are
-installable stdlib-only CLIs with their own ruff and pytest. So the heavy
-dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
-rather than being excluded by flag.
-
-`ruff` and `yamllint` belong to neither project; `make lint` runs them
-ephemerally at a pinned version with `uv tool run`, and checks each tracked
-subproject in turn — a new subproject carries its own `[tool.ruff]` and needs
-no Makefile change.
+Released under the [MIT License](LICENSE).
