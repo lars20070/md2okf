@@ -15,7 +15,27 @@
             }
           }
         },
+        "qwen/qwen3.8-2.4t-a95b": {
+          "compat": {
+            "openRouterRouting": {
+              "only": [
+                "deepinfra"
+              ],
+              "allow_fallbacks": false
+            }
+          }
+        },
         "deepseek/deepseek-v4-pro": {
+          "compat": {
+            "openRouterRouting": {
+              "only": [
+                "deepinfra"
+              ],
+              "allow_fallbacks": false
+            }
+          }
+        },
+        "moonshotai/kimi-k3": {
           "compat": {
             "openRouterRouting": {
               "only": [
