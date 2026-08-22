@@ -53,7 +53,6 @@ Install the sandbox CLI and sign in.
 brew trust docker/tap
 brew install docker/tap/sbx
 sbx login
-ln -s /path_to_sbxclaude_repo/scripts/sbxclaude ~/.local/bin/sbxclaude
 ```
 
 [Linux:](https://docs.docker.com/ai/sandboxes/install/#linux)
@@ -63,7 +62,6 @@ curl -fsSL https://get.docker.com | sudo REPO_ONLY=1 sh
 sudo apt-get install docker-sbx
 sudo usermod -aG kvm "$USER" && newgrp kvm
 sbx login
-ln -s /path_to_sbxclaude_repo/scripts/sbxclaude ~/.local/bin/sbxclaude
 ```
 
 Hand sbx your OpenRouter key once — see [Set up the OpenRouter
