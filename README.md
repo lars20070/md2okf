@@ -18,6 +18,63 @@ than overwrite. [SPEC.md](SPEC.md) is the OKF specification the wiki is built
 against; the agent reads it at the start of every run, and it outranks any
 other instructions.
 
+<!-- cspell:disable -->
+
+```mermaid
+flowchart LR
+  subgraph IN[" "]
+    direction TB
+    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
+    SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
+    KIT["pi/spec.yaml<br/>pi/files/"]
+  end
+  DRV["make wiki<br/>scripts/compile-okf.sh"]
+
+  subgraph VM["sbx microVM"]
+    TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
+    PI["Pi agent with<br/>compile-okf skill"]
+    LINT["okf-lint"]
+  end
+
+  subgraph NETG[" "]
+    direction TB
+    NET@{ shape: rounded, label: "OpenRouter hub"}
+    NET1@{ shape: rounded, label: "..."}
+    NET2@{ shape: rounded, label: "DeepInfra"}
+  end
+  OKF@{ shape: docs, label: "okf/<br/>the wiki"}
+
+  MD --> DRV
+  KIT -->|"builds"| VM
+  DRV -->|"sbx exec"| PI
+  SPEC -.->|"outranks all"| PI
+  PI -.->|"run"| TOOLS
+  PI -.->|"run"| LINT
+  LINT -.->|"must pass"| OKF
+  PI -->|"via sbx proxy"| NET
+  NET -->|"BYOK"| NET1
+  NET -->|"BYOK"| NET2
+  PI ==>|"writes"| OKF
+  PI ==>|"reads"| MD
+
+  classDef data    fill:#E7F0FA,stroke:#2F6FAD,stroke-width:2px,color:#10314F
+  classDef dataout fill:#E6F4EA,stroke:#2E7D46,stroke-width:2px,color:#103A20
+  classDef host    fill:#FBF0DC,stroke:#B4700A,stroke-width:2px,color:#4A2E05
+  classDef agent   fill:#EDE7F6,stroke:#6A4BBC,stroke-width:2px,color:#2E1D63
+  classDef gate    fill:#FCE8E6,stroke:#B3261E,stroke-width:2px,color:#5A1710
+  classDef ext     fill:#EEF0F3,stroke:#8A94A6,stroke-width:1.5px,color:#3A4250
+  class MD,SPEC,OKF data
+  class KIT,DRV host
+  class TOOLS,LINT agent
+  class PI gate
+  class NET,NET1,NET2 ext
+  style VM fill:whitesmoke,stroke:#8A94A6,stroke-width:1.5px
+  style IN fill:none,stroke:none
+  style NETG fill:none,stroke:none
+```
+
+<!-- cspell:enable -->
+
 ## Contents
 
 - [Requirements](#requirements)
@@ -104,36 +161,6 @@ is capped by `RALPH_MAX` (default 10). The agent's only writable output is
 it finishes, and `SPEC.md` outranks every instruction file. Each run streams
 tool names and assistant text as it goes, and writes a session transcript under
 `logs/sessions/`.
-
-<!-- cspell:disable -->
-
-```mermaid
-flowchart LR
-  MD["md/*.md<br/>source documents"]
-  DRV["scripts/compile-okf.sh<br/>make wiki"]
-  KIT["pi/spec.yaml<br/>+ pi/files/"]
-  SPEC["SPEC.md"]
-  OKF["okf/<br/>the wiki"]
-
-  subgraph VM["sbx microVM"]
-    PI["Pi agent with<br/>compile-okf skill"]
-    TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
-    LINT["okf-lint"]
-  end
-
-  KIT ~~~ SPEC
-  MD --> DRV
-  KIT -->|"builds"| VM
-  DRV -->|"sbx exec"| PI
-  SPEC -.->|"read first, outranks all"| PI
-  PI -->|"reads"| MD
-  PI -->|"writes"| OKF
-  TOOLS -.->|"survey + verify"| PI
-  PI --> LINT
-  LINT -.->|"must pass"| OKF
-```
-
-<!-- cspell:enable -->
 
 ### Repository layout
 
