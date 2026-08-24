@@ -38,9 +38,9 @@ flowchart LR
 
   subgraph NETG[" "]
     direction TB
-    NET@{ shape: rounded, label: "OpenRouter hub"}
-    NET1@{ shape: rounded, label: "..."}
-    NET2@{ shape: rounded, label: "DeepInfra"}
+    NET("OpenRouter hub")
+    NET1("...")
+    NET2("DeepInfra")
   end
   OKF@{ shape: docs, label: "okf/<br/>the wiki"}
 
@@ -48,27 +48,24 @@ flowchart LR
   KIT -->|"builds"| VM
   DRV -->|"sbx exec"| PI
   SPEC -.->|"outranks all"| PI
-  PI -.->|"run"| TOOLS
-  PI -.->|"run"| LINT
+  PI -.->|"run"| TOOLS & LINT
   LINT -.->|"must pass"| OKF
   PI -->|"via sbx proxy"| NET
-  NET -->|"BYOK"| NET1
-  NET -->|"BYOK"| NET2
+  NET -->|"BYOK"| NET1 & NET2
   PI ==>|"writes"| OKF
   PI ==>|"reads"| MD
 
-  classDef data    fill:#E7F0FA,stroke:#2F6FAD,stroke-width:2px,color:#10314F
-  classDef dataout fill:#E6F4EA,stroke:#2E7D46,stroke-width:2px,color:#103A20
-  classDef host    fill:#FBF0DC,stroke:#B4700A,stroke-width:2px,color:#4A2E05
-  classDef agent   fill:#EDE7F6,stroke:#6A4BBC,stroke-width:2px,color:#2E1D63
-  classDef gate    fill:#FCE8E6,stroke:#B3261E,stroke-width:2px,color:#5A1710
-  classDef ext     fill:#EEF0F3,stroke:#8A94A6,stroke-width:1.5px,color:#3A4250
+  classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
+  classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
+  classDef helper  fill:lavender,stroke:slateblue,stroke-width:2px,color:#2E1D63
+  classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
+  classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
   class MD,SPEC,OKF data
   class KIT,DRV host
-  class TOOLS,LINT agent
-  class PI gate
+  class TOOLS,LINT helper
+  class PI agent
   class NET,NET1,NET2 ext
-  style VM fill:whitesmoke,stroke:#8A94A6,stroke-width:1.5px
+  style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style IN fill:none,stroke:none
   style NETG fill:none,stroke:none
 ```
