@@ -24,15 +24,15 @@ other instructions.
 flowchart LR
   subgraph IN[" "]
     direction TB
-    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
     SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
+    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
+    DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["pi/spec.yaml<br/>pi/files/"]
   end
-  DRV["make wiki<br/>scripts/compile-okf.sh"]
 
   subgraph VM["sbx microVM"]
+    PI["Pi agent with<br/>/compile-okf skill"]
     TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
-    PI["Pi agent with<br/>compile-okf skill"]
     LINT["okf-lint"]
   end
 
@@ -44,16 +44,15 @@ flowchart LR
   end
   OKF@{ shape: docs, label: "okf/<br/>the wiki"}
 
-  MD --> DRV
-  KIT -->|"builds"| VM
-  DRV -->|"sbx exec"| PI
   SPEC -.->|"outranks all"| PI
+  MD ==>|"read by"| PI
+  DRV -->|"sbx exec"| PI
+  KIT -->|"builds"| VM
   PI -.->|"run"| TOOLS & LINT
   LINT -.->|"must pass"| OKF
   PI -->|"via sbx proxy"| NET
   NET -->|"BYOK"| NET1 & NET2
   PI ==>|"writes"| OKF
-  PI ==>|"reads"| MD
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
   classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
