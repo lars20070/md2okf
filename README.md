@@ -57,7 +57,7 @@ flowchart LR
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
   classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
-  classDef helper  fill:lavender,stroke:slateblue,stroke-width:2px,color:#2E1D63
+  classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
   classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
   classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
   class MD,SPEC,OKF data
