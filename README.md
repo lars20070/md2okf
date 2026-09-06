@@ -36,13 +36,13 @@ flowchart LR
     LINT["okf-lint"]
   end
 
-  subgraph NETG[" "]
+  subgraph OUT[" "]
     direction TB
+    OKF@{ shape: docs, label: "okf/<br/>the wiki"}
     NET("OpenRouter hub")
-    NET1("...")
-    NET2("DeepInfra")
   end
-  OKF@{ shape: docs, label: "okf/<br/>the wiki"}
+  NET1("DeepInfra")
+  NET2("...")
 
   SPEC -.->|"outranks all"| PI
   MD ==>|"read by"| PI
@@ -50,9 +50,9 @@ flowchart LR
   KIT -->|"builds"| VM
   PI -.->|"run"| TOOLS & LINT
   LINT -.->|"must pass"| OKF
+  PI ==>|"writes"| OKF
   PI -->|"via sbx proxy"| NET
   NET -->|"BYOK"| NET1 & NET2
-  PI ==>|"writes"| OKF
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
   classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
@@ -66,7 +66,7 @@ flowchart LR
   class NET,NET1,NET2 ext
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style IN fill:none,stroke:none
-  style NETG fill:none,stroke:none
+  style OUT fill:none,stroke:none
 ```
 
 <!-- cspell:enable -->
