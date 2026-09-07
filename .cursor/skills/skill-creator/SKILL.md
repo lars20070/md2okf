@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create new skills or edit existing ones under .claude/skills/. Use whenever the user wants to author a skill, capture a workflow as a skill, rewrite a SKILL.md, or asks about skill format, frontmatter, progressive disclosure, or skill structure — even if they do not say "skill-creator".
+description: Create new skills or edit existing ones under .cursor/skills/. Use whenever the user wants to author a skill, capture a workflow as a skill, rewrite a SKILL.md, or asks about skill format, frontmatter, progressive disclosure, or skill structure — even if they do not say "skill-creator".
 ---
 
 # Skill Creator
@@ -11,7 +11,7 @@ format.
 At a high level, the process goes like this:
 
 - Understand what the skill should do and when it should trigger
-- Write the SKILL.md under `.claude/skills/<name>/`
+- Write the SKILL.md under `.cursor/skills/<name>/`
 - Validate the format
 
 Figure out where the user is in this process and jump in from there. Maybe
@@ -128,7 +128,7 @@ Try to explain to the model why things are important in lieu of heavy-handed mus
 Once the SKILL.md is written, check it against the format rules:
 
 ```bash
-python3 .claude/skills/skill-creator/scripts/quick_validate.py <path/to/new-skill>
+python3 .cursor/skills/skill-creator/scripts/quick_validate.py <path/to/new-skill>
 ```
 
 It checks: the frontmatter only uses allowed keys (`name`, `description`,
