@@ -23,8 +23,13 @@ def validate_skill(skill_path):
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
-    # Extract frontmatter
-    match = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
+    # Extract frontmatter. Closing --- must be a full line (optional trailing
+    # spaces), not a prefix of ---not-a-delimiter.
+    match = re.match(
+        r'\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)',
+        content,
+        re.DOTALL,
+    )
     if not match:
         return False, "Invalid frontmatter format"
 
@@ -87,9 +92,10 @@ def validate_skill(skill_path):
         if len(description) > 1024:
             return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
 
-    # Validate compatibility field if present (optional)
-    compatibility = frontmatter.get('compatibility', '')
-    if compatibility:
+    # Validate compatibility field if present (optional). Key presence, not
+    # truthiness: false/0/null/[] must fail the string check rather than skip it.
+    if 'compatibility' in frontmatter:
+        compatibility = frontmatter['compatibility']
         if not isinstance(compatibility, str):
             return False, f"Compatibility must be a string, got {type(compatibility).__name__}"
         if len(compatibility) > 500:
