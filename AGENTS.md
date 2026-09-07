@@ -89,7 +89,8 @@ script it runs inside the VM (`test-sandbox-guest.sh`).
 ## Commands
 
 ```bash
-make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
+                         # also VERSION ↔ CHANGELOG.md agreement
 make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
@@ -106,6 +107,8 @@ make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
 ./scripts/compile-okf.sh md/other-books      # compile a different source folder
 # Per document: Ralph loop until `merkleokf --nolog -L 0` is unchanged (RALPH_MAX=10)
 sbx rm --force md2okf                        # discard the sandbox, so the next run rebuilds
+./scripts/release-notes.sh X.Y.Z             # print CHANGELOG.md notes for a release
+./scripts/check-release-tag.sh vX.Y.Z        # assert a tag matches VERSION
 ```
 
 `make lint-okf` is host-only and needs a generated `okf/`; it sits outside
@@ -116,6 +119,10 @@ it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
 from your shell (see the README for the two-step setup). Runtime commands such
 as `make wiki`, `make test-sandbox`, `scripts/bash.sh` and `scripts/pi.sh`
 require an active `sbx login` session; `make validate` is static and does not.
+
+Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
+a notes-only GitHub Release from the matching `CHANGELOG.md` section. See
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
 ## Always validate the sandbox kit spec before finishing
 

@@ -23,10 +23,11 @@ CSPELL ?= npx --yes cspell
 .PHONY: lint lint-okf validate test test-web2md test-clis install-clis \
 	test-sandbox wiki scrape
 
-# Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, and
-# lint Python. Driving every check off `git ls-files` means a newly added file
-# is covered the moment it is tracked, rather than when someone remembers to
-# extend a hand-maintained list here.
+# Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
+# Python, and check that VERSION and CHANGELOG.md's latest release agree.
+# Driving every check off `git ls-files` means a newly added file is covered the
+# moment it is tracked, rather than when someone remembers to extend a
+# hand-maintained list here.
 #
 # Exclusions, all deliberate:
 #   md/                generated Marker book output — large, and linted manually
@@ -50,6 +51,20 @@ lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(CSPELL) --no-progress
 	git ls-files -- '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
+	if [ ! -f VERSION ]; then \
+		echo "lint: VERSION is missing" >&2; exit 1; \
+	fi; \
+	repo_version="$$(grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+' VERSION)"; \
+	if [ -z "$$repo_version" ]; then \
+		echo "lint: could not find X.Y.Z in VERSION" >&2; exit 1; \
+	fi; \
+	changelog_version="$$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"; \
+	if [ -z "$$changelog_version" ]; then \
+		echo "lint: could not find a ## [X.Y.Z] release heading in CHANGELOG.md" >&2; exit 1; \
+	elif [ "$$repo_version" != "$$changelog_version" ]; then \
+		echo "lint: VERSION is $$repo_version but CHANGELOG.md's latest release is $$changelog_version" >&2; \
+		exit 1; \
+	fi
 	@echo "All lint checks passed."
 
 # Lint the generated okf/ wiki with okf-lint
