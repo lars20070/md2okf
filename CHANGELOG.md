@@ -29,3 +29,13 @@ and this project adheres to
   every invocation.
 - Simplify the README Mermaid overview diagram (layout and helper-tool
   colours).
+
+### Fixed
+
+- README quickstart warning now names this project (`md2okf`) when saying a
+  later `sbx` may break it.
+- Cursor `/skill-creator` now points at `.cursor/skills/` (paths and validate
+  command), not `.claude/skills/`.
+- `/skill-creator` `quick_validate.py`: require a full-line closing `---` for
+  frontmatter (not a `---` prefix), and validate `compatibility` when the key
+  is present rather than only when it is truthy.
