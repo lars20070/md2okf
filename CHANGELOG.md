@@ -21,6 +21,7 @@ and this project adheres to
 
 ### Changed
 
+- Bump the pinned Pi coding agent from 0.84.2 to 0.85.1.
 - Bump the documented minimum `sbx` version from 0.38.0 to 0.42.0.
 - `scripts/bash.sh`, `scripts/pi.sh`, `scripts/compile-okf.sh` and
   `tests/test-sandbox.sh` now invoke `sbx run` with the kit path as the
