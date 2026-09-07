@@ -98,6 +98,9 @@ flowchart LR
 
 ## Quickstart
 
+> **sbx v0.42.0 is required.** sbx is
+> experimental. A later version may break `sbxagent`.
+
 Install the sandbox CLI and sign in.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
