@@ -116,5 +116,12 @@ this migration becomes the first tracked release:
 3. Manually confirm `scripts/bash.sh` and `scripts/pi.sh` still attach to the
    same rebuilt sandbox without error (both reuse `md2okf` by name, so no
    separate rebuild needed once step 2 has created it).
-4. `git grep -n "0.38.0\|--kit ./pi/"` — should return no hits, confirming the
-   old version pin and syntax are fully replaced.
+4. Confirm only the migration targets no longer contain the old version or
+   invocation:
+   ```bash
+   git grep -n "0.38.0\|--kit ./pi/" -- \
+     README.md AGENTS.md CONTRIBUTING.md \
+     scripts/bash.sh scripts/pi.sh scripts/compile-okf.sh tests/test-sandbox.sh
+   ```
+   This should return no hits. `CHANGELOG.md` deliberately retains `0.38.0`
+   as historical context, so it is intentionally excluded.
