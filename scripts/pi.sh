@@ -25,7 +25,7 @@ fi
 # Create the sandbox only if it does not already exist, so we reuse any running
 # instance (and its state) instead of tearing it down.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
-	sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
+	sbx run --detached --name "${kit_name}" ./pi/
 fi
 
 # Drop into interactive Pi at the workspace (the repo root). `sbx exec` starts

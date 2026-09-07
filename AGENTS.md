@@ -72,7 +72,7 @@ its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
 only land in a fresh sandbox — which `make wiki` always builds. The `files/`
 level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
-kit uses the finalized kit-spec v2 grammar and requires sbx 0.38.0 or newer.
+kit uses the finalized kit-spec v2 grammar and requires sbx 0.42.0 or newer.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while

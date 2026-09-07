@@ -89,7 +89,7 @@ flowchart LR
 - macOS with [Homebrew](https://brew.sh), or
   Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
   required.
-- [sbx](https://github.com/docker/sbx-releases) 0.38.0 or newer — the Docker
+- [sbx](https://github.com/docker/sbx-releases) 0.42.0 or newer — the Docker
   Sandboxes CLI. The kit under `pi/` uses the finalized kit-spec v2 grammar,
   which older releases reject.
 - An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
@@ -230,7 +230,7 @@ at a different provider, see [the pi kit guide](pi/README.md).
 ## Troubleshooting
 
 **`sbx` reports unknown fields from `pi/spec.yaml`.** Your sbx is older than
-0.38.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
+0.42.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
 
 **A runtime command fails to authenticate.** `make wiki`, `make test-sandbox`,
 `./scripts/bash.sh` and `./scripts/pi.sh` need an active `sbx login` session.

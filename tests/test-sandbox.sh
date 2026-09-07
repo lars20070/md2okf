@@ -24,7 +24,7 @@ fi
 
 if ! sbx ls -q | grep -qx "${kit_name}"; then
 	echo "No ${kit_name} sandbox found — creating one (this takes minutes)."
-	sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
+	sbx run --detached --name "${kit_name}" ./pi/
 fi
 
 # `sh -lc` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm

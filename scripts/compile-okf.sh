@@ -42,7 +42,7 @@ fi
 # Recreate the sandbox so the latest kit changes and secrets are applied, then
 # leave it running (detached) so we can exec one Pi run per document into it.
 sbx rm --force "${kit_name}" || true
-sbx run --detached --name "${kit_name}" --kit ./pi/ "${kit_name}"
+sbx run --detached --name "${kit_name}" ./pi/
 
 # Compile each document into okf/. Verified: `sbx exec` runs with the VM
 # workspace (the repo root) as its cwd, so a host path md/<...>.md is the same
