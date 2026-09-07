@@ -9,7 +9,8 @@ you only want to compile a wiki, [the README](README.md) is enough.
 ## Commands
 
 ```bash
-make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
+                         # also VERSION ↔ CHANGELOG.md agreement
 make validate            # check pi/spec.yaml against the Sandbox Kit schema
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
@@ -35,7 +36,7 @@ Touch anything under `pi/` or `scripts/*.sh` and run `make validate` before you
 call the job done. It checks the kit spec against the schema bundled in your
 `sbx` binary, and needs no Docker, no login and no network. CI runs the same
 check in its `validate-kit` job, so catching a break locally saves a red build.
-The current kit requires sbx 0.38.0 or newer; `brew upgrade sbx` fixes unknown
+The current kit requires sbx 0.42.0 or newer; `brew upgrade sbx` fixes unknown
 field errors from an older install.
 
 `make test-sandbox` asks the other question: does the sandbox actually have
@@ -131,3 +132,23 @@ wraps it in its own `scripts/lint-okf.sh`. The agent lints its own output and fi
 the linter reports before it finishes. On the host, `make lint-okf` runs the
 same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
 `okf/` is generated.
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
+a GitHub Release whose notes are the matching section of `CHANGELOG.md`. There
+are no packages or images to publish — the project is consumed by cloning and
+running `make`.
+
+1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
+   with a real body (not just a heading).
+2. Set `VERSION` to `X.Y.Z`.
+3. Land that commit on `master`. `make lint` fails if `VERSION` and the latest
+   changelog release heading disagree.
+4. Sanity-check the notes: `./scripts/release-notes.sh X.Y.Z`
+5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+
+The workflow re-runs `make lint` and refuses a tag whose version disagrees with
+`VERSION` (`scripts/check-release-tag.sh`). An empty changelog section fails
+before the Release is created. Re-running is safe: if the Release already
+exists, the job skips it rather than modifying it.

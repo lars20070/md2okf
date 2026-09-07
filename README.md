@@ -24,40 +24,39 @@ other instructions.
 flowchart LR
   subgraph IN[" "]
     direction TB
-    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
     SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
+    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
+    DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["pi/spec.yaml<br/>pi/files/"]
   end
-  DRV["make wiki<br/>scripts/compile-okf.sh"]
 
   subgraph VM["sbx microVM"]
+    PI["Pi agent with<br/>/compile-okf skill"]
     TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
-    PI["Pi agent with<br/>compile-okf skill"]
     LINT["okf-lint"]
   end
 
-  subgraph NETG[" "]
+  subgraph OUT[" "]
     direction TB
+    OKF@{ shape: docs, label: "okf/<br/>the wiki"}
     NET("OpenRouter hub")
-    NET1("...")
-    NET2("DeepInfra")
   end
-  OKF@{ shape: docs, label: "okf/<br/>the wiki"}
+  NET1("DeepInfra")
+  NET2("...")
 
-  MD --> DRV
-  KIT -->|"builds"| VM
-  DRV -->|"sbx exec"| PI
   SPEC -.->|"outranks all"| PI
+  MD ==>|"read by"| PI
+  DRV -->|"sbx exec"| PI
+  KIT -->|"builds"| VM
   PI -.->|"run"| TOOLS & LINT
   LINT -.->|"must pass"| OKF
+  PI ==>|"writes"| OKF
   PI -->|"via sbx proxy"| NET
   NET -->|"BYOK"| NET1 & NET2
-  PI ==>|"writes"| OKF
-  PI ==>|"reads"| MD
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
   classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
-  classDef helper  fill:lavender,stroke:slateblue,stroke-width:2px,color:#2E1D63
+  classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
   classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
   classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
   class MD,SPEC,OKF data
@@ -67,7 +66,7 @@ flowchart LR
   class NET,NET1,NET2 ext
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style IN fill:none,stroke:none
-  style NETG fill:none,stroke:none
+  style OUT fill:none,stroke:none
 ```
 
 <!-- cspell:enable -->
@@ -90,7 +89,7 @@ flowchart LR
 - macOS with [Homebrew](https://brew.sh), or
   Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
   required.
-- [sbx](https://github.com/docker/sbx-releases) 0.38.0 or newer — the Docker
+- [sbx](https://github.com/docker/sbx-releases) 0.42.0 or newer — the Docker
   Sandboxes CLI. The kit under `pi/` uses the finalized kit-spec v2 grammar,
   which older releases reject.
 - An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
@@ -98,6 +97,9 @@ flowchart LR
 - `make`, `git`, and `jq`, which the compile driver uses on the host.
 
 ## Quickstart
+
+> **sbx v0.42.0 is required.** sbx is
+> experimental. A later version may break `md2okf`.
 
 Install the sandbox CLI and sign in.
 
@@ -231,7 +233,7 @@ at a different provider, see [the pi kit guide](pi/README.md).
 ## Troubleshooting
 
 **`sbx` reports unknown fields from `pi/spec.yaml`.** Your sbx is older than
-0.38.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
+0.42.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
 
 **A runtime command fails to authenticate.** `make wiki`, `make test-sandbox`,
 `./scripts/bash.sh` and `./scripts/pi.sh` need an active `sbx login` session.

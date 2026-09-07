@@ -1,0 +1,111 @@
+---
+name: Release
+
+# A tag push is the release: pushing vX.Y.Z creates a GitHub Release whose
+# notes are the matching section of CHANGELOG.md. There are no artifacts to
+# publish — the project is consumed by cloning and running make.
+#
+# All the version and notes logic lives in scripts/, so `make lint`
+# shellchecks the helpers and they can be rehearsed locally.
+
+on:
+  push:
+    # Digit-only, so vX.Y.Z-rc1 and other shapes cannot trigger a release.
+    # Matches the pattern scripts/check-release-tag.sh enforces.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# Narrowed further per job. The github-release job needs write; verify does not.
+permissions:
+  contents: read
+
+# Never cancel a release in flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Gate the release on the repo agreeing with itself before anything is
+  # announced. `make lint` is the substance here: it already fails when VERSION
+  # and CHANGELOG.md's latest release heading disagree, so a tag whose version
+  # is inconsistent cannot create a Release.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # No git operations after checkout, so don't leave the job token in
+          # .git/config where a later third-party step could read it.
+          persist-credentials: false
+
+      # The tag is authoritative and must agree with VERSION. check-release-tag.sh
+      # writes version= on fd 3, which is why it is redirected rather than
+      # piped: its human output must not reach $GITHUB_OUTPUT.
+      - name: Resolve version
+        id: version
+        run: ./scripts/check-release-tag.sh "${GITHUB_REF_NAME}" 3>>"$GITHUB_OUTPUT"
+
+      # Fail an empty changelog section here, before a Release is created.
+      # `make lint` cannot catch this: it checks only that the latest
+      # `## [X.Y.Z]` heading exists and agrees with VERSION, and a heading with
+      # no body passes that. The github-release job runs the same script again
+      # for the notes themselves, so there is one definition of "non-empty".
+      - name: Check the release notes are not empty
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/release-notes.sh "${RELEASE_VERSION}" >/dev/null
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Lint (includes the version-agreement check)
+        run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2'
+
+  # Create the GitHub Release. A tag and a Release are different objects and
+  # pushing a tag never creates one, so without this the Releases page stays
+  # empty however many versions ship. The notes are the changelog's own section,
+  # so there is no second description of a release to drift.
+  github-release:
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # The only job in this workflow that writes to the repository.
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Needed for CHANGELOG.md and the script. gh authenticates with
+          # GH_TOKEN below, not with the checkout credential.
+          persist-credentials: false
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Skip rather than fail if it exists — re-running a release is normal.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "NOTICE: release ${TAG} already exists — not modifying it"
+            exit 0
+          fi
+          # Read the notes first and only then create, rather than piping one
+          # into the other. In a pipeline both sides start together, so a
+          # failing extractor would hand gh an empty stdin and the Release
+          # would be created empty before pipefail reported the failure — and
+          # the existing-release check above would then skip it forever. The
+          # verify job makes that unreachable in practice; this makes it
+          # impossible.
+          notes="$(./scripts/release-notes.sh "${RELEASE_VERSION}")"
+          # --verify-tag refuses to invent a tag that does not exist, turning a
+          # typo into a failure instead of a stray tag.
+          printf '%s\n' "${notes}" |
+            gh release create "${TAG}" --title "${TAG}" --verify-tag --notes-file -
