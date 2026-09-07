@@ -99,7 +99,7 @@ flowchart LR
 ## Quickstart
 
 > **sbx v0.42.0 is required.** sbx is
-> experimental. A later version may break `sbxagent`.
+> experimental. A later version may break `md2okf`.
 
 Install the sandbox CLI and sign in.
 
