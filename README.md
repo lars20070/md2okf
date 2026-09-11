@@ -89,17 +89,12 @@ flowchart LR
 - macOS with [Homebrew](https://brew.sh), or
   Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
   required.
-- [sbx](https://github.com/docker/sbx-releases) 0.42.0 or newer — the Docker
-  Sandboxes CLI. The kit under `pi/` uses the finalized kit-spec v2 grammar,
-  which older releases reject.
+- [sbx](https://github.com/docker/sbx-releases) 0.42.0 is required. sbx is experimental. A later version may break `md2okf`.
 - An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
   agent runs on.
 - `make`, `git`, and `jq`, which the compile driver uses on the host.
 
 ## Quickstart
-
-> **sbx v0.42.0 is required.** sbx is
-> experimental. A later version may break `md2okf`.
 
 Install the sandbox CLI and sign in.
 
