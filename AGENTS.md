@@ -10,6 +10,12 @@
 > only. Sandbox Pi gets Context7 through the native `@upstash/context7-pi`
 > package installed by the kit, not via MCP.
 
+## Git
+
+Never run `git commit` or `git push` (including pushing tags) in this repo.
+Stage changes, draft the commit message, and hand it to the user — they run
+the commit and push themselves.
+
 ## Repository map
 
 md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one source
