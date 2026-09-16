@@ -19,5 +19,4 @@ web2md/cache/
 
 # okf output folder
 okf/*
-!okf/
 !okf/.okflintrc.json
