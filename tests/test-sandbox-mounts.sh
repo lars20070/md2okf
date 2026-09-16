@@ -92,6 +92,7 @@ output="$({
 		source scripts/lib/sandbox-mounts.sh
 		sandbox_workspace_args
 		printf "count=%s\n" "${#workspace_args[@]}"
+		printf "primary=%s\n" "${workspace_args[0]}"
 		for arg in "${workspace_args[@]}"; do printf "arg=%s\n" "${arg}"; done
 		if stat -c %a "${SBXAGENT_STATE_DIR}" >/dev/null 2>&1; then
 			stat -c "mode=%a" "${SBXAGENT_STATE_DIR}"
@@ -101,6 +102,7 @@ output="$({
 	'
 })"
 [[ "${output}" == *$'count=5'* ]] || fail "workspace array does not have five entries"
+[[ "${output}" == *$'primary=./okf'* ]] || fail "okf is not the primary workspace"
 [[ "${output}" == *"arg=${state_home}/md2okf"* ]] ||
 	fail "state path containing spaces was not preserved as one array entry"
 [[ "${output}" == *$'mode=700'* ]] || fail "state directory mode is not 0700"
@@ -116,5 +118,19 @@ for creator in scripts/compile-okf.sh scripts/pi.sh scripts/bash.sh tests/test-s
 		fail "${creator} does not inject SBXAGENT_STATE_DIR"
 done
 pass "every sandbox creator mounts and injects the shared state directory"
+
+# Pi starts in the wiki root. Runtime instructions must not point back to it as
+# ../okf: although that resolves to the same inode, it makes the wiki look like
+# a child directory and has caused agents to create okf/okf/.
+pi_agent_dir="${ROOT}/kits/md2okf/files/home/.pi/agent"
+if grep -R -F -q -- '../okf' "${pi_agent_dir}"; then
+	fail "Pi runtime instructions still refer to the wiki as ../okf"
+fi
+for skill in compile-okf inspect-okf size-okf merkle-okf; do
+	# shellcheck disable=SC2016 # Assert the literal runtime expansion in the skill.
+	grep -F -q -- '"$PWD"' "${pi_agent_dir}/skills/${skill}/SKILL.md" ||
+		fail "${skill} does not name the wiki root as \"\$PWD\""
+done
+pass "Pi runtime instructions use the workspace root, not ../okf"
 
 echo "All ${TESTS} sandbox-mount tests passed."

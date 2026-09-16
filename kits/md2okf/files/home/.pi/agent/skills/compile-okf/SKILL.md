@@ -8,6 +8,7 @@ description: Compile one Markdown source document from ../md/ into the OKF wiki,
 Translate one Markdown source document under `../md/` into well-structured OKF
 pages in your workspace, the wiki root. You are invoked **once per source document**: integrate that
 document into the existing wiki without disturbing unrelated pages.
+Write directly in the workspace; never create an `okf/` child directory.
 
 The OKF conventions in `AGENTS.md` — page frontmatter, `index.md` link lists, the
 update log format, kebab-case slugs, bundle-absolute links, idempotency — apply
@@ -40,7 +41,7 @@ to everything you write here and are not restated below.
    writes**, capture a Merkle baseline and keep the listing:
 
    ```bash
-   merkleokf -L 1 ../okf
+   merkleokf -L 1 "$PWD"
    ```
 
    (Read the `merkle-okf` skill if you need the flags or how to read the table.)
@@ -61,7 +62,7 @@ to everything you write here and are not restated below.
 
 7. **Lint the result** and fix what it reports — see below. Do not declare the
    run finished before lint passes. **After lint is clean**, re-run
-   `merkleokf -L 1 ../okf`, compare to the step-3 baseline, and descend only where
+   `merkleokf -L 1 "$PWD"`, compare to the step-3 baseline, and descend only where
    hashes moved (see `merkle-okf`). Merkle confirms edits landed where intended;
    it does not prove correctness — lint remains the gate that must pass.
 

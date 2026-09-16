@@ -11,15 +11,15 @@ skill name is `size-okf`; the binary is `sizeokf` — never shell the skill id.
 ## Invocation
 
 ```bash
-sizeokf -L 1 ../okf          # words per category — start here
-sizeokf ../okf/<topic>       # then per page within one category
-sizeokf ../okf               # every file and folder (large)
+sizeokf -L 1 "$PWD"          # words per category — start here
+sizeokf "$PWD/<topic>"       # then per page within one category
+sizeokf "$PWD"               # every file and folder (large)
 ```
 
-- **Always name the wiki as `../okf`**, never `.`, even though the wiki is
-  your working directory. The CLI's own default (`okf/`) assumes you are one
-  level above the wiki, and `--nolog` below only takes effect when the path it
-  walks is a directory named `okf`. Any existing directory works.
+- **Always name the wiki as `"$PWD"`**. You are already in the wiki root; the
+  CLI's own default (`okf/`) is for host-side use and would select an invalid
+  nested `okf/` directory here. The absolute path also preserves the root name
+  that `--nolog` relies on. Any existing directory works.
 - `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
   `0` = walk root only). Default: unlimited. Folder **totals** are always
   recursive.

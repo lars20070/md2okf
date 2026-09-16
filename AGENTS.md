@@ -2,8 +2,8 @@
 
 > **Scope:** these are instructions for **development agents** working *on* this
 > repository (e.g. Claude Code) — how to build, lint, and validate it. They are
-> not Pi's task instructions. Pi runs inside the sandbox with the repo root as
-> its workspace and may read this file as a project document; if you are Pi, your
+> not Pi's task instructions. Pi runs inside the sandbox with `okf/` as its
+> workspace and cannot read this repository-level file; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
 > from `kits/md2okf/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
 > Host MCP (Context7 / GitHub in `.mcp.json`) is for Cursor/Claude on the host

@@ -63,6 +63,14 @@ check_exec() {
 # prose. That prose is the promise being tested here, so a tool installed but
 # not promised — or promised but not installed — is itself the bug.
 
+case "$(pwd -P)" in
+*/okf) echo "ok sandbox workspace is the wiki root" ;;
+*)
+	echo "BROKEN sandbox workspace is not the wiki root: $(pwd -P)"
+	failures=$((failures + 1))
+	;;
+esac
+
 # apt (kits/md2okf/spec.yaml). Ubuntu's `fd-find` package provides `fdfind`;
 # `rg` is the command provided by the `ripgrep` package.
 check curl
@@ -108,6 +116,14 @@ check_file "${HOME}/.pi/agent/skills/inspect-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/size-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/merkle-okf/SKILL.md"
 check_file "${HOME}/.local/lib/md2okf/mount-state.sh"
+
+if grep -R -F -q -- '../okf' "${HOME}/.pi/agent/AGENTS.md" \
+	"${HOME}/.pi/agent/skills"; then
+	echo "BROKEN Pi runtime instructions refer to the wiki as ../okf"
+	failures=$((failures + 1))
+else
+	echo "ok Pi runtime instructions use the workspace root"
+fi
 
 # Persistent Pi sessions. The stock path must remain a real directory and be
 # the same bind-mounted directory as the host-backed state target.

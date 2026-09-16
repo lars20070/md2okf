@@ -25,7 +25,7 @@ source "${repo_root}/scripts/lib/sandbox-mounts.sh"
 markdown_folder="${1:-md}"
 kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 # __DOCUMENT__ is replaced with the source path for each Pi run.
-compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki in your workspace."
+compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ directly into the workspace root. You are already in the OKF wiki; never create an okf/ child directory."
 # Appended to compile_prompt on Ralph loop iterations after the first, so Pi
 # knows it may be resuming unfinished work rather than starting the document
 # over from scratch.

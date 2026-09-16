@@ -12,14 +12,15 @@ skill id.
 ## Invocation
 
 ```bash
-inspectokf -L 1 ../okf       # top level only: the categories — start here
-inspectokf ../okf/<topic>    # then descend into the one category you need
-inspectokf ../okf            # every page: hundreds of lines — avoid opening with this
+inspectokf -L 1 "$PWD"          # top level only: the categories — start here
+inspectokf "$PWD/<topic>"       # then descend into the one category you need
+inspectokf "$PWD"               # every page: hundreds of lines — avoid opening with this
 ```
 
-- **Always name the wiki as `../okf`**, never `.`, even though the wiki is your
-  working directory: the CLI's own default (`okf/`) assumes you are one level
-  above it. Any existing directory works, typically a wiki subfolder.
+- **Always name the wiki as `"$PWD"`**. You are already in the wiki root; the
+  CLI's own default (`okf/`) is for host-side use and would select an invalid
+  nested `okf/` directory here. Any existing directory works, typically a wiki
+  subfolder.
 - `-L`/`--level N` descends at most `N` directory levels (`N` ≥ 1). Default:
   unlimited.
 - Output is the `tree` listing of that path. An empty or dotfile-only directory

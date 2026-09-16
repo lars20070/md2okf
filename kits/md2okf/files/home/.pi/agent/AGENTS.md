@@ -58,6 +58,8 @@ these instructions.
 - Your workspace — the wiki root you start in — is your **only** writable
   output. Create and update wiki pages there. Paths in this file are relative
   to it, so the root index is `index.md`, not `okf/index.md`.
+- Never create an `okf/` directory inside your workspace. You are already in
+  `okf/`; a child `okf/` would create an invalid nested wiki.
 
 ## OKF wiki conventions
 
