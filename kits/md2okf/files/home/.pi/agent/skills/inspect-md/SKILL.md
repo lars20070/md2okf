@@ -1,20 +1,21 @@
 ---
 name: inspect-md
-description: Map headings in a long Markdown source under md/ before reading it in ranges. Use when a source is too large to pull into one call.
+description: Map headings in a long Markdown source under ../md/ before reading it in ranges. Use when a source is too large to pull into one call.
 ---
 
 # Map a long Markdown source with `inspectmd`
 
-Use the `inspectmd` CLI (on `PATH`) to plan ranged reads of a file under `md/`.
+Use the `inspectmd` CLI (on `PATH`) to plan ranged reads of a file under
+`../md/`.
 The skill name is `inspect-md`; the binary is `inspectmd` — never shell the
 skill id.
 
 ## Invocation
 
 ```bash
-inspectmd md/<document>.md
-inspectmd -L 2 md/<document>.md
-inspectmd --section N md/<document>.md
+inspectmd ../md/<document>.md
+inspectmd -L 2 ../md/<document>.md
+inspectmd --section N ../md/<document>.md
 ```
 
 - Requires a Markdown **file** path (not a directory).
@@ -28,9 +29,9 @@ inspectmd --section N md/<document>.md
 Map → cut → read. Do **not** treat `-L` as a directory depth (that is the wiki
 tools).
 
-1. Run `inspectmd -L 2 md/<document>.md` (or without `-L` if you need deeper
+1. Run `inspectmd -L 2 ../md/<document>.md` (or without `-L` if you need deeper
    headings).
-2. Pick a section `Index`, then `inspectmd --section N md/<document>.md`.
+2. Pick a section `Index`, then `inspectmd --section N ../md/<document>.md`.
 3. Ranged-read that line span — never pull a whole book into one call.
 
 ## Reading the output

@@ -5,23 +5,26 @@ description: Measure how much Markdown prose a page or category holds, excluding
 
 # Measure wiki content with `sizeokf`
 
-Use the `sizeokf` CLI (on `PATH`) to count content words under `okf/`. The
+Use the `sizeokf` CLI (on `PATH`) to count content words in the wiki. The
 skill name is `size-okf`; the binary is `sizeokf` — never shell the skill id.
 
 ## Invocation
 
 ```bash
-sizeokf -L 1             # words per category — start here
-sizeokf okf/<topic>      # then per page within one category
-sizeokf                  # every file and folder (large)
+sizeokf -L 1 ../okf          # words per category — start here
+sizeokf ../okf/<topic>       # then per page within one category
+sizeokf ../okf               # every file and folder (large)
 ```
 
-- Default path: `okf/`. Pass any existing directory.
+- **Always name the wiki as `../okf`**, never `.`, even though the wiki is
+  your working directory. The CLI's own default (`okf/`) assumes you are one
+  level above the wiki, and `--nolog` below only takes effect when the path it
+  walks is a directory named `okf`. Any existing directory works.
 - `-L`/`--level N` lists entries at most `N` directory levels deep (`N` ≥ 0;
   `0` = walk root only). Default: unlimited. Folder **totals** are always
   recursive.
-- `--nolog` omits `okf/log.md` from the listing and totals (nested `log.md`
-  still counted).
+- `--nolog` omits the wiki's root `log.md` from the listing and totals (nested
+  `log.md` still counted).
 - Exit codes: `0` ok, `2` usage or runtime error.
 
 ## Workflow

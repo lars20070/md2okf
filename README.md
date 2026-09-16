@@ -156,6 +156,30 @@ it finishes, and `SPEC.md` outranks every instruction file. Each run streams
 tool names and assistant text as it goes, and writes a session transcript under
 `logs/sessions/`.
 
+### What the sandbox can reach
+
+The sandbox does not get the repository. It gets five named mounts, and nothing
+else of yours is visible inside the microVM — not `.git`, not the `Makefile`,
+not the kit that built it:
+
+| Mount | Access | Why |
+| --- | --- | --- |
+| `okf/` | read-write | the wiki, and the agent's working directory |
+| `md/` | read-only | source documents, read as data and never modified |
+| `scripts/` | read-only | the four helper CLI projects the agent runs |
+| `SPEC.md` | read-only | the specification that outranks every instruction |
+| `logs/sessions/` | read-write | where the session transcript is written |
+
+So "the agent's only writable output is `okf/`" is a property of the
+filesystem, not a promise in an instruction file. The mount list lives in one
+place, [`scripts/lib/sandbox-mounts.sh`](scripts/lib/sandbox-mounts.sh), shared
+by every script that creates the sandbox; `sbx inspect md2okf` shows what a
+running sandbox actually got. Because `okf/` is the primary mount it is also
+the working directory inside the VM, which is why the agent addresses its
+siblings as `../md/`, `../scripts/` and `../SPEC.md`. Changing the mounts
+requires a new sandbox — `make wiki` builds one every time, or run
+`sbx rm --force md2okf` first.
+
 ### Repository layout
 
 | Path | Description |
@@ -163,7 +187,7 @@ tool names and assistant text as it goes, and writes a session transcript under
 | `md/` | source documents, one agent run each |
 | `okf/` | the generated wiki |
 | `Makefile` | every task worth running; `make wiki` compiles |
-| `scripts/` | what the Makefile or the agent call — compile, sandbox shell, sbx kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
+| `scripts/` | what the Makefile or the agent call — compile, sandbox shell, sbx kit validation, the sandbox mount list, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
 | `kits/md2okf/` | what the scripts run: the Docker Sandbox kit and the config it carries |
 | `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) the wiki is built against |
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |

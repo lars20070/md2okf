@@ -1,22 +1,25 @@
 ---
 name: inspect-okf
-description: Survey what the OKF wiki already contains before writing. Use when choosing where to place or update pages under okf/.
+description: Survey what the OKF wiki already contains before writing. Use when choosing where to place or update wiki pages.
 ---
 
 # Survey the wiki with `inspectokf`
 
-Use the `inspectokf` CLI (on `PATH`) to see what exists under `okf/`. The skill
-name is `inspect-okf`; the binary is `inspectokf` — never shell the skill id.
+Use the `inspectokf` CLI (on `PATH`) to see what the wiki already holds. The
+skill name is `inspect-okf`; the binary is `inspectokf` — never shell the
+skill id.
 
 ## Invocation
 
 ```bash
-inspectokf -L 1          # top level only: the categories — start here
-inspectokf okf/<topic>   # then descend into the one category you need
-inspectokf               # every page: hundreds of lines — avoid opening with this
+inspectokf -L 1 ../okf       # top level only: the categories — start here
+inspectokf ../okf/<topic>    # then descend into the one category you need
+inspectokf ../okf            # every page: hundreds of lines — avoid opening with this
 ```
 
-- Default path: `okf/`. Pass any existing directory (typically a wiki subfolder).
+- **Always name the wiki as `../okf`**, never `.`, even though the wiki is your
+  working directory: the CLI's own default (`okf/`) assumes you are one level
+  above it. Any existing directory works, typically a wiki subfolder.
 - `-L`/`--level N` descends at most `N` directory levels (`N` ≥ 1). Default:
   unlimited.
 - Output is the `tree` listing of that path. An empty or dotfile-only directory

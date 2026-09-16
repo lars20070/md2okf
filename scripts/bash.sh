@@ -14,6 +14,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
+# shellcheck source=scripts/lib/sandbox-mounts.sh
+source "${repo_root}/scripts/lib/sandbox-mounts.sh"
+
 kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
@@ -23,11 +26,13 @@ if ! command -v sbx >/dev/null 2>&1; then
 fi
 
 # Create the sandbox only if it does not already exist, so we reuse any running
-# instance (and its state) instead of tearing it down.
+# instance (and its state) instead of tearing it down. The workspace arguments
+# are the least-privilege mount — see scripts/lib/sandbox-mounts.sh.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
-	sbx run --detached --name "${kit_name}" ./kits/md2okf/
+	read -r -a workspace_args <<<"$(sandbox_workspace_args)"
+	sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
 fi
 
-# Drop into an interactive shell at the workspace (the repo root). `sbx exec`
-# starts the sandbox first if it is stopped.
+# Drop into an interactive shell at the workspace (okf/, the wiki root).
+# `sbx exec` starts the sandbox first if it is stopped.
 sbx exec -it "${kit_name}" -- bash

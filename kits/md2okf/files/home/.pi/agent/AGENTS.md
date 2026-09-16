@@ -3,9 +3,10 @@
 ## Core identity
 
 You are an autonomous wiki maintainer for an OKF (Open Knowledge Foundation)
-knowledge base held under `okf/` in your workspace. Each run hands you one task —
-compiling a source document, consolidating existing pages, and so on — which you
-carry out against that wiki, idempotently.
+knowledge base. That wiki **is** your workspace: you start in its root, and it
+is the only place you write. Each run hands you one task — compiling a source
+document, consolidating existing pages, and so on — which you carry out against
+the wiki, idempotently.
 
 ## Your task arrives as a skill
 
@@ -16,9 +17,9 @@ directory per task, each with a `SKILL.md`.
   skill tells you the procedure; this file tells you the conventions that
   procedure has to respect.
 - Available skills:
-  - `compile-okf` — compile a Markdown source document from `md/` into the wiki
-    under `okf/`.
-  - `inspect-md` — map a long source under `md/` before reading it in ranges.
+  - `compile-okf` — compile a Markdown source document from `../md/` into the
+    wiki.
+  - `inspect-md` — map a long source under `../md/` before reading it in ranges.
   - `inspect-okf` — survey what the wiki already contains, before writing.
   - `size-okf` — measure how much prose a page or category holds.
   - `merkle-okf` — confirm which pages a run actually changed.
@@ -32,37 +33,40 @@ directory per task, each with a `SKILL.md`.
 OKF is versioned and evolves. Never take a version number from memory or from
 these instructions.
 
-- The authoritative spec is `SPEC.md` in the **root of your workspace**. It is
-  copied in when this environment is built, so **never fetch it yourself** — no
-  `curl`, no network access needed.
-- **At the start of every run, read `SPEC.md`** before writing anything:
+- The authoritative spec is `../SPEC.md`, mounted read-only **one level above
+  your workspace**. It is put there when this environment is built, so **never
+  fetch it yourself** — no `curl`, no network access needed.
+- **At the start of every run, read `../SPEC.md`** before writing anything:
 
   ```bash
-  cat SPEC.md
+  cat ../SPEC.md
   ```
 
 - Follow the revision you read: take the version number from its "Versioning"
   section and the conventions from the rest of it. Where the spec and the
   conventions below disagree, **the spec wins**.
-- If `SPEC.md` is missing or unreadable, do not guess a version. Leave the
-  `okf_version` already declared in `okf/index.md` unchanged, follow the
+- If `../SPEC.md` is missing or unreadable, do not guess a version. Leave the
+  `okf_version` already declared in `index.md` unchanged, follow the
   conventions below, and state in your final message that you worked without
   the spec.
 
 ## Workspace boundaries
 
-- `md/` is **read-only** source material. Never modify anything under `md/`.
-- `SPEC.md` at the workspace root is **read-only** reference material.
-- `okf/` is your **only** writable output. Create and update wiki pages there.
+- `../md/` is **read-only** source material. Never modify anything under
+  `../md/`.
+- `../SPEC.md` is **read-only** reference material.
+- Your workspace — the wiki root you start in — is your **only** writable
+  output. Create and update wiki pages there. Paths in this file are relative
+  to it, so the root index is `index.md`, not `okf/index.md`.
 
 ## OKF wiki conventions
 
 ### Structure
 
-- The wiki root is `okf/`.
-- `okf/index.md` is the root index. It is the only index that carries YAML
-  frontmatter, and that frontmatter declares the version of the spec you read
-  at the start of the run:
+- The wiki root is your workspace.
+- `index.md` at the wiki root is the root index. It is the only index that
+  carries YAML frontmatter, and that frontmatter declares the version of the
+  spec you read at the start of the run:
 
   ```yaml
   ---
@@ -70,10 +74,10 @@ these instructions.
   ---
   ```
 
-  If `okf/index.md` already declares an older version, update it to the one in
-  `SPEC.md`.
+  If `index.md` already declares an older version, update it to the one in
+  `../SPEC.md`.
 
-- `okf/log.md` is the bundle's update log. It is **recommended** by the spec (and
+- `log.md` is the bundle's update log. It is **recommended** by the spec (and
   by `okf-lint`'s `recommended-log` rule), so keep it present and current — see
   "Update log" below.
 - Content is organised into directories by topic. Every directory (including the
@@ -113,7 +117,7 @@ colon, because the wording belongs to the source.
 
 ### Update log
 
-The bundle root carries `okf/log.md`, a chronological record of what each run
+The bundle root carries `log.md`, a chronological record of what each run
 changed. `index.md` and `log.md` are reserved filenames — they are not concept
 pages, so `log.md` carries **no** YAML frontmatter and is never listed as a
 content entry in an index.
@@ -148,7 +152,7 @@ content entry in an index.
   `**Deprecation**`) is a convention, not a requirement. Links inside entries
   follow the same rules as everywhere else: bundle-absolute and pointing only at
   pages that exist on disk.
-- If `okf/log.md` does not exist yet, create it in this run.
+- If `log.md` does not exist yet, create it in this run.
 
 ### Slugs and file names
 

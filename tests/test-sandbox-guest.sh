@@ -1,8 +1,9 @@
 #!/bin/sh
 
-# Runs INSIDE the md2okf sandbox, launched by tests/test-sandbox.sh through
-# `sbx exec ... sh -lc`. Run on the host it would happily report on your laptop's
-# toolchain instead, which proves nothing.
+# Runs INSIDE the md2okf sandbox, piped into `sbx exec ... sh -l -s` by
+# tests/test-sandbox.sh (tests/ is not mounted, so this file cannot be named as
+# a path inside the VM). Run on the host it would happily report on your
+# laptop's toolchain instead, which proves nothing.
 #
 # POSIX sh, not bash: the guest shell is `sh`, so the `#!/bin/sh` shebang above
 # is what makes shellcheck reject a bashism here rather than leaving it to fail

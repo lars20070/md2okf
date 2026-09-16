@@ -15,6 +15,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
+# shellcheck source=scripts/lib/sandbox-mounts.sh
+source "${repo_root}/scripts/lib/sandbox-mounts.sh"
+
 kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
@@ -23,14 +26,18 @@ if ! command -v sbx >/dev/null 2>&1; then
 	exit 1
 fi
 
+# The workspace arguments are the least-privilege mount — see
+# scripts/lib/sandbox-mounts.sh.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
 	echo "No ${kit_name} sandbox found — creating one (this takes minutes)."
-	sbx run --detached --name "${kit_name}" ./kits/md2okf/
+	read -r -a workspace_args <<<"$(sandbox_workspace_args)"
+	sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
 fi
 
-# `sh -lc` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm
-# globals in the user prefix, neither of which is on a non-login PATH. The
-# relative path resolves because `sbx exec` runs with the repo root as its cwd.
-# `</dev/null` stops the guest blocking on an stdin pipe that never reaches EOF
-# (scripts/compile-okf.sh:42-46).
-sbx exec "${kit_name}" -- sh -lc './tests/test-sandbox-guest.sh' </dev/null
+# `sh -l` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm
+# globals in the user prefix, neither of which is on a non-login PATH. `-s`
+# reads the script from stdin, because tests/ is not one of the sandbox's
+# mounts and so cannot be named as a path inside the VM. Feeding stdin from
+# the file also closes it at EOF, which is what stops the guest blocking on a
+# pipe that never ends (scripts/compile-okf.sh:61-65).
+sbx exec "${kit_name}" -- sh -l -s <"${repo_root}/tests/test-sandbox-guest.sh"

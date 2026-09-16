@@ -4,7 +4,7 @@ set -euo pipefail
 # Lint an OKF wiki bundle with okf-lint (https://github.com/thisismydesign/okf-lint).
 #
 # Usage: lint-okf.sh [bundle]
-#   bundle  wiki root to lint (default: ./okf, relative to the workspace)
+#   bundle  wiki root to lint (default: ., the workspace, which IS the wiki root)
 #
 # Rule severities come from <bundle>/.okflintrc.json — never edit that file.
 # okf-lint's output and exit code are passed through unchanged:
@@ -12,7 +12,7 @@ set -euo pipefail
 #   1  errors, or the warning threshold exceeded
 #   2  usage or runtime error (bad path, or okf-lint not installed)
 
-bundle="${1:-./okf}"
+bundle="${1:-.}"
 
 if ! command -v okf-lint >/dev/null 2>&1; then
 	echo "Error: 'okf-lint' not found in PATH." >&2

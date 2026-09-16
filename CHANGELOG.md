@@ -10,6 +10,16 @@ and this project adheres to
 
 ### Changed
 
+- Mount only what the agent needs into the sandbox, instead of the whole
+  repository read-write: `okf/` and `logs/sessions/` read-write, and `md/`,
+  `scripts/` and `SPEC.md` read-only. Nothing else in the repository is visible
+  inside the microVM, so the agent's restriction to `okf/` is now enforced by
+  the filesystem rather than by instructions alone. The mount list lives in
+  `scripts/lib/sandbox-mounts.sh`, shared by every script that creates the
+  sandbox.
+- `okf/` is the primary mount and therefore the working directory inside the
+  VM, so the agent's config and the `compile-okf` lint wrapper now address the
+  read-only mounts as `../md/`, `../scripts/` and `../SPEC.md`.
 - Move the Docker Sandbox kit from `pi/` to `kits/md2okf/`. Scripts, tests, and
   docs now point at `./kits/md2okf/`.
 - Bump the documented minimum `sbx` version from 0.42.0 to 0.43.0.

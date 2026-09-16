@@ -19,8 +19,21 @@ agentInstructions:
   filename: AGENTS.md
   content: |
     ## Sandbox environment
-    You are Pi running inside a Docker Sandbox microVM. The user's project is
-    mounted as your workspace, and edits apply directly to the host working tree.
+    You are Pi running inside a Docker Sandbox microVM. Your workspace is the
+    OKF wiki itself, mounted read-write, and edits apply directly to the host
+    working tree. Four more host paths are mounted beside it:
+
+    - `../md/` — read-only source documents
+    - `../scripts/` — read-only, the projects behind the CLIs listed below
+    - `../SPEC.md` — read-only, the OKF specification
+    - `../logs/sessions/` — writable, where your session transcript is kept
+
+    Nothing else from the user's project is mounted, so no other file of theirs
+    is visible or reachable — not the repository, not its history, not its
+    configuration. A write anywhere outside the wiki and the transcript
+    directory either fails or lands in the VM's own filesystem and is lost when
+    the sandbox is removed.
+
     `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
     it with `sbx policy allow network "<host>"`.
 
@@ -190,7 +203,9 @@ setup:
       description: Make compile-okf lint script executable
 
   # Workspace is not mounted during setup.install, so the CLIs are shims that
-  # resolve from ${WORKDIR} at invoke time (always tracks the tree).
+  # resolve from ${WORKDIR} — the workspace path — rather than from a copy
+  # (always tracks the tree). ${WORKDIR} is the wiki, and the projects sit in
+  # the scripts/ mount beside it, hence the dirname.
   files:
     - path: /home/agent/.local/bin/inspectmd
       mode: "0755"
@@ -198,7 +213,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/scripts/inspectmd" inspectmd "$@"
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectmd" inspectmd "$@"
 
     - path: /home/agent/.local/bin/inspectokf
       mode: "0755"
@@ -206,7 +221,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/scripts/inspectokf" inspectokf "$@"
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectokf" inspectokf "$@"
 
     - path: /home/agent/.local/bin/sizeokf
       mode: "0755"
@@ -214,7 +229,7 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/scripts/sizeokf" sizeokf "$@"
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/sizeokf" sizeokf "$@"
 
     - path: /home/agent/.local/bin/merkleokf
       mode: "0755"
@@ -222,4 +237,4 @@ setup:
       content: |
         #!/bin/sh
         set -eu
-        exec uv tool run --from "${WORKDIR}/scripts/merkleokf" merkleokf "$@"
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/merkleokf" merkleokf "$@"
