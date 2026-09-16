@@ -31,7 +31,6 @@ migration.
 Introduce these non-secret environment variables in every sandbox:
 
 ```text
-MD2OKF_WORKSPACE_LAYOUT=2
 MD2OKF_SOURCE_DIR=<absolute mounted source directory>
 MD2OKF_OKF_DIR=<absolute mounted okf directory>
 MD2OKF_SPEC_FILE=<absolute mounted SPEC.md path>
@@ -76,14 +75,10 @@ It will:
 - Pass the full environment-variable contract and ordered workspace list.
 - Support both "create if absent" and "remove then create" behavior without
   duplicating mount definitions.
-- Mark new sandboxes with `MD2OKF_WORKSPACE_LAYOUT=2`.
-- Refuse to reuse an existing sandbox without that marker and print the exact
-  migration command, `sbx rm --force md2okf`, rather than silently reusing the
-  old broad mount.
 
 Update `compile-okf.sh` to recreate the sandbox through this library, as it does
-today. Update `bash.sh`, `pi.sh`, and `test-sandbox.sh` to create or validate it
-through the same library.
+today. Update `bash.sh`, `pi.sh`, and `test-sandbox.sh` to create it through the
+same library when it is absent.
 
 ### Stage 2 — Remove repository-root assumptions inside the VM
 
@@ -139,7 +134,7 @@ Do not write probes into read-only mounts. Use permission tests there and, if an
 actual write probe is needed for output mounts, create a uniquely named
 temporary file and remove only that exact file.
 
-### Stage 4 — Documentation and compatibility
+### Stage 4 — Documentation
 
 Update the README, contributor guide, repository agent instructions, kit guide,
 and changelog to document:
@@ -147,8 +142,6 @@ and changelog to document:
 - The least-privilege mount table.
 - The new `okf/` interactive working directory.
 - Persistent transcripts as a separate writable output.
-- The one-time removal required for sandboxes created with the old
-  repository-wide mount.
 - The source-directory restriction.
 - How to inspect the effective mount list with `sbx inspect md2okf`.
 - That changes to mounts require sandbox recreation.
@@ -194,6 +187,8 @@ edits and use a freshly recreated sandbox for the conclusive runtime test.
 
 ## Assumptions
 
+- All sandboxes created with the old repository-wide mount will be discarded
+  and rebuilt; no backward-compatibility detection or migration path is needed.
 - The full sandbox kit remains a `kind: sandbox`; no `sbxenv.yaml` or mixin
   conversion is included.
 - Session transcripts remain a supported output and therefore receive their own
