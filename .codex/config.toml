@@ -1,0 +1,14 @@
+# Project configuration: https://developers.openai.com/codex/config-basic/
+# Codex loads this file after the project is trusted and reads ../AGENTS.md.
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@4.0.0"]
+
+# Requires github-mcp-server on PATH. Before starting Codex, export
+# GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN" if using the other agents' token.
+# Codex forwards the variable; it does not expand variables in TOML env values.
+[mcp_servers.github]
+command = "github-mcp-server"
+args = ["stdio"]
+env_vars = ["GITHUB_PERSONAL_ACCESS_TOKEN"]
