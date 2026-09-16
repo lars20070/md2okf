@@ -63,8 +63,10 @@ check_exec() {
 # prose. That prose is the promise being tested here, so a tool installed but
 # not promised — or promised but not installed — is itself the bug.
 
-# apt (kits/md2okf/spec.yaml). `rg` is the command; `ripgrep` is the package.
+# apt (kits/md2okf/spec.yaml). Ubuntu's `fd-find` package provides `fdfind`;
+# `rg` is the command provided by the `ripgrep` package.
 check curl
+check fdfind
 check jq
 check python3
 check rg

@@ -54,7 +54,8 @@ agentInstructions:
     ## Installed tools
     These commands are on PATH. Use them; do not reinstall them.
 
-    - `curl`, `jq`, `python3`, `rg` (ripgrep), `shellcheck`, `tree`
+    - `curl`, `fdfind` (fd; Ubuntu package `fd-find`), `jq`, `python3`,
+      `rg` (ripgrep), `shellcheck`, `tree`
     - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
@@ -121,6 +122,7 @@ setup:
         apt-get update
         apt-get install -y \
           curl \
+          fd-find \
           jq \
           python3 \
           ripgrep \
