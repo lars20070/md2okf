@@ -25,6 +25,7 @@
     "OpenRouter",
     "Ollama",
     "sbx",
+    "sbxenv",
     "npmjs",
     "maxsockets",
     "earendil",
