@@ -12,6 +12,7 @@ and this project adheres to
 
 - Move the Docker Sandbox kit from `pi/` to `kits/md2okf/`. Scripts, tests, and
   docs now point at `./kits/md2okf/`.
+- Bump the documented minimum `sbx` version from 0.42.0 to 0.43.0.
 
 ### Fixed
 

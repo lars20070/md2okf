@@ -36,7 +36,7 @@ Touch anything under `kits/md2okf/` or `scripts/*.sh` and run `make validate`
 before you call the job done. It checks the kit spec against the schema bundled
 in your `sbx` binary, and needs no Docker, no login and no network. CI runs the
 same check in its `validate-kit` job, so catching a break locally saves a red
-build. The current kit requires sbx 0.42.0 or newer; `brew upgrade sbx` fixes
+build. The current kit requires sbx 0.43.0 or newer; `brew upgrade sbx` fixes
 unknown field errors from an older install.
 
 `make test-sandbox` asks the other question: does the sandbox actually have
