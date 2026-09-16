@@ -1,5 +1,7 @@
 config:
   MD013: false  # line-length: disable line length checks
+  MD024:
+    siblings_only: true  # Keep a Changelog repeats Added/Changed/Fixed per release
   MD026: false  # Trailing punctuation in heading: disable trailing punctuation checks
 
 ignores:

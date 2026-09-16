@@ -89,8 +89,8 @@ jobs:
       - name: Test (pytest)
         run: make test-clis
 
-  # Validate pi/spec.yaml against the current Sandbox Kit schema. Static check —
-  # no Docker or login; only the CLI download needs the network.
+  # Validate kits/md2okf/spec.yaml against the current Sandbox Kit schema.
+  # Static check — no Docker or login; only the CLI download needs the network.
   validate-kit:
     runs-on: ubuntu-latest
     timeout-minutes: 10

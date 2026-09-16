@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- Move the Docker Sandbox kit from `pi/` to `kits/md2okf/`. Scripts, tests, and
+  docs now point at `./kits/md2okf/`.
+
+### Fixed
+
+- Ensure `lint-okf.sh` is executable after kit setup (`chmod` in
+  `kits/md2okf/spec.yaml`), so `make test-sandbox` passes when the static
+  `files/home/` copy drops the exec bit.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added

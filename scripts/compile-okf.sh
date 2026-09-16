@@ -10,17 +10,17 @@ set -euo pipefail
 # Env: RALPH_MAX  max Pi iterations per document when the wiki hash keeps
 #                 changing (default: 10)
 #
-# Model and provider come from the kit's own config (pi/files/home/.pi/agent/
-# settings.json + models.json), delivered to ~/.pi/agent/ in the VM — no
-# --provider/--model flags here. OPENROUTER_API_KEY is proxy-managed by sbx
-# (configured once via `sbx secret`, see README), so it is NOT required in the
-# host environment.
+# Model and provider come from the kit's own config
+# (kits/md2okf/files/home/.pi/agent/settings.json + models.json), delivered to
+# ~/.pi/agent/ in the VM — no --provider/--model flags here.
+# OPENROUTER_API_KEY is proxy-managed by sbx (configured once via `sbx secret`,
+# see README), so it is NOT required in the host environment.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
 markdown_folder="${1:-md}"
-kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
+kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 # __DOCUMENT__ is replaced with the source path for each Pi run.
 compile_prompt="Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, then follow it to compile __DOCUMENT__ into the OKF wiki under okf/."
 # Appended to compile_prompt on Ralph loop iterations after the first, so Pi
@@ -42,7 +42,7 @@ fi
 # Recreate the sandbox so the latest kit changes and secrets are applied, then
 # leave it running (detached) so we can exec one Pi run per document into it.
 sbx rm --force "${kit_name}" || true
-sbx run --detached --name "${kit_name}" ./pi/
+sbx run --detached --name "${kit_name}" ./kits/md2okf/
 
 # Compile each document into okf/. Verified: `sbx exec` runs with the VM
 # workspace (the repo root) as its cwd, so a host path md/<...>.md is the same

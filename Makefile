@@ -1,13 +1,13 @@
 # md2okf — developer task runner.
 #
-# Pi runs in one runtime: the Docker Sandbox (sbx) kit under pi/, which owns the
-# only copy of the agent config (see AGENTS.md).
+# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/md2okf/, which
+# owns the only copy of the agent config (see AGENTS.md).
 #
 # Tool overrides (defaults suit local dev; CI overrides only MARKDOWNLINT):
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (pi/spec.yaml).
+#                 project; the pin matches the sandbox (kits/md2okf/spec.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
@@ -112,7 +112,7 @@ install-clis:
 	uv tool install --force ./scripts/merkleokf
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
-# key that pi/spec.yaml promises.
+# key that kits/md2okf/spec.yaml promises.
 test-sandbox:
 	./tests/test-sandbox.sh
 

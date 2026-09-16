@@ -27,7 +27,7 @@ flowchart LR
     SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
     MD@{ shape: docs, label: "md/*.md<br/>source documents"}
     DRV["make wiki<br/>scripts/compile-okf.sh"]
-    KIT["pi/spec.yaml<br/>pi/files/"]
+    KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
 
   subgraph VM["sbx microVM"]
@@ -144,7 +144,7 @@ hash of the output stops moving. The host drives; everything else happens inside
 the sandbox.
 
 `make wiki` throws the old sandbox away and builds a fresh one, so the current
-kit — the `pi/` directory that declares the sandbox image, its network
+kit — the `kits/md2okf/` directory that declares the sandbox image, its network
 allowlist and the agent's config — always applies. It then runs the agent once
 per `md/*.md` file, re-running the same document (a *Ralph loop*) until
 `merkleokf --nolog -L 0` reports an unchanged wiki root hash. `merkleokf` prints
@@ -164,7 +164,7 @@ tool names and assistant text as it goes, and writes a session transcript under
 | `okf/` | the generated wiki |
 | `Makefile` | every task worth running; `make wiki` compiles |
 | `scripts/` | what the Makefile or the agent call — compile, sandbox shell, sbx kit validation, and the four helper CLIs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`) |
-| `pi/` | what the scripts run: the Docker Sandbox kit and the config it carries |
+| `kits/md2okf/` | what the scripts run: the Docker Sandbox kit and the config it carries |
 | `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) the wiki is built against |
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
@@ -221,14 +221,14 @@ sbx secret set-custom --sandbox md2okf \
   --value "$OPENROUTER_API_KEY"
 ```
 
-`md2okf` is the kit's name, which comes from `pi/spec.yaml`. `make wiki` reads
-the key from `sbx secret`, never from your shell environment. To point the agent
-at a different provider, see [the pi kit guide](pi/README.md).
+`md2okf` is the kit's name, which comes from `kits/md2okf/spec.yaml`. `make wiki`
+reads the key from `sbx secret`, never from your shell environment. To point the
+agent at a different provider, see [the kit guide](kits/md2okf/README.md).
 
 ## Troubleshooting
 
-**`sbx` reports unknown fields from `pi/spec.yaml`.** Your sbx is older than
-0.42.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
+**`sbx` reports unknown fields from `kits/md2okf/spec.yaml`.** Your sbx is older
+than 0.42.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
 
 **A runtime command fails to authenticate.** `make wiki`, `make test-sandbox`,
 `./scripts/bash.sh` and `./scripts/pi.sh` need an active `sbx login` session.

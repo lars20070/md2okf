@@ -5,7 +5,7 @@
 > not Pi's task instructions. Pi runs inside the sandbox with the repo root as
 > its workspace and may read this file as a project document; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
-> from `pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
+> from `kits/md2okf/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
 > Host MCP (Context7 / GitHub in `.mcp.json`) is for Cursor/Claude on the host
 > only. Sandbox Pi gets Context7 through the native `@upstash/context7-pi`
 > package installed by the kit, not via MCP.
@@ -71,9 +71,10 @@ sandbox exposes `merkleokf` through the same `setup.files` shim. Own
 Host install for these four CLIs is `make install-clis`; run `make test-clis`
 after touching any of them.
 
-Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `pi/`. Its spec is
-`pi/spec.yaml` and its Pi config (`AGENTS.md`, `settings.json`, `models.json`,
-`skills/`) lives in `pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
+Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `kits/md2okf/`.
+Its spec is `kits/md2okf/spec.yaml` and its Pi config (`AGENTS.md`,
+`settings.json`, `models.json`, `skills/`) lives in
+`kits/md2okf/files/home/.pi/agent/`. The agent has `bash`, so it lints
 its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
 only land in a fresh sandbox — which `make wiki` always builds. The `files/`
@@ -101,7 +102,7 @@ make validate            # validate the sandbox kit spec (runs scripts/validate-
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
 make install-clis        # uv tool install the four host CLIs onto PATH
-make test-sandbox        # check the sandbox delivers what pi/spec.yaml promises
+make test-sandbox        # check the sandbox delivers what kits/md2okf/spec.yaml promises
 make scrape              # fetch the website into md/ as one file (web2md)
 make wiki                # compile the OKF wiki via the sandbox runtime
 make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
@@ -132,14 +133,14 @@ a notes-only GitHub Release from the matching `CHANGELOG.md` section. See
 
 ## Always validate the sandbox kit spec before finishing
 
-Whenever you change anything under `pi/` or `scripts/*.sh`, you MUST validate the Pi
+Whenever you change anything under `kits/md2okf/` or `scripts/*.sh`, you MUST validate the Pi
 Sandbox Kit spec before considering the task complete:
 
 ```bash
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks `pi/spec.yaml` against the current Sandbox Kit schema (a
+This checks `kits/md2okf/spec.yaml` against the current Sandbox Kit schema (a
 static schema check — no Docker, login, or network required). The same check runs
 in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
@@ -147,7 +148,7 @@ is not installed, install it with `brew install docker/tap/sbx`. If validation
 reports unknown fields, upgrade an older installation with `brew upgrade sbx`.
 
 `make validate` only checks the spec statically. If you changed what the sandbox
-installs or what it carries in `pi/files/`, also run `sbx rm --force md2okf &&
+installs or what it carries in `kits/md2okf/files/`, also run `sbx rm --force md2okf &&
 make test-sandbox` — on its own `make test-sandbox` reuses whatever sandbox
 is running, which may predate your edit.
 

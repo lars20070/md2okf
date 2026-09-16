@@ -14,7 +14,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-kit_name="md2okf" # keyed to `name:` in pi/spec.yaml and to sbx secrets
+kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
@@ -25,7 +25,7 @@ fi
 # Create the sandbox only if it does not already exist, so we reuse any running
 # instance (and its state) instead of tearing it down.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
-	sbx run --detached --name "${kit_name}" ./pi/
+	sbx run --detached --name "${kit_name}" ./kits/md2okf/
 fi
 
 # Drop into interactive Pi at the workspace (the repo root). `sbx exec` starts

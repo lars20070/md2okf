@@ -184,6 +184,11 @@ setup:
       user: "1000"
       description: Install Context7 Pi extension
 
+    # Static files/home/ copies do not reliably preserve the git 100755 bit;
+    # set it explicitly so the compile-okf skill can invoke the wrapper.
+    - command: chmod 0755 /home/agent/.pi/agent/skills/compile-okf/scripts/lint-okf.sh
+      description: Make compile-okf lint script executable
+
   # Workspace is not mounted during setup.install, so the CLIs are shims that
   # resolve from ${WORKDIR} at invoke time (always tracks the tree).
   files:

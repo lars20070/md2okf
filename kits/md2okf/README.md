@@ -1,4 +1,4 @@
-# pi
+# kits/md2okf
 
 The Docker Sandbox kit that runs Pi. `spec.yaml` declares the image, the network
 allowlist, the credentials and the two pinned installs. Everything under
