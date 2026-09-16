@@ -89,9 +89,9 @@ skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`, `size-okf`
 `context7-docs`, installed by the kit via `@upstash/context7-pi`. A new task gets
 a new skill, not more rules in `AGENTS.md`.
 
-`tests/` holds shell tests for that sandbox, in pairs: a host-side script
-(`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`
-script it runs inside the VM (`test-sandbox-guest.sh`).
+`tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which owns the
+sandbox and calls `sbx`, and the POSIX `sh` script it runs inside the VM), plus
+host-side shell tests for state mount selection and bind relocation.
 
 ## Commands
 
@@ -99,6 +99,7 @@ script it runs inside the VM (`test-sandbox-guest.sh`).
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION ↔ CHANGELOG.md agreement
 make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
+make test-shell          # host tests for sandbox state mounts
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
 make install-clis        # uv tool install the four host CLIs onto PATH

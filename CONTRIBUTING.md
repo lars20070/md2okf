@@ -12,6 +12,7 @@ you only want to compile a wiki, [the README](README.md) is enough.
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION â†” CHANGELOG.md agreement
 make validate            # check kits/md2okf/spec.yaml against the Sandbox Kit schema
+make test-shell          # host tests for sandbox state mounts
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
 make install-clis        # install the four host CLIs onto PATH
@@ -25,10 +26,10 @@ markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
 `uv tool run` and cspell via `npx`, so none of them needs a separate install.
 `make lint-okf` needs `pnpm`.
 
-CI (`.github/workflows/ci.yml`) runs four jobs on every pull request: `lint`,
-`test-web2md`, `test-clis`, and `validate-kit`. Each one reuses the matching
-`make` target, so a green `make lint && make validate && make test-web2md &&
-make test-clis` locally means a green build.
+CI (`.github/workflows/ci.yml`) runs five jobs on every pull request: `lint`,
+`test-shell`, `test-web2md`, `test-clis`, and `validate-kit`. Each one reuses the
+matching make target, so a green `make lint && make validate && make test-shell
+&& make test-web2md && make test-clis` locally means a green build.
 
 ## Validate the kit spec before you finish
 
@@ -118,9 +119,9 @@ the kit is built, not mounted, so an edit reaches Pi on the next fresh sandbox â
 which `make wiki` always builds. [The kit guide](kits/md2okf/README.md) covers
 the model and provider settings.
 
-`tests/` holds shell tests for that sandbox, in pairs: a host-side script
-(`test-sandbox.sh`, which owns the sandbox and calls `sbx`) and the POSIX `sh`
-script it runs inside the VM (`test-sandbox-guest.sh`).
+`tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which owns the
+sandbox and calls `sbx`, and the POSIX `sh` script it runs inside the VM), plus
+host-side shell tests for state mount selection and bind relocation.
 
 ## Linting the wiki
 

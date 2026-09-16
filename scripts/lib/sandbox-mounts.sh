@@ -10,8 +10,22 @@
 # okf/ would rest on instructions alone. Naming the mounts makes that
 # restriction a property of the filesystem instead.
 
-# Print the ordered workspace PATH arguments for `sbx run`/`sbx create`, and
-# create the mount sources that are not tracked in git.
+# Config layer weaker than a real exported variable, stronger than the default
+# below. Source .env if present, then restore everything that was already
+# exported so the caller's environment always wins.
+sandbox_mounts_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+sandbox_mounts_env="${sandbox_mounts_root}/.env"
+if [[ -r "${sandbox_mounts_env}" ]]; then
+	sandbox_mounts_before="$(export -p)"
+	set -a
+	# shellcheck disable=SC1090
+	. "${sandbox_mounts_env}"
+	set +a
+	eval "${sandbox_mounts_before}" 2>/dev/null || true
+fi
+
+# Populate the global workspace_args array with the ordered workspace PATH
+# arguments for `sbx run`, and create the writable mount sources.
 #
 # `sbx` takes them positionally: the first is the primary workspace — mounted
 # read-write and the sandbox's default working directory — and the rest are
@@ -22,14 +36,28 @@
 #
 # Callers must be at the repository root, as every launcher already is.
 sandbox_workspace_args() {
-	# Not tracked in git (.gitignore: logs/), so `sbx run` would fail on a
-	# missing mount source in a fresh clone.
-	mkdir -p logs/sessions
+	# XDG_STATE_HOME must be absolute. Treat a relative value as unset instead
+	# of resolving it against whichever directory happened to invoke us.
+	case "${XDG_STATE_HOME:-}" in
+	/*) sandbox_state_home="${XDG_STATE_HOME}" ;;
+	*) sandbox_state_home="${HOME}/.local/state" ;;
+	esac
+	SBXAGENT_STATE_DIR="${sandbox_state_home}/md2okf"
+	export SBXAGENT_STATE_DIR
+	mkdir -p "${SBXAGENT_STATE_DIR}"
+	chmod 700 "${SBXAGENT_STATE_DIR}"
 
 	# okf/           the wiki: the agent's only writable content output
 	# md/            source documents, read as data and never modified
 	# scripts/       the four helper CLI projects the kit's shims run
 	# SPEC.md        the OKF spec, which outranks every instruction file
-	# logs/sessions/ Pi transcripts, written by `pi --session-dir`
-	echo "./okf ./md:ro ./scripts:ro ./SPEC.md:ro ./logs/sessions"
+	# state dir      persistent Pi sessions, mounted read-write
+	# shellcheck disable=SC2034 # consumed by every script that sources us
+	workspace_args=(
+		"./okf"
+		"./md:ro"
+		"./scripts:ro"
+		"./SPEC.md:ro"
+		"${SBXAGENT_STATE_DIR}"
+	)
 }

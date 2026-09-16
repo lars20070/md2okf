@@ -20,7 +20,7 @@ YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate test test-web2md test-clis install-clis \
+.PHONY: lint lint-okf validate test test-shell test-web2md test-clis install-clis \
 	test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
@@ -82,7 +82,13 @@ validate:
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-web2md test-clis test-sandbox
+test: test-shell test-web2md test-clis test-sandbox
+
+# Host-side shell tests for state-path selection and the session bind helper.
+# The real bind cases skip on hosts without password-free mount capability.
+test-shell:
+	./tests/test-sandbox-mounts.sh
+	./tests/test-mount-state.sh
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in

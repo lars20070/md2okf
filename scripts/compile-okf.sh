@@ -49,9 +49,11 @@ document_folder="$(cd "${markdown_folder}" && pwd)"
 # leave it running (detached) so we can exec one Pi run per document into it.
 # The workspace arguments are the least-privilege mount — see
 # scripts/lib/sandbox-mounts.sh.
-read -r -a workspace_args <<<"$(sandbox_workspace_args)"
+sandbox_workspace_args
 sbx rm --force "${kit_name}" || true
-sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
+sbx run --detached --name "${kit_name}" \
+	-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
+	./kits/md2okf/ "${workspace_args[@]}"
 
 # Compile each document into the wiki. `sbx exec` runs with the primary
 # workspace — okf/ — as its cwd, and every mount appears inside the VM at its
@@ -66,8 +68,8 @@ sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
 #
 # `--mode json` streams session events as JSON lines; a jq filter prints each
 # tool start and assistant message_end text/thinking so the host can watch
-# progress. --session-dir points at the logs/sessions/ mount, which keeps
-# transcripts across `sbx rm`.
+# progress. Pi writes transcripts to its native per-working-directory session
+# tree, which the kit bind-mounts onto persistent host state.
 #
 # Ralph loop: re-run Pi on the same document until merkleokf --nolog -L 0
 # reports an unchanged wiki root hash (log.md excluded). Cap with RALPH_MAX
@@ -97,8 +99,6 @@ pi_event_filter='fromjson? // empty
      | select(length > 0))
   else empty end'
 
-session_dir="${repo_root}/logs/sessions" # created by sandbox_workspace_args
-
 max_iterations="${RALPH_MAX:-10}"
 shopt -s nullglob
 for document in "${document_folder}"/*.md; do
@@ -117,7 +117,6 @@ for document in "${document_folder}"/*.md; do
 		echo "Compiling document ${document} (iteration ${iteration})"
 		sbx exec "${kit_name}" -- pi \
 			--mode json \
-			--session-dir "${session_dir}" \
 			"${iteration_prompt}" \
 			</dev/null |
 			jq --unbuffered -R -r "${pi_event_filter}"

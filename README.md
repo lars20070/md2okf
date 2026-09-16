@@ -75,6 +75,7 @@ flowchart LR
 
 - [Requirements](#requirements)
 - [Quickstart](#quickstart)
+- [Session state](#session-state)
 - [How it works](#how-it-works)
 - [What lands in okf/](#what-lands-in-okf)
 - [Getting Markdown in](#getting-markdown-in)
@@ -123,6 +124,14 @@ cp my-document.md md/
 make wiki
 ```
 
+The default Pi session-state location is `~/.local/state/md2okf`. To make that
+choice explicit or change it, copy the local configuration template before
+creating the sandbox:
+
+```bash
+cp .env.example .env
+```
+
 Each document gets its own agent run, and each run reports the wiki's root hash
 before and after (tool calls and agent prose stream in between):
 
@@ -137,6 +146,25 @@ The wiki lands in `okf/`, which is gitignored apart from `okf/.okflintrc.json`,
 so the generated pages stay out of the repo. `md/` is tracked and ships with
 sample documents, so `make wiki` has something to compile straight away.
 
+## Session state
+
+Pi writes transcripts through its native `~/.pi/agent/sessions` path. Inside
+the sandbox that directory is bind-mounted onto the host's
+`$XDG_STATE_HOME/md2okf/sessions`, so sessions survive `sbx rm` and retain Pi's
+native per-working-directory layout. All md2okf clones using the same state
+home intentionally share this directory; Pi's own layout separates their
+working directories.
+
+State location follows this precedence: an exported `XDG_STATE_HOME`, then the
+repository's gitignored `.env`, then `~/.local/state`. XDG requires an absolute
+path, so a relative value falls back to `~/.local/state`. The tracked
+[`.env.example`](.env.example) documents the local setting without committing
+machine-specific configuration. Paths containing spaces are supported.
+
+The state location and mount are fixed when a sandbox is created. After
+changing `XDG_STATE_HOME` or `.env`, run `sbx rm --force md2okf` before the next
+interactive shell or Pi session; `make wiki` always rebuilds automatically.
+
 ## How it works
 
 A shell driver on the host runs the agent inside a microVM, repeatedly, until a
@@ -150,11 +178,11 @@ per `md/*.md` file, re-running the same document (a *Ralph loop*) until
 `merkleokf --nolog -L 0` reports an unchanged wiki root hash. `merkleokf` prints
 a Merkle hash tree, one hash per file and per directory, so a change to any page
 moves the root hash and an unchanged root means the run added nothing. The loop
-is capped by `RALPH_MAX` (default 10). The agent's only writable output is
+is capped by `RALPH_MAX` (default 10). The agent's only writable content output is
 `okf/`, [okf-lint](https://github.com/thisismydesign/okf-lint) must pass before
 it finishes, and `SPEC.md` outranks every instruction file. Each run streams
-tool names and assistant text as it goes, and writes a session transcript under
-`logs/sessions/`.
+tool names and assistant text as it goes, and Pi writes its session transcript
+through its native session path into persistent host state.
 
 ### What the sandbox can reach
 
@@ -168,15 +196,15 @@ not the kit that built it:
 | `md/` | read-only | source documents, read as data and never modified |
 | `scripts/` | read-only | the four helper CLI projects the agent runs |
 | `SPEC.md` | read-only | the specification that outranks every instruction |
-| `logs/sessions/` | read-write | where the session transcript is written |
+| `$XDG_STATE_HOME/md2okf` | read-write | persistent Pi session state |
 
-So "the agent's only writable output is `okf/`" is a property of the
-filesystem, not a promise in an instruction file. The mount list lives in one
-place, [`scripts/lib/sandbox-mounts.sh`](scripts/lib/sandbox-mounts.sh), shared
-by every script that creates the sandbox; `sbx inspect md2okf` shows what a
-running sandbox actually got. Because `okf/` is the primary mount it is also
-the working directory inside the VM, which is why the agent addresses its
-siblings as `../md/`, `../scripts/` and `../SPEC.md`. Changing the mounts
+So the agent's only writable content output is `okf/`; its other writable mount
+is session state outside the repository. The mount list lives in one place,
+[`scripts/lib/sandbox-mounts.sh`](scripts/lib/sandbox-mounts.sh), shared by every
+script that creates the sandbox; `sbx inspect md2okf` shows what a running
+sandbox actually got. Because `okf/` is the primary mount it is also the working
+directory inside the VM, which is why the agent addresses its siblings as
+`../md/`, `../scripts/` and `../SPEC.md`. Changing mounts or the state location
 requires a new sandbox — `make wiki` builds one every time, or run
 `sbx rm --force md2okf` first.
 
@@ -258,8 +286,9 @@ than 0.43.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
 `./scripts/bash.sh` and `./scripts/pi.sh` need an active `sbx login` session.
 
 **`Error: Ralph loop hit 10 iterations`.** The wiki root hash kept changing.
-Raise the cap for one run with `RALPH_MAX=20 make wiki`, or read
-`logs/sessions/` to see what the agent was doing.
+Raise the cap for one run with `RALPH_MAX=20 make wiki`, or inspect
+`$XDG_STATE_HOME/md2okf/sessions` to see what the agent was doing (by default,
+`~/.local/state/md2okf/sessions`).
 
 ## Development
 

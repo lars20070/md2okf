@@ -29,8 +29,10 @@ fi
 # instance (and its state) instead of tearing it down. The workspace arguments
 # are the least-privilege mount — see scripts/lib/sandbox-mounts.sh.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
-	read -r -a workspace_args <<<"$(sandbox_workspace_args)"
-	sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
+	sandbox_workspace_args
+	sbx run --detached --name "${kit_name}" \
+		-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
+		./kits/md2okf/ "${workspace_args[@]}"
 fi
 
 # Drop into an interactive shell at the workspace (okf/, the wiki root).

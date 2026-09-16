@@ -105,6 +105,38 @@ check_file "${HOME}/.pi/agent/skills/inspect-md/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/inspect-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/size-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/merkle-okf/SKILL.md"
+check_file "${HOME}/.local/lib/md2okf/mount-state.sh"
+
+# Persistent Pi sessions. The stock path must remain a real directory and be
+# the same bind-mounted directory as the host-backed state target.
+if [ -z "${SBXAGENT_STATE_DIR:-}" ]; then
+	echo "MISSING SBXAGENT_STATE_DIR"
+	failures=$((failures + 1))
+else
+	session_link="${HOME}/.pi/agent/sessions"
+	session_target="${SBXAGENT_STATE_DIR}/sessions"
+	if [ -L "${session_link}" ]; then
+		echo "BROKEN ${session_link} is a symlink"
+		failures=$((failures + 1))
+	elif [ ! -d "${session_link}" ] || [ ! -d "${session_target}" ]; then
+		echo "MISSING persistent Pi session directories"
+		failures=$((failures + 1))
+	elif [ "$(stat -c '%d:%i' "${session_link}")" != \
+		"$(stat -c '%d:%i' "${session_target}")" ]; then
+		echo "BROKEN ${session_link} is not bind-mounted onto state"
+		failures=$((failures + 1))
+	else
+		probe=".md2okf-sandbox-test-$$"
+		if printf 'persistent\n' >"${session_link}/${probe}" &&
+			grep -qx persistent "${session_target}/${probe}"; then
+			echo "ok persistent Pi session bind"
+		else
+			echo "BROKEN write through Pi session path did not reach state"
+			failures=$((failures + 1))
+		fi
+		rm -f "${session_link:?}/${probe}"
+	fi
+fi
 
 # Context7 native Pi package (kits/md2okf/spec.yaml setup.install +
 # settings.json packages). Presence only — no live Context7 API call.

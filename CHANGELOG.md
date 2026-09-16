@@ -10,13 +10,19 @@ and this project adheres to
 
 ### Changed
 
+- Persist Pi's native `~/.pi/agent/sessions` tree in
+  `$XDG_STATE_HOME/md2okf/sessions`, bind-mounted from host state instead of a
+  repository-local `logs/sessions/`. An exported `XDG_STATE_HOME` takes
+  precedence over the gitignored `.env`, with `~/.local/state` as the fallback;
+  changing it requires rebuilding the sandbox. Existing legacy transcripts are
+  not migrated.
 - Mount only what the agent needs into the sandbox, instead of the whole
-  repository read-write: `okf/` and `logs/sessions/` read-write, and `md/`,
-  `scripts/` and `SPEC.md` read-only. Nothing else in the repository is visible
-  inside the microVM, so the agent's restriction to `okf/` is now enforced by
-  the filesystem rather than by instructions alone. The mount list lives in
-  `scripts/lib/sandbox-mounts.sh`, shared by every script that creates the
-  sandbox.
+  repository read-write: `okf/` and the external session-state directory
+  read-write, and `md/`, `scripts/` and `SPEC.md` read-only. Nothing else in the
+  repository is visible inside the microVM, so the agent's restriction to
+  `okf/` is now enforced by the filesystem rather than by instructions alone.
+  The mount list lives in `scripts/lib/sandbox-mounts.sh`, shared by every
+  script that creates the sandbox.
 - `okf/` is the primary mount and therefore the working directory inside the
   VM, so the agent's config and the `compile-okf` lint wrapper now address the
   read-only mounts as `../md/`, `../scripts/` and `../SPEC.md`.

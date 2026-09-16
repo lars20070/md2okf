@@ -30,8 +30,10 @@ fi
 # scripts/lib/sandbox-mounts.sh.
 if ! sbx ls -q | grep -qx "${kit_name}"; then
 	echo "No ${kit_name} sandbox found — creating one (this takes minutes)."
-	read -r -a workspace_args <<<"$(sandbox_workspace_args)"
-	sbx run --detached --name "${kit_name}" ./kits/md2okf/ "${workspace_args[@]}"
+	sandbox_workspace_args
+	sbx run --detached --name "${kit_name}" \
+		-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
+		./kits/md2okf/ "${workspace_args[@]}"
 fi
 
 # `sh -l` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm

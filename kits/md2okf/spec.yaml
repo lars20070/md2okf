@@ -12,7 +12,20 @@ sandbox:
   # Model and provider come from the kit's own config (files/home/.pi/agent/
   # settings.json + models.json), delivered to ~/.pi/agent/ in the VM. No
   # --provider/--model flags here — Pi resolves defaults from settings.json.
-  entrypoint: [pi]
+  entrypoint:
+    - sh
+    - -c
+    - |
+      set -eu
+      mount_state_status=0
+      sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+        "$HOME/.pi/agent/sessions" sessions || mount_state_status=$?
+      if [ "${mount_state_status}" -ne 0 ]; then
+        echo "md2okf: could not relocate Pi sessions onto state; refusing to start pi" >&2
+        exit "${mount_state_status}"
+      fi
+      exec pi "$@"
+    - md2okf-entrypoint
 
 # The AI profile Pi reads, and the text appended to it.
 agentInstructions:
@@ -21,18 +34,19 @@ agentInstructions:
     ## Sandbox environment
     You are Pi running inside a Docker Sandbox microVM. Your workspace is the
     OKF wiki itself, mounted read-write, and edits apply directly to the host
-    working tree. Four more host paths are mounted beside it:
+    working tree. Four more host paths are mounted:
 
     - `../md/` — read-only source documents
     - `../scripts/` — read-only, the projects behind the CLIs listed below
     - `../SPEC.md` — read-only, the OKF specification
-    - `../logs/sessions/` — writable, where your session transcript is kept
+    - `$SBXAGENT_STATE_DIR` — writable persistent state for Pi sessions
 
     Nothing else from the user's project is mounted, so no other file of theirs
     is visible or reachable — not the repository, not its history, not its
-    configuration. A write anywhere outside the wiki and the transcript
-    directory either fails or lands in the VM's own filesystem and is lost when
-    the sandbox is removed.
+    configuration. Pi writes sessions to its native `~/.pi/agent/sessions`
+    path, which is bind-mounted onto `$SBXAGENT_STATE_DIR/sessions`. A write
+    anywhere outside the wiki and state directory either fails or lands in the
+    VM's own filesystem and is lost when the sandbox is removed.
 
     `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
     it with `sbx policy allow network "<host>"`.
@@ -201,6 +215,22 @@ setup:
     # set it explicitly so the compile-okf skill can invoke the wrapper.
     - command: chmod 0755 /home/agent/.pi/agent/skills/compile-okf/scripts/lint-okf.sh
       description: Make compile-okf lint script executable
+
+  # Bind mounts do not survive a sandbox stop. The startup hook covers normal
+  # starts and sbx exec; the entrypoint above is a second required call site for
+  # starts where the hook is not replayed. The helper is idempotent.
+  startup:
+    - command:
+        - sh
+        - -c
+        - |
+          set -eu
+          HOME="${HOME:-/home/agent}"
+          export HOME
+          sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+            "$HOME/.pi/agent/sessions" sessions
+      user: "agent"
+      description: Bind-mount Pi sessions onto persistent state
 
   # Workspace is not mounted during setup.install, so the CLIs are shims that
   # resolve from ${WORKDIR} — the workspace path — rather than from a copy

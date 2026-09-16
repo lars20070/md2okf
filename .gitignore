@@ -3,6 +3,7 @@
 
 # Agents
 .claude/settings.local.json
+.env
 
 # Python
 .venv/
@@ -20,6 +21,3 @@ web2md/cache/
 okf/*
 !okf/
 !okf/.okflintrc.json
-
-# Pi session transcripts from make wiki
-logs/
