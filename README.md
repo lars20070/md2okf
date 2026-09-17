@@ -25,8 +25,8 @@ flowchart LR
   subgraph IN[" "]
     direction TB
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
-    STATE["session traces<br> + message board<br/>~/.local/state/sbxagent"]
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
+    STATE["session traces<br> + message board<br/>~/.local/state/sbxagent"]
     DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
@@ -46,9 +46,9 @@ flowchart LR
   NET2("...")
 
   SPEC -.->|"outranks all"| PI
+  MD ==>|"read by"| PI
   STATE -.->|"mounts"| VM
   STATE ~~~ PI
-  MD ==>|"read by"| PI
   DRV -->|"sbx exec"| PI
   KIT -->|"builds"| VM
   PI -.->|"uses"| TOOLS
