@@ -26,14 +26,15 @@ flowchart LR
     direction TB
     SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
     MD@{ shape: docs, label: "md/*.md<br/>source documents"}
+    STATE["session traces<br> + message board<br/>~/.local/state/sbxagent"]
     DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
 
   subgraph VM["sbx microVM"]
     PI["Pi agent with<br/>/compile-okf skill"]
-    TOOLS["inspectmd<br/>inspectokf<br/>sizeokf<br/>merkleokf"]
-    LINT["okf-lint"]
+    TOOLS["skills<br>/inspectmd<br/>/inspectokf<br/>/sizeokf<br/>/merkleokf"]
+    LINT["okfctl linter"]
   end
 
   subgraph OUT[" "]
@@ -46,9 +47,11 @@ flowchart LR
 
   SPEC -.->|"outranks all"| PI
   MD ==>|"read by"| PI
+  STATE -.->|"mounts"| VM
   DRV -->|"sbx exec"| PI
   KIT -->|"builds"| VM
-  PI -.->|"run"| TOOLS & LINT
+  PI -.->|"uses"| TOOLS
+  PI -.->|"runs"| LINT
   LINT -.->|"must pass"| OKF
   PI ==>|"writes"| OKF
   PI -->|"via sbx proxy"| NET
@@ -59,7 +62,7 @@ flowchart LR
   classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
   classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
   classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
-  class MD,SPEC,OKF data
+  class MD,SPEC,STATE,OKF data
   class KIT,DRV host
   class TOOLS,LINT helper
   class PI agent
