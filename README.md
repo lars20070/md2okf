@@ -24,9 +24,9 @@ other instructions.
 flowchart LR
   subgraph IN[" "]
     direction TB
-    SPEC@{ shape: doc, label: "SPEC.md<br/>OKF spec"}
-    MD@{ shape: docs, label: "md/*.md<br/>source documents"}
+    SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     STATE["session traces<br> + message board<br/>~/.local/state/sbxagent"]
+    MD@{ shape: docs, label: "source documents<br>md/*.md"}
     DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
@@ -46,8 +46,9 @@ flowchart LR
   NET2("...")
 
   SPEC -.->|"outranks all"| PI
-  MD ==>|"read by"| PI
   STATE -.->|"mounts"| VM
+  STATE ~~~ PI
+  MD ==>|"read by"| PI
   DRV -->|"sbx exec"| PI
   KIT -->|"builds"| VM
   PI -.->|"uses"| TOOLS
@@ -71,6 +72,15 @@ flowchart LR
   style IN fill:none,stroke:none
   style OUT fill:none,stroke:none
 ```
+
+<br>*Host tooling (amber) builds the microVM from the kit and drives it with one
+`sbx exec` per source document. Inside, the Pi agent (red) runs the
+`/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
+only content it may change. Skills and the linter (teal) support it — the four
+tools survey the source markdown and wiki, and the linter must pass before a run ends. Session
+state (blue) is mounted from the host, so transcripts outlive the sandbox.
+Model calls leave the VM only through the sbx proxy, which injects the
+OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 
 <!-- cspell:enable -->
 
