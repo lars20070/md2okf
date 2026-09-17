@@ -1,7 +1,7 @@
 # md2okf
 
 [![CI](https://github.com/lars20070/md2okf/actions/workflows/ci.yml/badge.svg)](https://github.com/lars20070/md2okf/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/lars20070/sbxagent?sort=semver)](https://github.com/lars20070/sbxagent/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/lars20070/md2okf?sort=semver)](https://github.com/lars20070/md2okf/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Compile Markdown documents into an OKF knowledge base with a coding agent.
