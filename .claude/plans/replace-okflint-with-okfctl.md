@@ -40,8 +40,15 @@ Root cause: `internal/okf/analyze.go:537` `frontmatterTimeString` formats a `tim
 datetime; a *quoted* one stays a string and passes through intact. Our wiki's timestamps are unquoted.
 
 **Verified workaround:** quote the timestamps before migrating, and the full datetime survives —
-`generated: {by: pi/qwen3.6-35b-a3b, at: "2026-08-01T06:28:39Z"}`. Stage 3 does this. No matching issue exists at
-`cwest/okfctl`; reporting it upstream is a worthwhile follow-up, but not a blocker.
+`generated: {by: pi/qwen3.6-35b-a3b, at: "2026-08-01T06:28:39Z"}`. Stage 3 does this.
+
+**Upstream status:** reported as [cwest/okfctl#171](https://github.com/cwest/okfctl/issues/171) (open, labelled `bug`),
+with a fix proposed in [PR #172](https://github.com/cwest/okfctl/pull/172) — **open, not merged**, against `main`. The
+PR takes the lossless route of carrying the verbatim source scalar across rather than re-rendering the parsed time, so
+quoted and unquoted inputs become identical by construction and a legitimate bare date is left alone. Neither is in
+v0.4.0, the version this plan pins, so Stage 3 keeps the quoting pre-step. Once a release contains the fix, bump
+`OKFCTL_VERSION` in `kits/md2okf/spec.yaml` and drop that pre-step — it is then redundant, though harmless, since the
+fix preserves a quoted value verbatim too.
 
 ## Settled decisions
 
@@ -370,5 +377,6 @@ the removal entry legitimately names the tool.
 
 ## Follow-ups (not in this plan)
 
-- Report the `migrate` timestamp truncation to `cwest/okfctl` — root cause and a one-line repro are in Context above.
+- Watch [cwest/okfctl#171](https://github.com/cwest/okfctl/issues/171) / [#172](https://github.com/cwest/okfctl/pull/172).
+  When the fix ships in a release, bump the pinned `OKFCTL_VERSION` and drop Stage 3's timestamp-quoting pre-step.
 - Lift each page's `resource:` into a v0.2 `sources` entry, which would clear the 14 `analyze` "uncited" findings.
