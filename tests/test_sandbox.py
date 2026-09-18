@@ -16,6 +16,18 @@ def test_present_reflects_path(monkeypatch):
     assert sandbox.present() is False
 
 
+def test_fake_sbx_covers_presence_not_only_subprocess(fake_sbx):
+    """Regression: the fixture faked subprocess but not shutil.which.
+
+    present() then answered from the developer's own PATH, so every test
+    reaching preflight() passed locally (sbx installed) and failed in CI
+    (sbx absent) without touching a single faked subprocess call. The
+    fixture has to cover the whole seam for the suite to be offline.
+    """
+    assert sandbox.present() is True
+    sandbox.preflight()  # must not raise, whatever the host has installed
+
+
 def test_version_parses_and_compares(fake_sbx):
     fake_sbx.version_string = "0.43.0"
     assert sandbox.version() == (0, 43, 0)

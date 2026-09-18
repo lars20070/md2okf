@@ -1,8 +1,14 @@
 """Shared pytest fixtures: a fake `sbx` standing in at the one real seam.
 
-`md2okf.sandbox` is the only module that calls subprocess.run/Popen, so faking
-those two builtins is enough to exercise every layer above it — workbench,
-compile, cli — without ever shelling out to a real `sbx`.
+`md2okf.sandbox` is the only module that reaches the outside world, so faking
+what it calls is enough to exercise every layer above it — workbench, compile,
+cli — without ever shelling out to a real `sbx`.
+
+That seam is three functions, not two: subprocess.run and subprocess.Popen,
+*and* shutil.which, which `present()` uses to decide whether `sbx` exists at
+all. Leaving which unfaked made the suite quietly depend on the developer's
+own machine having sbx installed — green locally, seven failures in CI, where
+nothing reaches a faked subprocess because preflight() bails first.
 """
 
 from __future__ import annotations
@@ -144,10 +150,18 @@ class FakeSbx:
 
 @pytest.fixture
 def fake_sbx(monkeypatch: pytest.MonkeyPatch) -> FakeSbx:
-    """Patch the one seam (subprocess.run/Popen as used by md2okf.sandbox)."""
+    """Patch the seam md2okf.sandbox reaches the outside world through.
+
+    A test that wants the opposite -- `sbx` absent -- re-patches `which`
+    itself; a monkeypatch in the test body is applied after this fixture
+    and so wins.
+    """
     fake = FakeSbx()
     monkeypatch.setattr(sandbox_module.subprocess, "run", fake.run)
     monkeypatch.setattr(sandbox_module.subprocess, "Popen", fake.popen)
+    # Faked alongside the subprocess calls, so the suite is the same whether
+    # or not the machine running it happens to have sbx installed.
+    monkeypatch.setattr(sandbox_module.shutil, "which", lambda name: f"/usr/bin/{name}")
     return fake
 
 

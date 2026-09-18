@@ -106,8 +106,7 @@ def test_sbx_not_present_is_exit_2(tmp_path, capsys, isolated_state, monkeypatch
     assert "sbx" in capsys.readouterr().err
 
 
-def test_sbx_too_old_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    monkeypatch.setattr(sandbox.shutil, "which", lambda _name: "/usr/bin/sbx")
+def test_sbx_too_old_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx):
     fake_sbx.version_string = "0.10.0"
     doc = _md(tmp_path)
     rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
@@ -115,8 +114,7 @@ def test_sbx_too_old_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx, monke
     assert "version" in capsys.readouterr().err
 
 
-def test_not_logged_in_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    monkeypatch.setattr(sandbox.shutil, "which", lambda _name: "/usr/bin/sbx")
+def test_not_logged_in_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx):
     fake_sbx.logged_in = False
     doc = _md(tmp_path)
     rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
@@ -125,10 +123,6 @@ def test_not_logged_in_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx, mon
 
 
 # --- the happy path: create, compile, mirror out ----------------------------
-
-
-def _stub_present(monkeypatch) -> None:
-    monkeypatch.setattr(sandbox.shutil, "which", lambda _name: "/usr/bin/sbx")
 
 
 def _write_a_page() -> None:
@@ -144,8 +138,7 @@ def _write_a_page() -> None:
         index.write_text('---\nokf_version: "0.2"\n---\n# Index\n', encoding="utf-8")
 
 
-def test_first_run_creates_the_sandbox_and_prints_one_tsv_row(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_first_run_creates_the_sandbox_and_prints_one_tsv_row(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     output_dir = tmp_path / "out"
 
@@ -169,8 +162,7 @@ def test_first_run_creates_the_sandbox_and_prints_one_tsv_row(tmp_path, capsys, 
     assert (output_dir / "page.md").exists()
 
 
-def test_second_run_with_unchanged_config_reuses_the_sandbox(tmp_path, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_second_run_with_unchanged_config_reuses_the_sandbox(tmp_path, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     output_dir = tmp_path / "out"
 
@@ -188,8 +180,7 @@ def test_second_run_with_unchanged_config_reuses_the_sandbox(tmp_path, isolated_
     assert len(run_calls_after_second) == 1  # not recreated
 
 
-def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     output_dir = tmp_path / "out"
 
@@ -204,8 +195,7 @@ def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx, monkeypatch
     assert len(run_calls) == 2
 
 
-def test_unowned_existing_sandbox_is_exit_2_and_not_deleted(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_unowned_existing_sandbox_is_exit_2_and_not_deleted(tmp_path, capsys, isolated_state, fake_sbx):
     fake_sbx.register(workbench.SANDBOX_NAME)  # exists, but we never created it -- no marker on disk
     doc = _md(tmp_path)
 
@@ -215,8 +205,7 @@ def test_unowned_existing_sandbox_is_exit_2_and_not_deleted(tmp_path, capsys, is
     assert sandbox.exists(workbench.SANDBOX_NAME) is True
 
 
-def test_compile_failure_is_exit_1_and_still_prints_to_stderr(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_compile_failure_is_exit_1_and_still_prints_to_stderr(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     fake_sbx.queue_hash("aaaa0000")
     fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], returncode=1)
@@ -245,8 +234,7 @@ def test_quiet_suppresses_rows_and_progress_but_not_fatal_errors(tmp_path, capsy
     assert err != ""
 
 
-def test_verbose_shows_tool_calls_and_prose(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_verbose_shows_tool_calls_and_prose(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     fake_sbx.queue_hash("aaaa0000")
     fake_sbx.queue_pi(
@@ -260,7 +248,6 @@ def test_verbose_shows_tool_calls_and_prose(tmp_path, capsys, isolated_state, fa
 
 
 def test_stdin_is_labelled_dash(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
     monkeypatch.setattr(cli.sys, "stdin", io.TextIOWrapper(io.BytesIO(b"# piped\n")))
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
 
@@ -288,8 +275,7 @@ def test_more_than_one_dash_is_rejected(tmp_path, capsys, isolated_state):
 # --- the lock ----------------------------------------------------------------
 
 
-def test_a_second_run_fails_the_lock(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
-    _stub_present(monkeypatch)
+def test_a_second_run_fails_the_lock(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     with workbench.lock():
         rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
