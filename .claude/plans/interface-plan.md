@@ -48,9 +48,9 @@ md2okf --version | --help
 | --- | --- | --- |
 | program | the pattern; `awk -f progfile` | fixed (the `compile-okf` skill). `--spec FILE` swaps the OKF spec, awk's `-f`; default is the bundled `SPEC.md` |
 | inputs | files; `-` or none means stdin | Markdown files, in the order given; a DIR means its `*.md`, sorted, non-recursive; `-` or no argument means stdin (refused on a TTY with usage, exit 2 — a paid, minutes-long run should not start on an idle terminal) |
-| output | stdout | the wiki in `-o DIR` (default `./okf`, created if missing). stdout carries one TSV line per document: `path  iterations  hash-before  hash-after` |
+| output | stdout | the wiki in `-o DIR` (default `./okf`, created if missing and **exclusively managed** — see the contracts below). stdout carries one TSV line per document and nothing else: `path  iterations  hash-before  hash-after` |
 | diagnostics | stderr | the `Compiling … (iteration n)` and `hash -> hash` lines. `-v` adds Pi's tool calls and prose (today's `jq` view); `-q` prints nothing |
-| exit status | 0 / 1 / 2 | 0 every document converged, **including a hash-stable first pass** — that is the documented idempotent re-run, not a failure; 1 the run failed: a document hit the iteration cap, a `pi` process exited non-zero, a session produced no tool calls at all, or the wiki was empty before *and* after — partial work is on disk and the document is named on stderr; 2 usage or environment, decided before any work starts (`sbx` missing or < 0.43, not logged in, key not proxy-managed, no documents, another run holds the sandbox) |
+| exit status | 0 / 1 / 2 | 0 every document converged, **including a hash-stable first pass** — that is the documented idempotent re-run, not a failure; 1 the run failed: a document hit the iteration cap, a `pi` process exited non-zero, a session produced no tool calls at all, the wiki was empty before *and* after, the wiki hash came back empty or malformed, or mirroring the wiki back out failed — partial work is on disk and the document is named on stderr; 2 usage or environment, decided before any work starts (`sbx` missing or < 0.43, not logged in, key not proxy-managed, no documents, overlapping or unsafe paths, another run holds the sandbox) |
 | state | none | one long-lived sandbox named `md2okf` (the name the `sbx secret` workaround is keyed to). Built on first use, reused after, rebuilt when the bundled kit changes or the mount set differs, and on `--fresh` |
 
 **Not in the surface:** `compile`, `shell`, `pi`, `sandbox up/down/status`,
@@ -67,6 +67,52 @@ gate stays `make check-okf`, which runs
 `RALPH_MAX` becomes `-n`. `.env` goes: a tool not tied to a checkout has no
 repository to read a `.env` from, so `XDG_STATE_HOME` is the one knob, with
 `~/.local/state` as the default.
+
+### Contracts the first implementation must get right
+
+Cheap to honour now, expensive to retrofit — each one is either a data-loss
+path, a false success, or a promise consumers would build on.
+
+- **`-o DIR` is exclusively managed.** Mirroring out propagates deletions, so
+  pointing `-o` at a directory holding anything else would delete it. Adopt a
+  directory only when it is empty, was created by this run, or carries a wiki
+  marker (a root `index.md`, or the stamp the tool writes on first use);
+  anything else is exit 2 with a message naming the directory.
+- **Paths may not overlap.** Resolve the inputs, `-o`, `--spec` and the
+  workbench, and refuse when one contains another — exit 2. Without it an
+  output inside an input, or either inside the workbench, produces a recursive
+  copy or a run that eats its own output.
+- **A failed mirror-out is a failed run.** Disk space or permissions can break
+  the copy back to `-o DIR`. Exit 1, name the workbench path that still holds
+  the good wiki, and print no success row for that document.
+- **Recovery after an interruption is best effort, not atomic.** A recursive
+  copy can itself be interrupted and leave a mixed tree in `-o DIR`; the
+  workbench keeps the last complete copy. A same-filesystem snapshot and atomic
+  swap would make it a guarantee, and is a later refinement, not a v1 promise.
+- **A missing or malformed hash is never convergence.** If `merkleokf` fails or
+  prints nothing, an empty string compares equal to the previous empty string
+  and the loop reports success having done nothing. Validate the hash — third
+  line, first field, hex — before comparing.
+- **Ctrl-C leaves the wiki consistent.** On interruption, do not mirror out the
+  half-finished iteration, release the lock, and exit non-zero.
+- **`--dry-run` is local-only.** It resolves paths, enumerates documents and
+  prints the mounts and command lines; it creates no directories, takes no
+  lock, runs no `sbx`, and consumes nothing paid. It is the one exception to
+  "the environment checks run on every invocation", and it says so in its
+  output.
+- **stdout carries the TSV and nothing else.** Every subprocess has its stdout
+  captured and re-emitted on stderr, so `sbx run --detached`, `sbx rm` and the
+  hash call cannot corrupt the stream. Rows print paths **as supplied**; a path
+  containing a tab or a newline is rejected (exit 2); `-q` suppresses rows and
+  progress but never fatal diagnostics.
+- **The lock and the fingerprint are host-side control state.** The lock lives
+  at a fixed per-user path — `/tmp/md2okf-<uid>.lock`, deliberately *not* under
+  the configurable state directory, or two shells with different
+  `XDG_STATE_HOME` values take two different locks while racing on the one
+  sandbox named `md2okf`. The fingerprint is written atomically and only after
+  a successful create, and is treated as a cache rather than as authority: a
+  cheap probe (does `work/okf` exist inside the VM?) decides whether the
+  sandbox named `md2okf` is really ours, and anything unexpected means rebuild.
 
 ## Constraints that must hold
 
@@ -149,13 +195,18 @@ and out:
     scripts/                 mount, ro           <- the four helper CLI projects
                                                     (pyproject.toml + src), staged from the package
     SPEC.md                  mount, ro           <- --spec, or the bundled copy
-  sandbox-fingerprint        host-only: kit tree hash + tool version + mount set
-  lock                       host-only: flock, one run at a time; a second invocation exits 2
+  sandbox-fingerprint        host-only: kit tree hash + tool version + mount set,
+                             written atomically after a successful create
+
+/tmp/md2okf-<uid>.lock       host-only, outside the configurable state dir:
+                             flock, one run at a time; a second invocation exits 2
 ```
 
 This reproduces the sibling layout the kit expects, so **the kit's agent config
 does not change**. The wiki copy is Markdown-sized. Mirroring back after every
-iteration means an interrupted run leaves the last completed pass in `-o DIR`.
+iteration means an interrupted run leaves the last completed pass in `-o DIR` —
+best effort, not a guarantee, since the copy itself can be interrupted; the
+workbench keeps the last complete one either way.
 The staged `SPEC.md` is also what the frontmatter guard reads inside the VM as
 `../SPEC.md`, so the gate the agent runs before it finishes keeps working;
 running that gate on the host against an `-o DIR` with no sibling spec needs
@@ -486,7 +537,8 @@ honours VCS ignores — before writing the file.
   continuation from iteration 2" rule → `compile.py`.
 - `scripts/compile-okf.sh:83-86` — `merkleokf --nolog -L 0 <abs okf>`, third
   line, first field → `compile.py`; the absolute path is the workbench's
-  `work/okf`.
+  `work/okf`. Validate what comes back — a missing or non-hex field is a
+  failure, never a convergence.
 - `scripts/compile-okf.sh:89-100` — the jq filter → `events.py`: the same three
   cases (`tool_execution_start` as `toolName args`, assistant `message_end`
   text and thinking), 120-character cut.
@@ -504,7 +556,9 @@ honours VCS ignores — before writing the file.
   count as today, no writable one an ancestor of a read-only one.
 - `scripts/bash.sh:31-36` — the `sbx ls -q | grep -qx` existence check and
   `sbx run --detached --name md2okf -e SBXAGENT_STATE_DIR=… <kit> <mounts>` →
-  `sandbox.py`, plus the fingerprint comparison.
+  `sandbox.py`, plus the fingerprint comparison — written atomically after a
+  successful create, and backed by the "is this sandbox ours" probe rather than
+  trusted on its own.
 - `scripts/compile-okf.sh:34-38` — the `brew install docker/tap/sbx` hint, plus
   new checks: `sbx version` ≥ 0.43.0, `sbx ls` succeeds (logged in), and after
   creation `sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'` prints
@@ -634,8 +688,9 @@ Add the root `pyproject.toml`, `src/md2okf/` and the pytest suite. `make wiki`
 delegates to `uv run md2okf md/`. **The old launchers stay**: `bash.sh`,
 `pi.sh`, `compile-okf.sh` and `sandbox-mounts.sh` are untouched, so the
 documented path keeps working if the new command is wrong. Paths are still
-checkout-relative — the workbench arrives in stage 3 — and anything outside the
-checkout exits 2 with a message saying so.
+resolved against the current directory — no project-root discovery, which
+`make wiki` does not need and stage 3 would only delete — and the workbench
+arrives in stage 3.
 
 **Checkpoint.**
 
@@ -647,8 +702,12 @@ checkout exits 2 with a message saying so.
   wiki empty before and after → exit 1; the cap → exit 1 naming the document;
   the continuation prompt from iteration 2; `stdin=DEVNULL`; the fingerprint
   rebuild rule; `events.py` against recorded Pi lines.
+- The contracts hold: an unsafe or non-empty `-o` → 2; overlapping input,
+  output, spec or workbench paths → 2; a path containing a tab or newline → 2;
+  an empty or malformed hash → exit 1, not convergence; no subprocess output
+  ever reaches stdout; `-q` still prints fatal diagnostics.
 - `md2okf --dry-run -o okf/ md/` prints the mounts, the documents and the
-  command line without calling `sbx`.
+  command line while creating nothing, taking no lock and calling no `sbx`.
 - One paid live run: `sbx rm --force md2okf`, then `make wiki`, then
   `make check-okf` on the result — the same wiki the shell driver produced.
 - Then the same document again: one iteration, equal hashes, exit 0, which is
@@ -667,8 +726,9 @@ the state root is no longer mounted.
 **Checkpoint.**
 
 - `make test-md2okf` again, now covering mirror in/out including deletion, a
-  dirty workbench left by a different `-o`, a basename clash → 2, and stdin on
-  a TTY → 2.
+  dirty workbench left by a different `-o`, a basename clash → 2, stdin on a
+  TTY → 2, and an injected mirror-out failure → exit 1 naming the workbench
+  copy, with no success row for that document.
 - `make test-sandbox` passes with the narrowed mount set, and its new
   assertions hold from inside the VM: `lock` and `sandbox-fingerprint` are not
   visible; no read-write mount is an ancestor of a read-only one; writes to
@@ -722,6 +782,12 @@ job, the release `publish` job, and the README install lines.
 - The PyPI project exists and this repository is registered as its trusted
   publisher **before** the first `vX.Y.Z` tag is pushed — a pending publisher
   does not reserve the name.
+- `SPEC.md`'s provenance is settled before it ships inside an artifact. The
+  file currently carries no licence, copyright or upstream URL, while the
+  repository ships one MIT `LICENSE`; the upstream Open Knowledge Format is
+  Apache-2.0. Record the source and revision, carry the required licence and
+  attribution in both the wheel and the sdist, and note whether the bundled
+  copy is modified. This blocks publishing, nothing earlier.
 
 Safe to stop here, and this is the last stage.
 
@@ -747,4 +813,11 @@ Safe to stop here, and this is the last stage.
   whatever the guest does — but it means the driver should treat a sudden
   `EROFS` on `work/okf` as a runtime failure with a clear message rather than
   as a mirroring bug.
+- **Deferred on purpose, and recorded so they are not lost.** A same-filesystem
+  snapshot and atomic swap for mirror-out; a full symlink, device and
+  permission policy for staging; signal forwarding and remote-process reaping
+  beyond "don't mirror a partial iteration"; comparing `sbx inspect --json`
+  workspaces, access modes and environment instead of the cheap ownership
+  probe; stdin's row label and duplicate-input rules, which arrive with stdin
+  in stage 3. Each is a refinement on a correct baseline, not a gap in one.
 - **Effort estimates are judgement**, not measurement.
