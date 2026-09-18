@@ -1,0 +1,81 @@
+"""Turn Pi's `--mode json` event stream into the host-side progress view.
+
+Replaces the jq filter in the old shell driver
+(`scripts/compile-okf.sh:89-100`): the same three cases, the same 120-character
+cut on tool calls.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterable, Iterator
+
+DISPLAY_WIDTH = 120
+
+
+def _load(line: str) -> dict | None:
+    try:
+        event = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    return event if isinstance(event, dict) else None
+
+
+def _translate_event(event: dict) -> str | None:
+    event_type = event.get("type")
+    if event_type == "tool_execution_start":
+        tool_name = event.get("toolName", "")
+        args = event.get("args", "")
+        return f"{tool_name} {args}"[:DISPLAY_WIDTH]
+
+    if event_type == "message_end":
+        message = event.get("message") or {}
+        if message.get("role") != "assistant":
+            return None
+        parts = []
+        for block in message.get("content") or []:
+            if block.get("type") == "thinking":
+                parts.append(f"[thinking]\n{block.get('thinking', '')}")
+            elif block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n\n".join(parts) or None
+
+    return None
+
+
+def translate(line: str) -> str | None:
+    """One raw `pi --mode json` line -> the text worth showing, or None.
+
+    A tool call becomes "toolName args" (cut to DISPLAY_WIDTH); an assistant
+    `message_end` becomes its joined text/thinking parts; anything else,
+    including a line that is not JSON, produces nothing.
+    """
+    event = _load(line)
+    return _translate_event(event) if event is not None else None
+
+
+def is_tool_call(line: str) -> bool:
+    """Whether a raw line is a `tool_execution_start` event.
+
+    A session with zero of these did not follow the compile-okf skill (its
+    first two steps are tool calls) -- see compile.py's "did nothing" check.
+    """
+    event = _load(line)
+    return event is not None and event.get("type") == "tool_execution_start"
+
+
+def process(lines: Iterable[str]) -> Iterator[tuple[str, str | None, bool]]:
+    """Yield (raw line, formatted-or-None, is_tool_call) for each line, in order.
+
+    The raw line is always handed back alongside the translation: a line
+    with no recognised translation (malformed JSON, plain stderr text, a
+    stack trace merged in from stderr) is not nothing -- a caller that
+    drops everything without a translation loses exactly the diagnostic
+    text a failure needs.
+    """
+    for line in lines:
+        event = _load(line)
+        if event is None:
+            yield line, None, False
+            continue
+        yield line, _translate_event(event), event.get("type") == "tool_execution_start"

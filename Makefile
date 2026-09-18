@@ -20,8 +20,8 @@ YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint check-okf validate test test-shell test-web2md test-clis install-clis \
-	test-sandbox wiki scrape
+.PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
+	install-clis install test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
 # Python, and check that VERSION and CHANGELOG.md's latest release agree.
@@ -42,6 +42,9 @@ CSPELL ?= npx --yes cspell
 # ruff runs once per tracked subproject rather than once over the tree, because
 # each project carries its own [tool.ruff]. Deriving the list from tracked
 # pyproject.toml files means a new subproject is linted the moment it is added.
+# The bare 'pyproject.toml' pattern adds the root md2okf project alongside the
+# '*/pyproject.toml' subprojects; its own [tool.ruff] scopes that walk away
+# from md/, okf/, and everything else that isn't its source.
 lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(MARKDOWNLINT)
@@ -50,7 +53,7 @@ lint:
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(CSPELL) --no-progress
-	git ls-files -- '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
+	git ls-files -- 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
 	if [ ! -f VERSION ]; then \
 		echo "lint: VERSION is missing" >&2; exit 1; \
 	fi; \
@@ -83,7 +86,7 @@ validate:
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-shell test-web2md test-clis test-sandbox
+test: test-shell test-web2md test-clis test-md2okf test-sandbox
 
 # Host-side shell tests for state-path selection and the session bind helper.
 # The real bind cases skip on hosts without password-free mount capability.
@@ -111,12 +114,28 @@ test-clis:
 	uv run --project scripts/merkleokf --group test pytest -c scripts/merkleokf/pyproject.toml \
 		scripts/merkleokf/tests
 
+# Unit-test the md2okf driver itself. pytest's default discovery already
+# collects only tests/test_*.py, leaving the tests/*.sh shell suites (run by
+# test-shell and test-sandbox) untouched. Offline: every sbx call goes
+# through the one seam in md2okf.sandbox, which these tests replace with a
+# fake.
+test-md2okf:
+	uv run --group test pytest tests
+
 # Install the four host CLIs onto PATH via uv tool.
 install-clis:
 	uv tool install --force ./scripts/inspectmd
 	uv tool install --force ./scripts/inspectokf
 	uv tool install --force ./scripts/sizeokf
 	uv tool install --force ./scripts/merkleokf
+
+# Install md2okf itself onto PATH via uv tool. Packaging the kit/SPEC/CLIs
+# into the wheel (force-include) lands in a later stage; until then the
+# installed tool has no bundled kit and fails clearly (ResourcesError) on
+# anything but --help/--version — this target is for verifying the entry
+# point wires up, not yet for real compiling from an install.
+install:
+	uv tool install --force .
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that kits/md2okf/spec.yaml promises.

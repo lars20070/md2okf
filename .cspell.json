@@ -12,7 +12,8 @@
     "scripts/inspectmd/tests/**",
     "scripts/inspectokf/tests/**",
     "scripts/sizeokf/tests/**",
-    "scripts/merkleokf/tests/**"
+    "scripts/merkleokf/tests/**",
+    "tests/**"
   ],
   "words": [
     "okf",
@@ -54,6 +55,8 @@
     "docstrings",
     "conftest",
     "monkeypatch",
+    "argparse",
+    "workbench",
     "qwen",
     "resumability",
     "resumable",

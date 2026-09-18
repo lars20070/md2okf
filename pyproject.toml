@@ -1,0 +1,54 @@
+[project]
+name = "md2okf"
+dynamic = ["version"]
+description = "Compile Markdown into an OKF wiki with the Pi coding agent, via a sandboxed sbx runtime"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+md2okf = "md2okf.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# VERSION is the single source of the package version (see AGENTS.md); this
+# reads it verbatim rather than duplicating it in [project.version].
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+[dependency-groups]
+test = ["pytest>=8.4"]
+
+# Paths are relative to this file, so they resolve wherever the project is
+# invoked from. pythonpath keeps `import md2okf` working without an install.
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+# This is the repository root, so the tree walk would otherwise reach md/,
+# okf/ (gitignored, usually absent), kits/md2okf/files/.../frontmatter-guard.py
+# (no project of its own), scripts/sync-descriptions.py (ditto), and the
+# skill-tool vendor scripts under .claude/ and .cursor/ -- none of these were
+# linted before this project existed, and none belong to it. web2md/, pdf2md/
+# and scripts/<cli>/ each carry their own [tool.ruff] and are linted under
+# that instead, via their own explicit Makefile invocation, unaffected by this
+# exclude list.
+extend-exclude = ["md", "okf", "kits", "scripts", ".claude", ".cursor"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "RET", "PT", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# A test's name is its documentation; a docstring on each of them would be noise.
+# Fixtures and helpers are still expected to explain themselves.
+"tests/*" = ["D100", "D103"]
