@@ -56,7 +56,8 @@ agentInstructions:
 
     - `curl`, `fdfind` (fd; Ubuntu package `fd-find`), `jq`, `python3`,
       `rg` (ripgrep), `shellcheck`, `tree`
-    - `okf-lint` — OKF wiki linter (the compile-okf skill wraps it)
+    - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring
+      verbs (the curate-okf skill covers it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
     - `ruff`, `yamllint` — Python and YAML
     - `inspectmd` — Markdown heading map (line ranges and word counts)
@@ -75,7 +76,7 @@ permissions:
       - "openrouter.ai"
       # Pi service bootstrap.
       - "pi.dev"
-      # npm: pi-coding-agent, okf-lint, markdownlint-cli2, cspell.
+      # npm: pi-coding-agent, markdownlint-cli2, cspell.
       - "registry.npmjs.org:443"
       # uv tool install: ruff, yamllint (index + wheels).
       - "pypi.org:443"
@@ -87,9 +88,9 @@ permissions:
       - "security.ubuntu.com:80"
       - "ports.ubuntu.com:80"
       - "download.docker.com:443"
-      # mq release binary: github.com redirects to a GitHub CDN host.
-      # Today that is objects.githubusercontent.com; release-assets is also
-      # used for release downloads and must stay allowlisted.
+      # mq and okfctl release binaries: github.com redirects to a GitHub CDN
+      # host. Today that is objects.githubusercontent.com; release-assets is
+      # also used for release downloads and must stay allowlisted.
       - "github.com:443"
       - "objects.githubusercontent.com:443"
       - "release-assets.githubusercontent.com:443"
@@ -135,7 +136,6 @@ setup:
     - command: |
         set -eu
         PI_VERSION=0.85.1
-        OKF_LINT_VERSION=0.1.0
 
         npm config set proxy "$HTTP_PROXY"
         npm config set https-proxy "$HTTP_PROXY"
@@ -157,9 +157,8 @@ setup:
         }
 
         npm_install_retry "@earendil-works/pi-coding-agent@${PI_VERSION}"
-        npm_install_retry "@thisismydesign/okf-lint@${OKF_LINT_VERSION}"
       user: "1000"
-      description: Configure npm proxy and install Pi and okf-lint
+      description: Configure npm proxy and install Pi
 
     - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
       user: "1000"
@@ -205,6 +204,44 @@ setup:
       user: "1000"
       description: Install mq (Markdown query tool)
 
+    # Same story as mq, one release archive rather than a bare binary. The
+    # checksums.txt second column is a plain filename here, so the awk match is
+    # on the archive name. Only okfctl is extracted: the archive also carries
+    # okfctl-search, whose semantic index needs a model download from a host
+    # that is not allowlisted.
+    - command: |
+        set -eu
+        OKFCTL_VERSION=0.4.0
+
+        case "$(uname -m)" in
+          x86_64) OKFCTL_ARCH=amd64 ;;
+          aarch64) OKFCTL_ARCH=arm64 ;;
+          *)
+            echo "okfctl: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        archive="okfctl_${OKFCTL_VERSION}_linux_${OKFCTL_ARCH}.tar.gz"
+        base="https://github.com/cwest/okfctl/releases/download/v${OKFCTL_VERSION}"
+        curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "okfctl: checksum mismatch for ${archive}" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$archive" -C "$tmp" okfctl
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/okfctl" "$HOME/.local/bin/okfctl"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install okfctl (OKF bundle tool)
+
     # Native Pi package (not MCP): tools + context7-docs skill under ~/.pi/agent/npm/.
     - command: |
         set -eu
@@ -215,8 +252,11 @@ setup:
 
     # Static files/home/ copies do not reliably preserve the git 100755 bit;
     # set it explicitly so the compile-okf skill can invoke the wrapper.
-    - command: chmod 0755 /home/agent/.pi/agent/skills/compile-okf/scripts/lint-okf.sh
-      description: Make compile-okf lint script executable
+    - command: |
+        set -eu
+        scripts=/home/agent/.pi/agent/skills/compile-okf/scripts
+        chmod 0755 "$scripts/check-okf.sh"
+      description: Make the compile-okf check script executable
 
   # Bind mounts do not survive a sandbox stop. The startup hook covers normal
   # starts and sbx exec; the entrypoint above is a second required call site for

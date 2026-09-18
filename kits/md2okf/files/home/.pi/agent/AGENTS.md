@@ -23,10 +23,12 @@ directory per task, each with a `SKILL.md`.
   - `inspect-okf` — survey what the wiki already contains, before writing.
   - `size-okf` — measure how much prose a page or category holds.
   - `merkle-okf` — confirm which pages a run actually changed.
+  - `curate-okf` — check the wiki with `okfctl`, and maintain nodes and indexes.
   - `context7-docs` — fetch current library/framework docs via Context7 (installed
     with `@upstash/context7-pi`; use before relying on training data for APIs).
-- Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`) are read
-  **when the work calls for them**, not only when a run names one.
+- Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`,
+  `curate-okf`) are read **when the work calls for them**, not only when a run
+  names one.
 
 ## The OKF specification is the source of truth
 
@@ -79,16 +81,20 @@ these instructions.
   If `index.md` already declares an older version, update it to the one in
   `../SPEC.md`.
 
-- `log.md` is the bundle's update log. It is **recommended** by the spec (and
-  by `okf-lint`'s `recommended-log` rule), so keep it present and current — see
-  "Update log" below.
+- `log.md` is the bundle's update log. The spec recommends it and the run's gate
+  requires it, so keep it present and current — see "Update log" below.
 - Content is organised into directories by topic. Every directory (including the
-  root) contains a plain `index.md` whose body is a link list to the pages and
-  subdirectories directly beneath it.
-- Write cross-links and index links as **bundle-absolute** paths — rooted at the
+  root) contains an `index.md` listing the pages and subdirectories directly
+  beneath it.
+- **`index.md` files are generated, not written.** Run `okfctl index build` (see
+  the `curate-okf` skill) after adding, moving or removing a page, and never
+  hand-edit one. The gate checks that every index is exactly what a rebuild would
+  produce, so a hand-written entry fails the run — including an entry for a page
+  that does not exist yet, which a rebuild can never emit.
+- Write cross-links **in page prose** as **bundle-absolute** paths — rooted at the
   wiki root, e.g. `/glossary/verb.md`, not `glossary/verb.md` — and only ever
-  link to a page that **exists on disk right now**. An index lists what is
-  already there; the run that adds a page also adds its index entry.
+  link to a page that **exists on disk right now**. Index links are the tool's
+  business, not yours; it writes them relative, and that is correct.
 
 ### Content pages
 
@@ -102,6 +108,7 @@ description: "A concise summary, at most ~200 characters."
 tags:
   - example-tag
   - another-tag
+generated: { by: pi/<model-id>, at: "2026-09-18T06:28:39Z" }
 ---
 ```
 
@@ -109,6 +116,12 @@ tags:
 - `title` — human-readable page title, **double-quoted**.
 - `description` — a concise summary, **at most ~200 characters**, **double-quoted**.
 - `tags` — a YAML list of kebab-case tags.
+- `generated` — who wrote the page and when (spec §5.2). `by` is an actor in the
+  §7 form `<producer>/<version>`: you are Pi, so it is `pi/` followed by the model
+  you are running, e.g. `pi/qwen3.6-35b-a3b`. `at` is an ISO 8601 datetime with an
+  explicit UTC offset — **double-quote it**, because an unquoted one is parsed as
+  a date by some tools and silently loses its time of day. Refresh `at` on a page
+  whose content you actually changed, and leave it alone on a page you did not.
 
 **Always double-quote `title` and `description`**, whatever they contain, and
 escape any double quote inside the value as `\"`. Headings in source documents
@@ -146,10 +159,10 @@ content entry in an index.
   date +%F
   ```
 
-- **Every run appends to the log.** After writing your pages and indexes, add an
-  entry for each page you created or updated under today's date heading, creating
-  that heading (at the top of the list) if it does not exist yet. Do not rewrite
-  or reorder entries from earlier dates.
+- **Every run appends to the log.** After writing your pages and rebuilding the
+  indexes, add an entry for each page you created or updated under today's date
+  heading, creating that heading (at the top of the list) if it does not exist
+  yet. Do not rewrite or reorder entries from earlier dates.
 - Entries are short prose. The leading bold word (`**Creation**`, `**Update**`,
   `**Deprecation**`) is a convention, not a requirement. Links inside entries
   follow the same rules as everywhere else: bundle-absolute and pointing only at
@@ -165,6 +178,8 @@ content entry in an index.
 
 - Updates are **idempotent**. If a page for a topic already exists, update it in
   place — never create a duplicate.
-- After writing or updating any page, **regenerate the affected `index.md` link
-  lists** (the page's own directory index and any parent index that must link to
-  it) so navigation stays correct.
+- After adding, moving or removing a page, **run `okfctl index build`** so every
+  `index.md` matches what is on disk. Never hand-edit one: the gate compares each
+  index against what a rebuild would produce, so a hand-written entry fails the
+  run. The gate only reports that mismatch — it never writes an index for you, so
+  rebuilding is always your step.

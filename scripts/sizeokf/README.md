@@ -49,7 +49,7 @@ byte-identical and easy to diff.
 
 ## What counts
 
-- **Only `*.md` files.** Anything else — `.okflintrc.json`, `.DS_Store` — is
+- **Only `*.md` files.** Anything else — `.DS_Store`, an editor swap file — is
   neither listed nor counted.
 - **Words, not characters or bytes.** `len(text.split())` after a UTF-8 decode
   and frontmatter strip. Punctuation stays attached to tokens.

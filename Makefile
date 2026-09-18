@@ -20,7 +20,7 @@ YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate test test-shell test-web2md test-clis install-clis \
+.PHONY: lint check-okf validate test test-shell test-web2md test-clis install-clis \
 	test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
@@ -67,13 +67,14 @@ lint:
 	fi
 	@echo "All lint checks passed."
 
-# Lint the generated okf/ wiki with okf-lint
-# (https://github.com/thisismydesign/okf-lint). Run via `pnpm dlx`, so nothing
-# needs installing on the host. Rules live in okf/.okflintrc.json. Kept out of
-# `make lint` because okf/ is generated output and gitignored — this is a
-# host-side developer command, not part of the source-tree lint or CI.
-lint-okf:
-	pnpm dlx @thisismydesign/okf-lint ./okf
+# Check the generated okf/ wiki with okfctl (https://github.com/cwest/okfctl)
+# and the frontmatter guard, using the same script the agent runs inside the
+# sandbox — one implementation, two call sites. Needs okfctl on PATH:
+# `brew install cwest/tap/okfctl`. Kept out of `make lint` because okf/ is
+# generated output and gitignored — this is a host-side developer command,
+# not part of the source-tree lint or CI.
+check-okf:
+	kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
 # Validate the sandbox kit spec against the current Sandbox Kit schema.
 validate:

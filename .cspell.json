@@ -40,7 +40,6 @@
     "psutil",
     "fdfind",
     "venv",
-    "okflintrc",
     "pycache",
     "httpx",
     "pythonpath",
@@ -91,6 +90,9 @@
     "Dramatica",
     "Egri",
     "usermod",
-    "newgrp"
+    "newgrp",
+    "okflintrc",
+    "okfctl",
+    "cwest"
   ]
 }

@@ -17,7 +17,7 @@ failures=0
 
 # `command -v` first, then a uniform smoke run: `--version`, falling back to
 # `--help`. That fallback is what makes CLIs with unknown flag support (pi,
-# okf-lint, markdownlint-cli2, cspell) checkable without fixture files or
+# markdownlint-cli2, cspell) checkable without fixture files or
 # hard-coding which flag each one accepts. `timeout` guards a tool that waits
 # rather than prints. Output is discarded, so no version is asserted.
 check() {
@@ -83,7 +83,6 @@ check tree
 
 # npm through the retry wrapper (kits/md2okf/spec.yaml).
 check pi
-check okf-lint
 
 # npm, Markdown and spelling linters (kits/md2okf/spec.yaml).
 check markdownlint-cli2
@@ -99,9 +98,10 @@ check inspectokf
 check sizeokf
 check merkleokf
 
-# pinned release binary (kits/md2okf/spec.yaml): checksummed download, no
+# pinned release binaries (kits/md2okf/spec.yaml): checksummed download, no
 # package manager.
 check mq
+check okfctl
 
 # Config delivery: kits/md2okf/files/home/.pi/agent/ is copied at kit build
 # time, not mounted, so a layout change can leave Pi with no instructions and
@@ -110,11 +110,13 @@ check_file "${HOME}/.pi/agent/AGENTS.md"
 check_file "${HOME}/.pi/agent/settings.json"
 check_file "${HOME}/.pi/agent/models.json"
 check_file "${HOME}/.pi/agent/skills/compile-okf/SKILL.md"
-check_exec "${HOME}/.pi/agent/skills/compile-okf/scripts/lint-okf.sh"
+check_exec "${HOME}/.pi/agent/skills/compile-okf/scripts/check-okf.sh"
+check_file "${HOME}/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py"
 check_file "${HOME}/.pi/agent/skills/inspect-md/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/inspect-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/size-okf/SKILL.md"
 check_file "${HOME}/.pi/agent/skills/merkle-okf/SKILL.md"
+check_file "${HOME}/.pi/agent/skills/curate-okf/SKILL.md"
 check_file "${HOME}/.local/lib/md2okf/mount-state.sh"
 
 if grep -R -F -q -- '../okf' "${HOME}/.pi/agent/AGENTS.md" \

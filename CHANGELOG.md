@@ -8,7 +8,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `okfctl` (pinned 0.4.0, checksummed release archive) to the sandbox toolchain,
+  and a `curate-okf` skill covering it. It replaces `okf-lint` as the wiki's
+  gate and takes ownership of the reserved `index.md` files: the agent runs
+  `okfctl index build` instead of writing link lists by hand, and the gate's
+  `okfctl index check` fails closed on a stale or hand-edited index.
+- `compile-okf/scripts/check-okf.sh`, one gate with two call sites — the agent
+  runs it before finishing, `make check-okf` runs the same file on the host. It
+  combines `okfctl validate`, a new dependency-free `frontmatter-guard.py`,
+  `okfctl lint`, `okfctl analyze` for links that resolve to nothing, and
+  `okfctl index check`. Lint defects (`broken-link`, `orphan`, `type-hygiene`,
+  `status-lifecycle`, `spec-version`) block; `missing-xref` and `coverage-gap`
+  are printed as advice, since they are judgment calls and the gate runs
+  unattended inside the compile loop.
+
 ### Changed
+
+- Migrate the wiki to **OKF v0.2**, following `SPEC.md`: every page's legacy
+  `timestamp` becomes `generated: { by, at }` (§5.2) with the actor recorded as
+  `pi/<model-id>` (§7), and the bundle-root `index.md` marker moves to `"0.2"`.
+  Index links are now relative, which is what `okfctl index build` writes;
+  cross-links in page prose stay bundle-absolute.
 
 - Persist Pi's native `~/.pi/agent/sessions` tree in
   `$XDG_STATE_HOME/md2okf/sessions`, bind-mounted from host state instead of a
@@ -32,9 +54,18 @@ and this project adheres to
 
 ### Fixed
 
-- Ensure `lint-okf.sh` is executable after kit setup (`chmod` in
-  `kits/md2okf/spec.yaml`), so `make test-sandbox` passes when the static
+- Ensure the `compile-okf` check script is executable after kit setup (`chmod`
+  in `kits/md2okf/spec.yaml`), so `make test-sandbox` passes when the static
   `files/home/` copy drops the exec bit.
+
+### Removed
+
+- `okf-lint` (`@thisismydesign/okf-lint`) and its `okf/.okflintrc.json` rule
+  file, superseded by `okfctl` and the frontmatter guard. The guard re-implements
+  the rules okfctl's spec floor deliberately leaves open — title, description,
+  tags, provenance, the `okf_version` marker and the log's date headings — and
+  adds a format check on provenance timestamps. `prefer-absolute-links` retires
+  with it, for index files only.
 
 ## [0.1.0] - 2026-09-07
 

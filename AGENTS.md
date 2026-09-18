@@ -20,8 +20,8 @@ the commit and push themselves.
 
 md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one source
 document per file in `md/`, one Pi run per file, folded into the wiki under
-`okf/`. `md/` is tracked; `okf/` is gitignored except for `okf/.okflintrc.json`,
-which is tracked.
+`okf/`. `md/` is tracked; `okf/` is gitignored in full — the wiki is generated
+output.
 
 `SPEC.md` at the repo root is the OKF revision the wiki is built against — the
 agent reads it at the start of every run, and it outranks any instruction file,
@@ -85,7 +85,8 @@ Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
 each task's procedure lives in its own skill directory under `skills/`. Task
 skill today: `compile-okf`. Tool skills: `inspect-md`, `inspect-okf`, `size-okf`,
-`merkle-okf` — **a tool gets a skill, not an `AGENTS.md` section.** Helper skill:
+`merkle-okf`, `curate-okf` — **a tool gets a skill, not an `AGENTS.md`
+section.** Helper skill:
 `context7-docs`, installed by the kit via `@upstash/context7-pi`. A new task gets
 a new skill, not more rules in `AGENTS.md`.
 
@@ -106,7 +107,7 @@ make install-clis        # uv tool install the four host CLIs onto PATH
 make test-sandbox        # check the sandbox delivers what kits/md2okf/spec.yaml promises
 make scrape              # fetch the website into md/ as one file (web2md)
 make wiki                # compile the OKF wiki via the sandbox runtime
-make lint-okf            # lint the generated okf/ wiki (okf-lint via pnpm dlx)
+make check-okf           # check the generated okf/ wiki (okfctl + frontmatter guard)
 ```
 
 ```bash
@@ -119,9 +120,9 @@ sbx rm --force md2okf                        # discard the sandbox, so the next 
 ./scripts/check-release-tag.sh vX.Y.Z        # assert a tag matches VERSION
 ```
 
-`make lint-okf` is host-only and needs a generated `okf/`; it sits outside
-`make lint` and outside CI because `okf/` is gitignored output, and the driver
-does not call it. `make test-sandbox` is host-only for the other reason — it
+`make check-okf` is host-only and needs a generated `okf/` plus `okfctl` on
+PATH (`brew install cwest/tap/okfctl`); it sits outside `make lint` and outside
+CI because `okf/` is gitignored output, and the driver does not call it. `make test-sandbox` is host-only for the other reason — it
 needs an sbx runtime — and reuses the existing sandbox rather than rebuilding
 it. `make wiki` takes `OPENROUTER_API_KEY` from `sbx secret`, not
 from your shell (see the README for the two-step setup). Runtime commands such

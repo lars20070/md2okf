@@ -1,7 +1,8 @@
 # kits/md2okf
 
 The Docker Sandbox kit that runs Pi. `spec.yaml` declares the image, the network
-allowlist, the credentials and the two pinned installs. Everything under
+allowlist, the credentials and the pinned installs — Pi itself, the linters, and
+the `mq` and `okfctl` release binaries. Everything under
 `files/home/` is copied into the sandbox at `~/`, so `files/home/.pi/agent/`
 becomes Pi's config directory: `AGENTS.md`, `settings.json`, `models.json` and
 `skills/`.

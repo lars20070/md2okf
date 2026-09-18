@@ -17,14 +17,14 @@ make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
 make install-clis        # install the four host CLIs onto PATH
 make test-sandbox        # check the sandbox has the tools, config and key it promises
-make lint-okf            # lint the generated wiki
+make check-okf           # check the generated wiki
 make scrape              # fetch the website into md/ as one file
 make wiki                # compile the OKF wiki
 ```
 
 markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
 `uv tool run` and cspell via `npx`, so none of them needs a separate install.
-`make lint-okf` needs `pnpm`.
+`make check-okf` needs `okfctl`: `brew install cwest/tap/okfctl`.
 
 CI (`.github/workflows/ci.yml`) runs five jobs on every pull request: `lint`,
 `test-shell`, `test-web2md`, `test-clis`, and `validate-kit`. Each one reuses the
@@ -104,8 +104,8 @@ The instructions come in two parts. `kits/md2okf/files/home/.pi/agent/AGENTS.md`
 holds what every task must respect: the OKF conventions, the directories the
 agent may write to, and the rule that `SPEC.md` outranks both. Each task's
 procedure lives in a skill of its own. Task skill today: `compile-okf`. Tool
-skills: `inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf` — a tool gets a
-skill, not an `AGENTS.md` section. The sandbox also installs the
+skills: `inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`, `curate-okf` — a
+tool gets a skill, not an `AGENTS.md` section. The sandbox also installs the
 `context7-docs` skill via `@upstash/context7-pi` for library docs lookups. A
 new task gets a new directory rather than more rules in `AGENTS.md`.
 
@@ -123,17 +123,35 @@ the model and provider settings.
 sandbox and calls `sbx`, and the POSIX `sh` script it runs inside the VM), plus
 host-side shell tests for state mount selection and bind relocation.
 
-## Linting the wiki
+## Checking the wiki
 
-[okf-lint](https://github.com/thisismydesign/okf-lint) checks the wiki against
-the spec. Rules live in `okf/.okflintrc.json`, tracked and un-ignored by name so
-it survives the `okf/*` rule in `.gitignore`.
+[okfctl](https://github.com/cwest/okfctl) checks the wiki against the spec and
+against its own curation health, and it owns the reserved `index.md` files: the
+agent runs `okfctl index build` rather than writing link lists by hand.
 
-The sandbox installs okf-lint at a pinned version, and the `compile-okf` skill
-wraps it in its own `scripts/lint-okf.sh`. The agent lints its own output and fixes what
-the linter reports before it finishes. On the host, `make lint-okf` runs the
-same tool through `pnpm dlx`. It sits outside `make lint` and outside CI because
-`okf/` is generated.
+The gate is `kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
+one script with two call sites — the agent runs it before it finishes, and
+`make check-okf` runs the same file on the host. It combines five checks:
+`okfctl validate` for the spec floor, a `frontmatter-guard.py` for the
+conventions the floor deliberately leaves open (title, description, tags,
+`generated` provenance, the `okf_version` marker, the log's date headings),
+`okfctl lint` for curation defects, `okfctl analyze` for links that resolve to
+nothing, and `okfctl index check` for a stale or hand-edited index.
+
+Lint findings split two ways. `broken-link`, `orphan`, `type-hygiene`,
+`status-lifecycle` and `spec-version` block the run — each has one correct fix.
+`missing-xref` and `coverage-gap` are printed as advice, because they are
+judgment calls and the gate runs unattended inside the compile loop.
+
+The guard reads the expected `okf_version` from `SPEC.md`, looked up as the
+sibling of the bundle — `./SPEC.md` beside `./okf` on the host, the
+`../SPEC.md` mount in the sandbox. A bundle copied elsewhere to try something
+out has no sibling spec and the guard exits `2`; set `SPEC_MD` to point at the
+real file rather than reading it as a broken gate.
+
+The sandbox installs okfctl at a pinned version; on the host it comes from
+Homebrew, so the two can drift — `okfctl version` says which. The check sits
+outside `make lint` and outside CI because `okf/` is generated.
 
 ## Releasing
 

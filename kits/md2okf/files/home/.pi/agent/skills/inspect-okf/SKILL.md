@@ -39,8 +39,9 @@ renders them. Use this to find pages already covering a topic before writing.
 
 ## Limits
 
-- Hides **dotfiles**, so `.okflintrc.json` is invisible here.
+- Hides **dotfiles**, so anything starting with `.` is invisible here.
 - Slugs are lossy (`1981.md`, `exams.md` say nothing about content) — open the
   page when you need substance.
 - A page listed here may still be **unreachable in the wiki** if no `index.md`
-  links it; `okf-lint` does not catch that either.
+  links it. The gate does catch that — `okfctl lint` reports it as an `orphan`,
+  which usually means the indexes need `okfctl index build`.

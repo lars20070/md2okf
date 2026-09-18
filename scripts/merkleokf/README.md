@@ -56,7 +56,7 @@ table.
   timestamp bump or a tag fix is a change and will move the hash. `sizeokf` is
   the one that ignores frontmatter and measures prose — the two answer different
   questions on purpose, and share no code.
-- **Only `*.md` files.** `.DS_Store` and `.okflintrc.json` are ignored, so a
+- **Only `*.md` files.** Dotfiles such as `.DS_Store` are ignored, so a
   hash never flaps because Finder looked at a folder.
 - **Directory digests** cover their children sorted by name, each contributing a
   type tag, its name, and its digest (`d`/`f` + name + digest). Names are

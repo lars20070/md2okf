@@ -107,6 +107,9 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
   agent runs on.
 - `make`, `git`, and `jq`, which the compile driver uses on the host.
+- [okfctl](https://github.com/cwest/okfctl), only for the host-side `make
+  check-okf`: `brew install cwest/tap/okfctl`. The sandbox installs its own
+  pinned copy, so a compile does not need it.
 
 ## Quickstart
 
@@ -155,8 +158,8 @@ Compiling document md/my-document.md (iteration 2)
 b481d05c6a17 -> b481d05c6a17
 ```
 
-The wiki lands in `okf/`, which is gitignored apart from `okf/.okflintrc.json`,
-so the generated pages stay out of the repo. `md/` is tracked and ships with
+The wiki lands in `okf/`, which is gitignored, so the generated pages stay out
+of the repo. `md/` is tracked and ships with
 sample documents, so `make wiki` has something to compile straight away.
 
 ## Session state
@@ -192,8 +195,8 @@ per `md/*.md` file, re-running the same document (a *Ralph loop*) until
 a Merkle hash tree, one hash per file and per directory, so a change to any page
 moves the root hash and an unchanged root means the run added nothing. The loop
 is capped by `RALPH_MAX` (default 10). The agent's only writable content output is
-`okf/`, [okf-lint](https://github.com/thisismydesign/okf-lint) must pass before
-it finishes, and `SPEC.md` outranks every instruction file. Each run streams
+`okf/`, the [okfctl](https://github.com/cwest/okfctl) check must pass before it
+finishes, and `SPEC.md` outranks every instruction file. Each run streams
 tool names and assistant text as it goes, and Pi writes its session transcript
 through its native session path into persistent host state.
 

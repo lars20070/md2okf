@@ -461,7 +461,8 @@ is already unwired from the Makefile — leave it.
 ### Check
 
 ```bash
-rg -n 'okf-lint|okflintrc|lint-okf' -g '!.claude/**' -g '!CHANGELOG.md'   # expect no hits
+rg --hidden -n 'okf-lint|okflintrc|lint-okf' \
+  -g '!.claude/**' -g '!.git/**' -g '!CHANGELOG.md'   # --hidden: the Pi config lives under .pi/
 make lint                                    # cspell will catch an unregistered `okfctl`
 make validate
 sbx rm --force md2okf && make test-sandbox   # proves nothing still depends on okf-lint
