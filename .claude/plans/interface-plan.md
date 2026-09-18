@@ -1,31 +1,4 @@
-# Plan for this task
-
-Write the merged document below to `.claude/plans/interface-redesign.md`
-(a new file; nothing else is touched). It combines the packaging proposal and
-the review into one self-contained plan: no pointers to the three documents
-that are being retired, so it survives their deletion. References to repository
-files the plan *changes* (`README.md`, `CHANGELOG.md`, `AGENTS.md`,
-`CONTRIBUTING.md`, `SPEC.md`) are kept — without them the plan cannot state
-what to edit.
-
-Substantive merge decisions, so the result is one plan rather than two stapled
-together:
-
-- The packaging recommendation (pure-Python wheel, `uv tool install`) is kept as
-  the plan of record; the two rejected channels shrink to one table and two
-  sentences each.
-- The staging is the review's: command first, then constraint reduction, then
-  the workbench, then publishing — so the workbench is built once, smaller.
-- The review's six gaps are folded into the carry-over list rather than sitting
-  in a separate critique section.
-- Stale line references are corrected (the kit shims are `spec.yaml:281-312`,
-  not `237-272`).
-- The `okf/`-missing-in-a-fresh-clone finding becomes an explicit work item,
-  since it is a live bug rather than a design question.
-
----
-
-<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR Sigstore SLSA Linuxbrew importlib flock DEVNULL Popen nullglob pipefail shopt -->
+<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR importlib flock progfile DEVNULL Popen SBXAGENT nullglob pipefail shopt pypi -->
 
 # Plan: ship `md2okf` as a packaged primitive
 
