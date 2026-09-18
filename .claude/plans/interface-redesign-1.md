@@ -54,9 +54,9 @@ and neither is a good interface.
 - **State precedence.** An exported `XDG_STATE_HOME` beats `.env`, which beats
   `~/.local/state`; a relative value counts as unset; the directory is created
   mode `0700`.
-- **`make` remains the developer task runner** for `lint`, `validate` and the
-  test suites. This proposal is about the user-facing runtime commands, not
-  about repository chores.
+- **`make` remains the developer task runner** for `lint`, `validate`,
+  `check-okf` and the test suites. This proposal is about the user-facing
+  runtime commands, not about repository chores.
 
 ## Proposal A — `bin/md2okf`, a Bash dispatcher
 
@@ -141,7 +141,9 @@ md2okf compile [PATH ...] [--max-iterations N] [--reuse] [--dry-run]
 md2okf shell                     # bash in the sandbox, reusing it
 md2okf pi [-- PI_ARGS...]        # interactive Pi, reusing it
 md2okf sandbox up [--fresh] | down | status
-md2okf lint [PATH]               # okf-lint on the host, via pnpm dlx
+md2okf check [PATH]              # the wiki gate on the host: okfctl plus the
+                                 # kit's check-okf.sh, the same script the
+                                 # agent runs (what `make check-okf` invokes)
 md2okf doctor                    # sbx present and ≥ 0.43, logged in, key set,
                                  # state dir writable, kit spec valid
 md2okf --version                 # reads VERSION
@@ -153,6 +155,13 @@ compiles `md/`. It rebuilds the sandbox by default, as today; `--reuse` keeps
 the existing one, `sandbox up --fresh` is the explicit rebuild for the other
 commands. `--dry-run` prints the sandbox command line, the mounts and the
 document list without running Pi.
+
+`check` does not re-implement anything: it runs
+`kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
+one script with two call sites today — the agent before it finishes, and
+`make check-okf` on the host — so the CLI becomes a third caller, not a second
+implementation. It needs `okfctl` on PATH (`brew install cwest/tap/okfctl`);
+that stays a `check`-only requirement, which is why it is staged last.
 
 The root is found by walking up from the current directory until
 `kits/md2okf/spec.yaml` and `SPEC.md` appear, like `git` finds `.git`;
@@ -324,7 +333,7 @@ From `scripts/compile-okf.sh` and `scripts/lib/sandbox-mounts.sh`:
 2. Port `test-sandbox-mounts.sh`, point `test-sandbox.sh` at
    `md2okf sandbox up`, delete the three scripts and the library, update the
    docs.
-3. Add `doctor`, `lint` and `--dry-run`.
+3. Add `doctor`, `check` and `--dry-run`.
 
 ### Decisions left open
 

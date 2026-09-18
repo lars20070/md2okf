@@ -1,4 +1,4 @@
-<!-- cspell:words argparse workbench uvx pipx hatchling sdist okflintrc GHCR Sigstore SLSA Linuxbrew getopts importlib flock progfile subcommands DEVNULL -->
+<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR Sigstore SLSA Linuxbrew getopts importlib flock progfile subcommands DEVNULL -->
 
 # Proposal: package and ship `md2okf` as a primitive
 
@@ -40,13 +40,15 @@ md2okf --version | --help
 | exit status | 0 / 1 / 2 | 0 every document converged; 1 a document hit the iteration cap — its partial work is on disk and named on stderr; 2 usage or environment (`sbx` missing or < 0.43, not logged in, key not proxy-managed, another run holds the sandbox) |
 | state | none | one long-lived sandbox named `md2okf` (the name the `sbx secret` workaround is keyed to). Built on first use, reused after, rebuilt automatically when the bundled kit changes, and on `--fresh` |
 
-Not in the surface: `shell`, `pi`, `sandbox up/down`, `doctor`, `lint`. Those
+Not in the surface: `shell`, `pi`, `sandbox up/down`, `doctor`, `check`. Those
 were repository chores, not the tool's job. `sbx exec -it md2okf -- bash` and
 `-- pi` are one-liners once a sandbox exists; the environment checks run on
 every invocation and fail with the fix in the message, which is what `doctor`
-was for; `okf-lint` has its own CLI. `RALPH_MAX` becomes `-n`; `.env` goes —
-a tool that is not tied to a checkout has no repository to read a `.env` from,
-so `XDG_STATE_HOME` is the one knob, with `~/.local/state` as the default.
+was for; the wiki check is `okfctl` plus the kit's `check-okf.sh`, a
+repository chore with its own entry point (`make check-okf`). `RALPH_MAX`
+becomes `-n`; `.env` goes — a tool that is not tied to a checkout has no
+repository to read a `.env` from, so `XDG_STATE_HOME` is the one knob, with
+`~/.local/state` as the default.
 
 ### Why it needs a workbench
 
@@ -75,16 +77,18 @@ This reproduces exactly the sibling layout the kit expects — `../md`,
 `../scripts`, `../SPEC.md`, and a working directory *named* `okf`, which
 `merkleokf --nolog` needs — so **the kit does not change**. The wiki copy is
 Markdown-sized. Mirroring back after every iteration means an interrupted run
-leaves the last completed pass in `-o DIR`. `.okflintrc.json` is seeded from
-the bundled default when `-o DIR` has none, and the user's copy wins after
-that.
+leaves the last completed pass in `-o DIR`. The sibling `SPEC.md` is also what
+`check-okf.sh`'s frontmatter guard reads inside the VM (`../SPEC.md`), so the
+gate the agent runs before it finishes keeps working unchanged; running that
+gate on the host against an `-o DIR` with no sibling spec needs `SPEC_MD`
+pointed at one, which the README should say.
 
 ## Three ways to package and ship it
 
-Every option bundles the same four assets — the kit, `SPEC.md`, the default
-`.okflintrc.json`, and the four CLI projects (`pyproject.toml` + `src/`) —
-because the tool must work outside a checkout. They differ in what the
-artifact is, what the host needs, and what the release publishes.
+Every option bundles the same three assets — the kit, `SPEC.md`, and the four
+CLI projects (`pyproject.toml` + `src/`) — because the tool must work outside a
+checkout. They differ in what the artifact is, what the host needs, and what
+the release publishes.
 
 ### Option A — a Python wheel on PyPI: `uv tool install md2okf`
 
@@ -103,14 +107,13 @@ uv tool install md2okf==0.2.0                          # pinned
 The driver is Python: argparse, native JSON for Pi's event stream (no `jq`),
 `subprocess` for `sbx`, `os.execvp` for nothing — there are no interactive
 subcommands left. `importlib.resources` locates the assets in the installed
-wheel; in a checkout it falls back to `kits/md2okf/`, `SPEC.md`,
-`okf/.okflintrc.json` and `scripts/`, so `uv run md2okf` works during
-development without a build.
+wheel; in a checkout it falls back to `kits/md2okf/`, `SPEC.md` and `scripts/`,
+so `uv run md2okf` works during development without a build.
 
 ### Option B — a Homebrew tap: `brew install lars20070/tap/md2okf`
 
 A tarball per release — `bin/md2okf` (Bash, the four scripts folded into one
-with a `while … case` option loop) plus `share/md2okf/{kit,SPEC.md,okflintrc.json,clis}`
+with a `while … case` option loop) plus `share/md2okf/{kit,SPEC.md,clis}`
 — attached to the GitHub Release, and a formula in a second repository,
 `lars20070/homebrew-tap`, that unpacks it and declares
 `depends_on "docker/tap/sbx"` and `depends_on "jq"`. The release workflow
@@ -239,11 +242,11 @@ pyproject.toml              name = "md2okf"; version from VERSION (hatch regex s
 src/md2okf/
   __init__.py               __version__ from importlib.metadata
   cli.py                    argparse: the one command; main() returns the exit code
-  resources.py              kit_dir(), spec_md(), okflintrc(), clis_dir(): the installed
-                            package's copies, else the checkout's (kits/md2okf, SPEC.md,
-                            okf/.okflintrc.json, scripts/<cli>)
+  resources.py              kit_dir(), spec_md(), clis_dir(): the installed package's
+                            copies, else the checkout's (kits/md2okf, SPEC.md,
+                            scripts/<cli>)
   workbench.py              state dir (XDG precedence, minus .env), work/ layout, mirror
-                            in/out, lock, .okflintrc seeding, kit fingerprint
+                            in/out, lock, kit fingerprint
   sandbox.py                the one sbx seam: present/version/login checks, exists(),
                             create(), remove(), exec(argv, stdin=DEVNULL, stream=…),
                             key check; `python -m md2okf.sandbox` ensures one (maintainers)
@@ -263,8 +266,7 @@ boundaries per directory; `uv run --project web2md` and the per-directory
 `src/md2okf` explicitly so `web2md/`, `pdf2md/` and `md/` cannot leak in.
 
 Wheel contents, via `[tool.hatch.build.targets.wheel.force-include]`:
-`kits/md2okf` → `md2okf/kit`, `SPEC.md` → `md2okf/SPEC.md`,
-`okf/.okflintrc.json` → `md2okf/okflintrc.json`, and for each CLI
+`kits/md2okf` → `md2okf/kit`, `SPEC.md` → `md2okf/SPEC.md`, and for each CLI
 `scripts/<cli>/pyproject.toml` and `scripts/<cli>/src` → `md2okf/clis/<cli>/…`
 (tests, `uv.lock`, README excluded). Verified by `tests/test_package.py`,
 which builds the wheel and asserts those paths exist and no `.DS_Store`,
@@ -313,9 +315,11 @@ force-include and version-source syntax before writing the file.
 - `scripts/bash.sh`, `scripts/pi.sh`: two lines each —
   `uv run python -m md2okf.sandbox && sbx exec -it md2okf -- bash` (or `pi "$@"`).
   `tests/test-sandbox.sh`: same ensure call, then its existing `sbx exec … sh -l -s`.
-- `Makefile`: `wiki` → `uv run md2okf md/` for one release, then goes; new
-  `install` (`uv tool install --force .`) beside `install-clis`; new
-  `test-md2okf` (`uv run --group test pytest tests`) added to `test`;
+- `Makefile`: `wiki` → `uv run md2okf md/` for one release, then goes;
+  `check-okf` stays exactly as it is — host-only, `okfctl` plus the kit's
+  `check-okf.sh`, outside the driver; new `install`
+  (`uv tool install --force .`) beside `install-clis`; new `test-md2okf`
+  (`uv run --group test pytest tests`) added to `test`;
   the ruff line's glob gains the root `pyproject.toml`
   (`'pyproject.toml' '*/pyproject.toml'`).
 - `.github/workflows/ci.yml`: `test-md2okf` job (pytest) and `build-package`
@@ -367,14 +371,14 @@ force-include and version-source syntax before writing the file.
 - `make lint` and `make validate` pass (the kit is unchanged; ruff now covers
   the root project).
 - `uv run --group test pytest tests` — offline: fake `sbx` recorded per test;
-  XDG precedence; mirror in/out including deletion and `.okflintrc.json`
-  seeding; basename clash → 2; stdin on a TTY → 2; the cap → 1 with the
-  document named; the continuation prompt from iteration 2; `stdin=DEVNULL`;
+  XDG precedence; mirror in/out including deletion; basename clash → 2;
+  stdin on a TTY → 2; the cap → 1 with the document named; the continuation
+  prompt from iteration 2; `stdin=DEVNULL`;
   the fingerprint rebuild rule; `events.py` against recorded Pi lines.
 - `uv build`, then `unzip -l dist/md2okf-*.whl` shows `md2okf/kit/spec.yaml`,
   `md2okf/kit/files/home/.pi/agent/AGENTS.md`, `md2okf/SPEC.md`,
-  `md2okf/okflintrc.json`, `md2okf/clis/merkleokf/pyproject.toml`, and no
-  `.DS_Store`, `tests/` or `uv.lock`; `uvx --from dist/*.whl md2okf --help`.
+  `md2okf/clis/merkleokf/pyproject.toml`, and no `.DS_Store`, `tests/` or
+  `uv.lock`; `uvx --from dist/*.whl md2okf --help`.
 - `uv tool install --force .` then, from a directory that is *not* the
   checkout, `md2okf --dry-run -o /tmp/w ~/some.md` prints the mounts,
   documents and command line without touching sbx.
