@@ -1,4 +1,4 @@
-<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR importlib flock progfile DEVNULL Popen SBXAGENT nullglob pipefail shopt pypi -->
+<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR importlib flock progfile DEVNULL Popen SBXAGENT nullglob pipefail shopt pypi mountpoint EROFS submounts virtiofs -->
 
 # Plan: ship `md2okf` as a packaged primitive
 
@@ -89,6 +89,11 @@ repository to read a `.env` from, so `XDG_STATE_HOME` is the one knob, with
 - **State precedence.** An exported absolute `XDG_STATE_HOME` wins, a relative
   value counts as unset, the default is `~/.local/state`, and the directory is
   created mode `0700` (`scripts/lib/sandbox-mounts.sh:38-48`).
+- **Read-only has to mean read-only.** The agent treats every source document as
+  untrusted, so `md/` and `SPEC.md` must be read-only as a property of the
+  filesystem rather than of instructions — the reason the mount list exists at
+  all (`scripts/lib/sandbox-mounts.sh:1-11`). That holds only while no
+  read-write mount is an ancestor of a read-only one; see the invariant below.
 - **`make` remains the developer task runner** for `lint`, `validate`,
   `check-okf` and the test suites. This plan is about the user-facing runtime
   command, not about repository chores.
@@ -129,16 +134,17 @@ What remains is a fixed staging layout under the state directory, mirrored in
 and out:
 
 ```text
-~/.local/state/md2okf/       $XDG_STATE_HOME/md2okf, as today
-  sessions/                  Pi sessions, bind-mounted as today (mount-state.sh)
-  work/
+~/.local/state/md2okf/       $XDG_STATE_HOME/md2okf — the root is NOT mounted
+  sessions/                  mount, rw           <- Pi sessions (mount-state.sh); the only
+                                                    state path the VM can reach
+  work/                      not mounted as a whole — only the three paths below are
     okf/                     primary mount, rw   <- mirrored from -o DIR before the run,
                                                     back to it after every iteration
     md/                      mount, ro           <- the inputs, copied by basename
                                                     (stdin -> stdin.md; a basename clash is exit 2)
     SPEC.md                  mount, ro           <- --spec, or the bundled copy
-  sandbox-fingerprint        kit tree hash + tool version + mount set
-  lock                       flock: one run at a time; a second invocation exits 2
+  sandbox-fingerprint        host-only: kit tree hash + tool version + mount set
+  lock                       host-only: flock, one run at a time; a second invocation exits 2
 ```
 
 This reproduces the sibling layout the kit expects, so **the kit's agent config
@@ -153,17 +159,37 @@ Seen from inside the VM, where every mount appears at its host absolute path,
 that staging area *is* the bundle layout the agent config assumes:
 
 ```text
-$XDG_STATE_HOME/md2okf/
-├── work/
-│   ├── okf/          rw, primary mount — the agent's working directory, the wiki root
-│   ├── md/           ro — the staged inputs for this run        (reached as ../md)
-│   └── SPEC.md       ro — --spec, or the bundled copy           (reached as ../SPEC.md)
-└── sessions/         rw — bind-mounted onto ~/.pi/agent/sessions (mount-state.sh)
+$XDG_STATE_HOME/md2okf/            the root and work/ are bare mountpoint parents,
+└── work/                          not mounts — nothing else of theirs is shared
+    ├── okf/          rw, primary mount — the agent's working directory, the wiki root
+    ├── md/           ro — the staged inputs for this run        (reached as ../md)
+    └── SPEC.md       ro — --spec, or the bundled copy           (reached as ../SPEC.md)
+$XDG_STATE_HOME/md2okf/sessions/   rw — bind-mounted onto ~/.pi/agent/sessions
+
+never mounted, so invisible inside the VM:
+  sandbox-fingerprint, lock                               <- host-side control files
 
 in the image, never mounted:
   pi, okfctl, inspectmd, inspectokf, sizeokf, merkleokf   <- installed at kit build time
   ~/.pi/agent/{AGENTS.md, settings.json, models.json, skills/}
 ```
+
+Four mounts, and one invariant: **no read-write mount may be an ancestor of a
+read-only one.** `sbx` enforces `:ro` on the host side — inside a sandbox,
+`sudo mount -o remount,rw` on a read-only workspace returns 0 and writes still
+fail with `EROFS` — so a read-only mount holds even against root in the guest.
+That guarantee survives only while nothing writable contains it: a plain
+`mount --bind` does not replicate nested submounts, so binding a writable
+parent elsewhere exposes the underlying writable view of everything below it,
+and the kit's own `agentInstructions` state that `sudo` is passwordless
+(`kits/md2okf/spec.yaml:51`). Mounting the state *root* read-write, as today's
+launchers do, would therefore put `work/md` and `work/SPEC.md` one
+`mount --bind` away from writable, and hand the agent the `lock` and
+`sandbox-fingerprint` outright — an injected source document could rewrite the
+spec the run is held to, and `check-okf.sh` would then validate the wiki
+against the tampered `../SPEC.md`. So `sessions/` is mounted, not the root.
+`SBXAGENT_STATE_DIR` still names the root, which is what the guest helper
+expects.
 
 Nothing above `work/` is reachable from the wiki, so `../md` and `../SPEC.md`
 resolve exactly as they do today and no host path outside the staging area is
@@ -212,21 +238,23 @@ sequenceDiagram
   D->>U: TSV row per document, exit 0
   end
 
-  Note over W: the three mount paths never change — only their contents do,<br/>which is why one sandbox serves both runs
+  Note over W: the four mount paths never change — only their contents do,<br/>which is why one sandbox serves both runs.<br/>lock and fingerprint stay on the host, unmounted
 ```
 
 <br>*Two `md2okf` invocations against different inputs and different outputs.
-The three mount paths — `work/okf` read-write, `work/md` and `work/SPEC.md`
-read-only — are the same in both runs; only what sits inside them changes, so
+The four mount paths — `work/okf` read-write, `work/md` and `work/SPEC.md`
+read-only, and `sessions/` read-write for Pi's transcripts — are the same in
+both runs; only what sits inside them changes, so
 run 2 finds the fingerprint unchanged and reuses the sandbox instead of paying
 for a rebuild. The host driver owns every copy: it stages the inputs and
 mirrors the wiki **in** before the run, so an existing wiki is continued rather
 than restarted, and mirrors it **out** after every iteration, so an interrupted
 run still leaves the last completed pass in `-o DIR`. Mirroring is a sync, not
 an append: re-staging for run 2 deletes run 1's pages from `work/okf`, which is
-what keeps `wikis/alpha` out of `wikis/beta`. The agent sees only `work/`, and
-the `flock` means the second run waits for the first rather than overlapping
-with it.*
+what keeps `wikis/alpha` out of `wikis/beta`. The agent sees only the four
+mounts — never the state root, so the `lock` and `sandbox-fingerprint` it would
+otherwise be able to rewrite are not in its namespace — and the `flock` means
+the second run waits for the first rather than overlapping with it.*
 
 ### The same two runs, without the time axis
 
@@ -251,13 +279,15 @@ flowchart LR
     WOKF@{ shape: docs, label: "okf/<br/>read-write<br/>the agent's cwd"}
   end
 
+  SESS@{ shape: docs, label: "sessions/<br/>read-write<br/>Pi transcripts"}
+
   subgraph VM["sbx microVM — one sandbox, both runs"]
     direction TB
     PI["Pi agent with<br/>/compile-okf skill"]
   end
 
   DRV["md2okf<br/>host driver"]
-  FP[("sandbox-fingerprint<br/>+ lock")]
+  FP[("sandbox-fingerprint + lock<br/>host-only, never mounted")]
 
   AMD ==>|"1. stage in"| WMD
   AOKF <==>|"2. mirror in, then out<br/>after every iteration"| WOKF
@@ -271,6 +301,7 @@ flowchart LR
   WMD -.->|"../md"| PI
   WSPEC -.->|"../SPEC.md, outranks all"| PI
   PI ==>|"writes"| WOKF
+  PI -.->|"~/.pi/agent/sessions"| SESS
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
   classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
@@ -279,6 +310,7 @@ flowchart LR
   class AMD,AOKF,BMD,BOKF data
   class DRV,FP host
   class WMD,WSPEC,WOKF helper
+  class SESS helper
   class PI agent
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style WORK fill:#F4FAFA,stroke:#0E7C86,stroke-width:1.5px,stroke-dasharray:4 3
@@ -295,7 +327,10 @@ never sees a path of yours, only `work/`, where it reads `../md` and
 inputs are staged, the target wiki is mirrored in so an existing wiki is
 continued rather than restarted, and the wiki is mirrored back out after every
 iteration. Run 2 re-stages the same paths, and mirroring in deletes run 1's
-pages, which is what keeps `wikis/alpha` out of `wikis/beta`.*
+pages, which is what keeps `wikis/alpha` out of `wikis/beta`. The state root is
+not mounted: `sessions/` is shared on its own so that the fingerprint and the
+lock stay host-side, and so that no writable mount sits above the two read-only
+ones.*
 
 <!-- cspell:enable -->
 
@@ -442,9 +477,12 @@ and version-source syntax before writing the file.
   non-interactive `sbx exec … pi`, with the reason in a comment and a test.
 - `scripts/lib/sandbox-mounts.sh:38-48` — absolute-or-unset `XDG_STATE_HOME`,
   `mkdir -p`, mode `0700` → `workbench.py`. Drop the `.env` layer.
-- `scripts/lib/sandbox-mounts.sh:56-62` — mount order (`okf` primary, then
-  `md:ro`, `SPEC.md:ro`, state rw; `scripts:ro` disappears with the kit
-  change) → `sandbox.create()`, with the workbench paths.
+- `scripts/lib/sandbox-mounts.sh:56-62` — mount order → `sandbox.create()`,
+  with the workbench paths and two deliberate changes: `scripts:ro` disappears
+  with the kit change, and the writable state mount narrows from the state root
+  to `$XDG_STATE_HOME/md2okf/sessions`. The list becomes `work/okf` (primary,
+  rw), `work/md:ro`, `work/SPEC.md:ro`, `…/md2okf/sessions` (rw) — four mounts,
+  no writable one an ancestor of a read-only one.
 - `scripts/bash.sh:31-36` — the `sbx ls -q | grep -qx` existence check and
   `sbx run --detached --name md2okf -e SBXAGENT_STATE_DIR=… <kit> <mounts>` →
   `sandbox.py`, plus the fingerprint comparison.
@@ -493,7 +531,9 @@ Six behaviours the shell has implicitly and a Python port silently loses:
   `.gitignore` and `README.md`, and `tests/test-sandbox-mounts.sh` (its
   precedence cases become `tests/test_workbench.py`).
 - `tests/test-sandbox.sh`: `uv run python -m md2okf.sandbox` in place of its own
-  create step, then its existing `sbx exec … sh -l -s`.
+  create step, then its existing `sbx exec … sh -l -s`, plus the mount-invariant
+  assertions above. `tests/test-sandbox-guest.sh`: the mount count and the
+  state-mount path change (`sessions/`, not the state root).
 - `Makefile`: `wiki` → `uv run md2okf md/` for one release, then goes;
   `check-okf` unchanged; new `install` (`uv tool install --force .`) beside
   `install-clis`; new `test-md2okf` (`uv run --group test pytest tests`) added
@@ -563,6 +603,14 @@ thrown away if they do.
 - `uv tool install --force .`, then from a directory that is *not* the
   checkout: `md2okf --dry-run -o /tmp/w ~/some.md` prints the mounts, the
   documents and the command line without touching sbx.
+- The mount invariant, live and cheap (`tests/test-sandbox.sh`, no model
+  calls): from inside the VM, assert that `$XDG_STATE_HOME/md2okf/lock` and
+  `…/sandbox-fingerprint` do not exist; that no read-write mount is an ancestor
+  of `work/md` or `work/SPEC.md`; that a write to `../md/*` and to
+  `../SPEC.md` fails **after** `sudo mount --bind` of every writable mount to a
+  scratch path; and that `~/.pi/agent/sessions` is still bound onto the host
+  now that only `sessions/` is mounted — `mount-state.sh` runs `mkdir -p` on
+  both ends, so the narrower granularity has to be proven, not assumed.
 - Live (paid; needs `sbx login` and the key in `sbx secret`):
   `sbx rm --force md2okf`, then `md2okf -v md/GoogleStyleGuide-abridged.md`
   from the checkout — the wiki lands in `./okf`, stdout has one TSV line, exit
@@ -581,4 +629,16 @@ thrown away if they do.
   verified by listing the wheel, and the in-checkout fallback is a second code
   path — one function, tested.
 - **PyPI registration is a one-time owner action** and blocks step 4 only.
+- **`mount-state.sh` against the narrower mount.** Mounting `sessions/` rather
+  than the state root changes the granularity the guest helper was written for.
+  Its contract (`$SBXAGENT_STATE_DIR/sessions`) is unchanged, and the env var
+  still names the root, but the first live run after the change is the proof.
+- **A guest with sudo can still deny service on the mounts.** All of a
+  sandbox's host shares appear to sit on one virtiofs superblock: a
+  `mount -o remount,ro` on any one of them flips every share in the VM to
+  read-only until it is remounted (observed while testing this plan). That
+  costs a failed run, not data — a host-side read-only export stays read-only
+  whatever the guest does — but it means the driver should treat a sudden
+  `EROFS` on `work/okf` as a runtime failure with a clear message rather than
+  as a mirroring bug.
 - **Effort estimates are judgement**, not measurement.
