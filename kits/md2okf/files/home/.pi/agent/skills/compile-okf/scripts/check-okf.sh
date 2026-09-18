@@ -114,8 +114,21 @@ fi
 # would have written.
 echo
 echo "== dangling links =="
-dangling="$(okfctl analyze --json "${bundle}" |
-	jq -r '.coverage_gaps.dangling_links[]? | "dangling-link: \(.from) -> \(.target)"')"
+analyze_json="$(okfctl analyze --json "${bundle}")"
+analyze_status=$?
+if [[ "${analyze_status}" -ne 0 ]] || [[ -z "${analyze_json}" ]]; then
+	echo "Error: could not read 'okfctl analyze --json ${bundle}'." >&2
+	exit 2
+fi
+
+dangling="$(jq -r '.coverage_gaps.dangling_links[]? | "dangling-link: \(.from) -> \(.target)"' \
+	<<<"${analyze_json}")"
+jq_status=$?
+if [[ "${jq_status}" -ne 0 ]]; then
+	echo "Error: could not parse 'okfctl analyze --json ${bundle}'." >&2
+	exit 2
+fi
+
 if [[ -n "${dangling}" ]]; then
 	echo "${dangling}"
 	status=1
