@@ -3,6 +3,7 @@ config:
   MD024:
     siblings_only: true  # Keep a Changelog repeats Added/Changed/Fixed per release
   MD026: false  # Trailing punctuation in heading: disable trailing punctuation checks
+  MD033: false  # no-inline-html: allow <br> and similar
 
 ignores:
   - "SPEC.md"
