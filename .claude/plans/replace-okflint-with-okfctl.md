@@ -24,6 +24,7 @@ instruction file no longer describes the corpus. Closing that gap is now part of
 | `okfctl analyze` | Useful signal: 1 thin node, 14 uncited nodes, 3 tag-cluster candidates, no orphans |
 | `okfctl node mv --dry-run` | Rewrites inbound links **preserving bundle-absolute form** (`/general-principles/…`) |
 | `okfctl index build` | Byte-identical to today's indexes **except** links become relative; root frontmatter preserved |
+| `okfctl index check` | Exit 1 on today's hand-written indexes, exit 0 after a build; exit 1 again when a page is added without one |
 | `okfctl migrate` | 0 deterministic edits, 14 `missing-actor` judgment items; with `--generated-by` all 14 migrate |
 | `okfctl log append` | **Incompatible** — prepends a second `# Change Log` H1 with flat `- DATE — msg` bullets |
 | Install | Pinned tarball + `checksums.txt` from GitHub releases; SHA-256 verified; **no new egress hosts needed** |
@@ -58,9 +59,14 @@ fix preserves a quoted value verbatim too.
 4. **No `.okf` sidecar.** It is an okfctl artifact, absent from OKF v0.1 *and* v0.2; §12 puts the marker in bundle-root
    `index.md` frontmatter, "the only place frontmatter is permitted in an `index.md`", which the wiki already carries.
 5. The frontmatter conventions are enforced by a **small guard script** — no `Type Template` node in the wiki.
-6. Generated indexes **adopt okfctl's relative links**; the `prefer-absolute-links` convention retires with `okf-lint`.
+6. **`okfctl index build` owns every `index.md`.** Pi never hand-edits one; `okfctl index check` gates that, failing
+   closed on a stale or hand-edited index. Generated indexes therefore carry okfctl's **relative** links, and the
+   `prefer-absolute-links` convention retires with `okf-lint` — for indexes only. Page **prose** stays bundle-absolute.
 7. The wiki **migrates to v0.2** via `okfctl migrate`, recording the actor as **`pi/<model-id>`** (today
    `pi/qwen3.6-35b-a3b`) — §7's `<producer>/<version>` form, matching the spec's own `reference_agent/gemini-2.5-pro`.
+8. **The gate hard-fails on lint *defects*, and only advises on lint *judgment* findings.** `broken-link`, `orphan`,
+   `type-hygiene`, `status-lifecycle` and `spec-version` block; `missing-xref` and `coverage-gap` are printed for Pi to
+   act on. Filtering `lint --json` on `.check` is what makes the split, rather than the all-or-nothing `--strict`.
 
 ### Accepted trade-offs (flagged, chosen deliberately)
 
@@ -68,6 +74,12 @@ fix preserves a quoted value verbatim too.
   guard script (Stage 2) or dropped.
 - `index.md` files switch to relative links. Spec-legal (§6.1), though it calls absolute the "recommended" form. Node
   **prose** keeps its absolute links — `node mv` preserves whatever form it finds.
+- Tool-owned indexes also mean **tool-decided indexes**: okfctl emits `# <Directory>`, then `## Subdirectories` and
+  `## Concepts`, entries sorted alphabetically with the linked page's `description` after ` - `. That happens to match
+  what the wiki has today, so nothing is lost on this corpus, but a future thematically-grouped or deliberately-ordered
+  index is no longer possible while `index check` gates. Curation moves into directory structure and titles.
+- `lint`'s `coverage-gap` cannot fire on this wiki: it only reports terms declared in some node's `aliases`, and the
+  pages carry none. It is in the advisory half of decision 8 on principle, not because it is expected to appear.
 - The type-template overlay is **not** used: it is an okfctl invention (its PRD §9, absent from both OKF revisions), it
   only checks field *presence*, and its template node would appear as an entry in the wiki's own `index.md`.
 - Migration converts provenance but cannot invent it: the 14 `analyze` "uncited" findings persist, because the pages
@@ -84,9 +96,12 @@ reverting that stage's edits and rebuilding. Only Stage 5 removes anything.
 | --- | --- | --- |
 | 1 | Install okfctl in the sandbox | Both linters installed; okf-lint still the gate |
 | 2 | Build `check-okf.sh` + the guard, prove they agree with okf-lint | New gate exists, not yet wired |
-| 3 | Migrate the wiki to v0.2, then tighten the guard | Wiki is v0.2; okf-lint now visibly obsolete |
+| 3 | Migrate to v0.2, rebuild the indexes, tighten the gate | Wiki is v0.2; okf-lint now visibly obsolete |
 | 4 | Switch Pi over (skills, conventions) | Pi uses okfctl; okf-lint still installed as fallback |
 | 5 | Remove okf-lint; Makefile, docs, CHANGELOG | okfctl only |
+
+Stages 3 and 4 are the one pair that must not be left half-done: after Stage 3 the wiki is v0.2 while Pi is still
+wired to okf-lint, so **no `make wiki` runs in that window** — see the warning at the end of Stage 3.
 
 ---
 
@@ -140,8 +155,10 @@ from a host that is not allowlisted. Leave it out.
 Same file, two more edits — nothing removed yet:
 
 - In `agentInstructions.content` → `## Installed tools`, add
-  `` - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring verbs (the curate-okf skill covers it) ``
-  **beside** the existing `okf-lint` bullet.
+  `` - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring verbs ``
+  **beside** the existing `okf-lint` bullet. Do **not** mention the `curate-okf` skill yet — it does not exist until
+  Stage 4, and this prose is what `tests/test-sandbox-guest.sh` treats as the kit's promise to the agent. Stage 4 adds
+  the pointer.
 - **No `permissions.network.allow` change** — `github.com:443` and `objects.githubusercontent.com:443` are already
   listed for `mq`; extend that comment to name okfctl too.
 
@@ -173,8 +190,29 @@ defaulting to `.`, exit `0` clean / `1` findings / `2` usage-or-runtime), shellc
 2. `okfctl validate "$bundle"` — spec floor. **Without `--strict`**: floor violations fail regardless, while git drift
    stays advisory (on the host `okf/` sits in a repo but is gitignored, so `--strict` would be noise).
 3. `python3 frontmatter-guard.py "$bundle"` — the conventions below.
-4. Dangling-link gate: `okfctl analyze --json "$bundle" | jq -e '.coverage_gaps.dangling_links | length == 0'`.
-5. `okfctl lint "$bundle"` — advisory, printed for Pi to act on (orphans, missing-xref, coverage gaps, type hygiene).
+4. Lint **defect** gate (decision 8) — fail when any blocking check appears:
+
+   ```sh
+   okfctl lint --json "$bundle" | jq -e '
+     [.[] | select(.check | IN("broken-link","orphan","type-hygiene","status-lifecycle","spec-version"))]
+     | length == 0'
+   ```
+
+5. Dangling-link gate: `okfctl analyze --json "$bundle" | jq -e '.coverage_gaps.dangling_links | length == 0'`.
+6. `okfctl lint "$bundle"` — printed in full, so the advisory half (`missing-xref`, `coverage-gap`) reaches Pi.
+
+Steps 4 and 5 look redundant and are not — verified on a copy of the wiki:
+
+| Link defect | `lint` `broken-link` | `analyze` `dangling_links` |
+| --- | --- | --- |
+| `/key-resources/jargon.md` when `jargon.md` lives elsewhere (moved path) | fires | fires |
+| `/general-principles/never-written.md`, a basename in no node | **silent** | fires |
+
+Lint only reports a missing target when a same-basename node exists to suggest, so it answers "this path is wrong".
+Analyze answers "this link goes nowhere", which is what the retired `valid-links` rule covered. Keep both.
+
+`okfctl index check` joins this list in Stage 3, not here: today's indexes are hand-written and bundle-absolute, so it
+would fail until they are rebuilt.
 
 **`…/skills/compile-okf/scripts/frontmatter-guard.py`** — stdlib, PyYAML-free (parse the frontmatter block directly, as
 `scripts/sync-descriptions.py` does). It walks concept nodes (`*.md` minus the reserved `index.md`/`log.md`):
@@ -187,13 +225,25 @@ defaulting to `.`, exit `0` clean / `1` findings / `2` usage-or-runtime), shellc
 | `tags-type` | guard: non-empty list of strings |
 | `okf-version-declared` | guard: root `index.md` carries `okf_version` matching the `**Version X.Y**` line in `SPEC.md` |
 | `recommended-log`, `log-date-order` | guard: root `log.md` exists; `## YYYY-MM-DD` headings, newest first (§9) |
-| `valid-links` | `check-okf.sh` step 4 (okfctl computes it; no duplicate link logic) |
+| `valid-links` | `check-okf.sh` step 5 (okfctl computes it; no duplicate link logic) |
 | *(type present)* | `okfctl validate` — the spec floor |
 | `prefer-absolute-links` | **dropped** by decision 6 |
 
 Accepting either provenance form in this stage is what lets the guard run against the pre-migration wiki; §13.1
 explicitly permits the legacy fallback. Stage 3 tightens it. Reading the expected `okf_version` out of `SPEC.md` keeps
 the check honest the next time the spec is updated — which has already happened once.
+
+**Where the guard finds `SPEC.md`:** as the **sibling of the bundle directory**, `<bundle>/../SPEC.md`. One rule covers
+both layouts, which is why it is worth stating rather than hard-coding a path:
+
+| Run from | Bundle | `<bundle>/../SPEC.md` resolves to |
+| --- | --- | --- |
+| Host, repo root | `./okf` | `./SPEC.md` — the tracked spec |
+| Sandbox, workspace *is* the wiki | `.` | `../SPEC.md` — the read-only mount (`scripts/lib/sandbox-mounts.sh`) |
+
+Allow a `SPEC_MD` environment override for anything unusual, and exit `2` with a clear message when the file is absent
+rather than silently skipping the `okf_version` check — a version check that quietly does nothing is worse than none.
+Verify the sandbox path in Stage 4's rebuild, since a host-only green here would not prove it.
 
 Both files are the single implementation for host and sandbox: the Stage 5 `make` target calls the same path.
 
@@ -204,6 +254,7 @@ drift — `okfctl version` reports which.
 
 ```bash
 make lint                                                    # shellcheck + markdownlint over the new files
+okfctl version                                               # record it: Homebrew tracks latest, the kit pins 0.4.0
 kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf   # expect exit 0
 pnpm dlx @thisismydesign/okf-lint ./okf                      # the old gate, for comparison
 ```
@@ -216,7 +267,13 @@ exists. Each must make `check-okf.sh` exit 1, and `okfctl validate` alone must *
 
 - break a timestamp into a non-ISO value, and separately into a bare date (the upstream-bug shape);
 - replace a `tags` list with a bare string;
-- point an `index.md` entry at a page that does not exist.
+- point an `index.md` entry at a page that does not exist;
+- link to a page whose basename lives in another directory — e.g. `[Jargon](/key-resources/jargon.md)` when
+  `jargon.md` is under `general-principles/`. Verified to raise lint `broken-link`, so this is the case that proves
+  the **step 4 defect gate** is wired, not just the guard.
+
+Also confirm the gate's own blocking set behaves: an added page that is not in the index raises `orphan` and fails,
+while a `missing-xref` on its own does not — that split is decision 8, and a test is the only thing that keeps it honest.
 
 ---
 
@@ -250,10 +307,21 @@ and keep it until the stage's checks pass.
    okfctl migrate okf --apply --plan /tmp/migrate-plan.json
    ```
 
-4. **Tighten the guard:** `generated.by` (an actor in §7 form) and `generated.at` are now required; a bare legacy
+4. **Hand the indexes to the tool** — this is the step that actually puts decision 6 into effect, and it is why
+   `index check` can join the gate:
+
+   ```bash
+   okfctl index build okf
+   okfctl index check okf      # expect: OK: index.md is current
+   ```
+
+   All three `index.md` files switch to relative links here. Verified: byte-identical to today's otherwise.
+
+5. **Tighten the gate:** add `okfctl index check "$bundle"` as the last step of `check-okf.sh`, and require in
+   `frontmatter-guard.py` that `generated.by` (an actor in §7 form) and `generated.at` are present — a bare legacy
    `timestamp` becomes a finding rather than an accepted fallback.
 
-5. **Update `kits/md2okf/files/home/.pi/agent/AGENTS.md`** so new pages are written the migrated way. Its documented
+6. **Update `kits/md2okf/files/home/.pi/agent/AGENTS.md`** so new pages are written the migrated way. Its documented
    content-page frontmatter (`type`, `title`, `description`, `tags`) never mentioned a timestamp at all — the wiki only
    has them because okf-lint demanded them, per `okf/log.md`. Add `generated: { by: pi/<model-id>, at: <ISO-8601 UTC> }`
    to that block with the double-quoting rule the section already applies to `title` and `description`.
@@ -264,13 +332,28 @@ and keep it until the stage's checks pass.
 grep -rh '^generated:' okf | sort -u        # full datetimes, not bare dates — the bug this stage works around
 okfctl bundle info okf                      # okf_version: 0.2
 head -3 okf/index.md                        # root marker bumped to "0.2"
-check-okf.sh ./okf                          # the tightened guard, exit 0
-diff -rq /tmp/okf-premigration okf          # only the 14 frontmatter blocks and index.md should differ
+okfctl index check okf                      # OK: index.md is current
+check-okf.sh ./okf                          # the tightened gate, exit 0
+diff -rq /tmp/okf-premigration okf          # expected: 14 frontmatter blocks + all 3 index.md files
 ```
+
+The diff should show exactly two classes of change and nothing else: the `timestamp` → `generated` rename on the 14
+pages, and the three indexes switching to relative links (plus the root marker going to `"0.2"`). Body prose must be
+untouched.
+
+Add one more negative check now that indexes are tool-owned: append a hand-written entry to a subdirectory
+`index.md` and confirm `check-okf.sh` exits 1 on the new `index check` step. Verified to fail closed.
 
 Expect `pnpm dlx @thisismydesign/okf-lint ./okf` to start failing `recommended-timestamp` on every page from here on.
 That is not a regression — it is okf-lint checking a v0.1 field that v0.2 §13.1 superseded, and it is the clearest
 possible signal that the old gate has outlived its usefulness.
+
+> **Do not run `make wiki` between Stage 3 and Stage 4.** Pi is still wired to `lint-okf.sh`, and okf-lint now fails on
+> every page. `compile-okf` tells Pi to fix every error and re-run until clean, so a compile in this window would have
+> it **undo the migration**: re-adding a `timestamp:` key to satisfy `recommended-timestamp`, and converting the
+> rebuilt indexes back to bundle-absolute links to satisfy `prefer-absolute-links` — which then fails `index check`.
+> The okf-lint failure here is a signal for a human reading it, not a gate anything should run against. Stage 4 closes
+> the window; if a compile is needed sooner, do Stage 4 first.
 
 ---
 
@@ -279,7 +362,9 @@ possible signal that the old gate has outlived its usefulness.
 ### Command policy
 
 **Allowed:** `validate`, `lint`, `analyze`, `bundle info`, `node list|show|new|mv|rm`, `index build|check`, `search`,
-`graph export`, `template list|show`, `version`.
+`graph export`, `template list|show`, `version`. `index build` is not merely permitted but **required** after any run
+that adds, moves or removes a page — decision 6 — and `analyze` stays guidance only: its thin, uncited and cluster
+findings are for Pi to weigh, never a gate.
 
 **Forbidden, with the reason stated in the skill:**
 
@@ -301,14 +386,22 @@ wiki uses, so Pi must complete the frontmatter afterwards — the guard catches 
   `bash` block and the verbatim `- Exit codes:` line, `## Workflow`, `## Reading the output`, `## Limits`). The
   allowed/forbidden split above lives here.
 - **`…/.pi/agent/AGENTS.md`** — add `curate-okf` to the `- Available skills:` list and to the "Tool skills … are read
-  when the work calls for them" sentence; fix the `okf-lint` mention in the `log.md` bullet; and amend the
-  "Write cross-links and index links as **bundle-absolute** paths" rule, which decision 6 retires for *index* links
-  while keeping it for page prose.
-- **`…/skills/compile-okf/SKILL.md`** — rewrite the final section `## Check your output with \`okf-lint\`` (lines
-  90–135) to call `~/.pi/agent/skills/compile-okf/scripts/check-okf.sh`, keep the "end your final message with the
-  summary line" rule, and point at `curate-okf` for the authoring verbs. Drop the `.okflintrc.json` paragraph.
+  when the work calls for them" sentence; fix the `okf-lint` mention in the `log.md` bullet. Then rework the
+  `### Structure` rules for decision 6: the "Write cross-links **and index links** as bundle-absolute paths" rule keeps
+  applying to page prose but not to indexes, and "Every directory … contains a plain `index.md` whose body is a link
+  list" becomes **`index.md` is generated — run `okfctl index build`, never hand-edit one**. The existing "only ever
+  link to a page that exists on disk right now … the run that adds a page also adds its index entry" sentence is then
+  satisfied by rebuilding rather than by hand.
+- **`…/skills/compile-okf/SKILL.md`** — two changes, not one. Rewrite the final section
+  `## Check your output with \`okf-lint\`` (lines 90–135) to call
+  `~/.pi/agent/skills/compile-okf/scripts/check-okf.sh`, keep the "end your final message with the summary line" rule,
+  point at `curate-okf` for the authoring verbs, and drop the `.okflintrc.json` paragraph. **And rewrite the procedure
+  step that has Pi regenerate index link lists by hand** into `okfctl index build`, run after the run's content changes
+  and before the gate. Without that step the indexes are never rebuilt, decision 6 never takes effect, and `index
+  check` fails closed on every run.
 - **`kits/md2okf/spec.yaml`** — point the `chmod 0755` step at `check-okf.sh` (add it; `lint-okf.sh` may keep its own
-  chmod until Stage 5).
+  chmod until Stage 5). Now that the skill exists, extend the `okfctl` bullet in `## Installed tools` with
+  "(the curate-okf skill covers it)" — the phrase Stage 1 deliberately left out.
 - **`tests/test-sandbox-guest.sh`** — add `check_exec` for `check-okf.sh` and `check_file` lines for
   `frontmatter-guard.py` and `skills/curate-okf/SKILL.md`.
 
@@ -325,10 +418,15 @@ diff -rq /tmp/okf-prerun okf                 # what actually moved
 What to look for, in order of importance:
 
 1. The run finishes and Pi's final message carries the `check-okf.sh` summary line — the gate is wired and passing.
-2. The only structural change is `index.md` links going relative, and any page Pi genuinely rewrote carrying a fresh
-   `generated` block. Anything else moving is a surprise worth understanding before Stage 5.
-3. `merkleokf --nolog -L 0 okf` settles between consecutive runs, as `scripts/compile-okf.sh`'s Ralph loop expects —
-   a gate that reports differently each run would never converge.
+   This is also the first proof that the guard resolves `SPEC.md` through the sandbox's `../SPEC.md` mount; a green
+   Stage 2 on the host does not establish that.
+2. `okfctl index check okf` still exits 0 afterwards, which proves Pi ran `index build` rather than hand-editing an
+   index. This is the single most likely thing to get missed, since it depends on a procedure step rather than a file.
+3. Any page Pi genuinely rewrote carries a fresh `generated` block, and body prose elsewhere is untouched. Anything
+   else moving is a surprise worth understanding before Stage 5.
+4. `merkleokf --nolog -L 0 okf` settles between consecutive runs, as `scripts/compile-okf.sh`'s Ralph loop expects —
+   a gate that reports differently each run would never converge. Watch this one now that the gate blocks on lint
+   defects: an `orphan` finding Pi resolves by rebuilding the index must not re-appear on the next pass.
 
 ---
 
