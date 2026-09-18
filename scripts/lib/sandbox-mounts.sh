@@ -47,6 +47,11 @@ sandbox_workspace_args() {
 	mkdir -p "${SBXAGENT_STATE_DIR}"
 	chmod 700 "${SBXAGENT_STATE_DIR}"
 
+	# okf/.okflintrc.json used to be the only tracked file under okf/; it is
+	# gone, .gitignore ignores the rest, and sbx cannot mount a path that does
+	# not exist yet, so a fresh clone needs this created before the mount.
+	mkdir -p "./okf"
+
 	# okf/           the wiki: the agent's only writable content output
 	# md/            source documents, read as data and never modified
 	# scripts/       the four helper CLI projects the kit's shims run

@@ -75,11 +75,13 @@ sbx run --detached --name "${kit_name}" \
 # reports an unchanged wiki root hash (log.md excluded). Cap with RALPH_MAX
 # (default 10) so a runaway compile fails instead of looping forever.
 #
-# The wiki is named by its absolute path, not as `.`, even though it is the cwd
-# `sbx exec` starts in: --nolog only skips the root log.md when the walk root
-# is a directory named okf (scripts/merkleokf/src/merkleokf/merkle.py), and
-# `.` has no name. Under `.` the log would be hashed, every run appends to it,
-# and the loop would never converge.
+# The wiki is named by its absolute path, not as `.`, even though it is the
+# cwd `sbx exec` starts in — consistent with every other host/VM path in this
+# script. --nolog no longer requires the walk root to be a directory literally
+# named okf (scripts/merkleokf/src/merkleokf/merkle.py): it now skips the walk
+# root's own log.md whatever it is named, so this is no longer load-bearing
+# for convergence — just kept for the same host/VM naming consistency as the
+# document path above.
 wiki_root_hash() {
 	sbx exec "${kit_name}" -- merkleokf --nolog -L 0 "${repo_root}/okf" |
 		awk 'NR==3 {print $1}'
