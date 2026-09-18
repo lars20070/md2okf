@@ -149,6 +149,26 @@ The staged `SPEC.md` is also what the frontmatter guard reads inside the VM as
 running that gate on the host against an `-o DIR` with no sibling spec needs
 `SPEC_MD` pointed at one, which the README should say.
 
+Seen from inside the VM, where every mount appears at its host absolute path,
+that staging area *is* the bundle layout the agent config assumes:
+
+```text
+$XDG_STATE_HOME/md2okf/
+├── work/
+│   ├── okf/          rw, primary mount — the agent's working directory, the wiki root
+│   ├── md/           ro — the staged inputs for this run        (reached as ../md)
+│   └── SPEC.md       ro — --spec, or the bundled copy           (reached as ../SPEC.md)
+└── sessions/         rw — bind-mounted onto ~/.pi/agent/sessions (mount-state.sh)
+
+in the image, never mounted:
+  pi, okfctl, inspectmd, inspectokf, sizeokf, merkleokf   <- installed at kit build time
+  ~/.pi/agent/{AGENTS.md, settings.json, models.json, skills/}
+```
+
+Nothing above `work/` is reachable from the wiki, so `../md` and `../SPEC.md`
+resolve exactly as they do today and no host path outside the staging area is
+visible to the agent.
+
 ## Packaging: a pure-Python wheel on PyPI
 
 A stdlib-only project at the repository root, laid out like the four helper
@@ -196,6 +216,45 @@ one.
 ## Implementation
 
 ### Layout
+
+The checkout after step 3, with what is new, changed and gone:
+
+```text
+md2okf/                          the repository — and now the Python project root
+├── pyproject.toml               NEW      name/entry point; version read from VERSION
+├── uv.lock                      NEW
+├── src/md2okf/                  NEW      the driver (module split below)
+├── tests/                       CHANGED  driver pytest suite joins the shell tests
+│   ├── test_cli.py … test_package.py     NEW
+│   ├── test-sandbox.sh                   kept; ensures the sandbox via python -m md2okf.sandbox
+│   ├── test-sandbox-guest.sh             kept; runs inside the VM
+│   ├── test-mount-state.sh               kept; guest-side state helper
+│   └── test-sandbox-mounts.sh            GONE -> tests/test_workbench.py
+├── kits/md2okf/                 CHANGED  the sandbox kit
+│   ├── spec.yaml                CHANGED  installs the helper CLIs; workspace shims deleted
+│   └── files/home/
+│       ├── .local/lib/md2okf/mount-state.sh   untouched (guest-side)
+│       └── .pi/agent/                         untouched: AGENTS.md, settings.json,
+│                                              models.json, skills/{compile-okf,
+│                                              curate-okf, inspect-md, inspect-okf,
+│                                              size-okf, merkle-okf}
+├── scripts/                     CHANGED  only the helper CLI projects and chores remain
+│   ├── inspectmd/ inspectokf/ sizeokf/ merkleokf/   pyproject.toml + src/ + tests/
+│   ├── validate-spec.sh release-notes.sh check-release-tag.sh sync-descriptions.py
+│   ├── compile-okf.sh                    GONE -> src/md2okf/compile.py, events.py
+│   ├── bash.sh  pi.sh                    GONE -> sbx exec one-liners in CONTRIBUTING.md
+│   └── lib/sandbox-mounts.sh             GONE -> workbench.py + sandbox.py
+├── md/                          source documents — one input among many now
+├── okf/                         the default output wiki, gitignored, created if missing
+├── SPEC.md                      the OKF revision; bundled into the wheel
+├── VERSION                      single source of the package version
+├── Makefile                     CHANGED  wiki delegates, then goes; + install, test-md2okf
+├── .github/workflows/           CHANGED  ci.yml gains two jobs; release.yml gains publish
+├── web2md/  pdf2md/             upstream stages, untouched
+└── README.md AGENTS.md CONTRIBUTING.md CHANGELOG.md   CHANGED (docs)
+```
+
+The driver itself, and the wheel it builds into:
 
 ```text
 pyproject.toml              name = "md2okf"; version from VERSION (hatch regex source);
