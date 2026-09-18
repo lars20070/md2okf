@@ -169,6 +169,136 @@ Nothing above `work/` is reachable from the wiki, so `../md` and `../SPEC.md`
 resolve exactly as they do today and no host path outside the staging area is
 visible to the agent.
 
+### Two runs, two wikis, one sandbox
+
+<!-- cspell:disable -->
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as your shell
+  participant D as md2okf<br/>host driver
+  participant H as your folders<br/>docs/… wikis/…
+  participant W as work/<br/>the fixed mount paths
+  participant S as sandbox "md2okf"<br/>Pi agent
+
+  rect rgb(253, 243, 224)
+  Note over U,S: run 1 — md2okf -o wikis/alpha docs/alpha/
+  U->>D: md2okf -o wikis/alpha docs/alpha/
+  D->>S: checks, then fingerprint: no sandbox yet<br/>sbx run --detached (minutes, once)
+  D->>H: read docs/alpha/*.md and wikis/alpha
+  D->>W: stage: work/md (ro), work/SPEC.md (ro)<br/>mirror in: wikis/alpha → work/okf (rw)
+  loop per document, until the wiki hash repeats (cap -n)
+    D->>S: sbx exec md2okf -- pi --mode json "compile ../md/a.md"
+    S->>W: agent writes pages into work/okf
+    D->>S: sbx exec md2okf -- merkleokf --nolog -L 0 work/okf
+    D->>H: mirror out: work/okf → wikis/alpha
+  end
+  D->>U: TSV row per document, exit 0
+  end
+
+  rect rgb(232, 243, 236)
+  Note over U,S: run 2 — other input, other output, same sandbox
+  U->>D: md2okf -o wikis/beta docs/beta/
+  D->>S: fingerprint unchanged → reuse it (seconds, no rebuild)
+  D->>H: read docs/beta/*.md and wikis/beta
+  D->>W: re-stage the same paths: work/md ← docs/beta<br/>work/okf ← wikis/beta, alpha's files deleted
+  loop per document, until the wiki hash repeats (cap -n)
+    D->>S: sbx exec md2okf -- pi --mode json "compile ../md/b.md"
+    S->>W: agent writes pages into work/okf
+    D->>S: sbx exec md2okf -- merkleokf --nolog -L 0 work/okf
+    D->>H: mirror out: work/okf → wikis/beta
+  end
+  D->>U: TSV row per document, exit 0
+  end
+
+  Note over W: the three mount paths never change — only their contents do,<br/>which is why one sandbox serves both runs
+```
+
+<br>*Two `md2okf` invocations against different inputs and different outputs.
+The three mount paths — `work/okf` read-write, `work/md` and `work/SPEC.md`
+read-only — are the same in both runs; only what sits inside them changes, so
+run 2 finds the fingerprint unchanged and reuses the sandbox instead of paying
+for a rebuild. The host driver owns every copy: it stages the inputs and
+mirrors the wiki **in** before the run, so an existing wiki is continued rather
+than restarted, and mirrors it **out** after every iteration, so an interrupted
+run still leaves the last completed pass in `-o DIR`. Mirroring is a sync, not
+an append: re-staging for run 2 deletes run 1's pages from `work/okf`, which is
+what keeps `wikis/alpha` out of `wikis/beta`. The agent sees only `work/`, and
+the `flock` means the second run waits for the first rather than overlapping
+with it.*
+
+### The same two runs, without the time axis
+
+```mermaid
+flowchart LR
+  subgraph RUN1[" run 1 — md2okf -o wikis/alpha docs/alpha/ "]
+    direction TB
+    AMD@{ shape: docs, label: "docs/alpha/*.md"}
+    AOKF@{ shape: docs, label: "wikis/alpha/<br/>the wiki"}
+  end
+
+  subgraph RUN2[" run 2 — md2okf -o wikis/beta docs/beta/ "]
+    direction TB
+    BMD@{ shape: docs, label: "docs/beta/*.md"}
+    BOKF@{ shape: docs, label: "wikis/beta/<br/>the wiki"}
+  end
+
+  subgraph WORK["the fixed mount paths<br/>$XDG_STATE_HOME/md2okf/work"]
+    direction TB
+    WMD@{ shape: docs, label: "md/<br/>read-only"}
+    WSPEC@{ shape: doc, label: "SPEC.md<br/>read-only"}
+    WOKF@{ shape: docs, label: "okf/<br/>read-write<br/>the agent's cwd"}
+  end
+
+  subgraph VM["sbx microVM — one sandbox, both runs"]
+    direction TB
+    PI["Pi agent with<br/>/compile-okf skill"]
+  end
+
+  DRV["md2okf<br/>host driver"]
+  FP[("sandbox-fingerprint<br/>+ lock")]
+
+  AMD ==>|"1. stage in"| WMD
+  AOKF <==>|"2. mirror in, then out<br/>after every iteration"| WOKF
+  BMD ==>|"3. re-stage, replacing run 1"| WMD
+  BOKF <==>|"4. mirror in — run 1's<br/>pages deleted — then out"| WOKF
+
+  DRV ==>|"every copy"| WORK
+  DRV -->|"sbx exec, once per document"| PI
+  DRV -.->|"reads"| FP
+  FP -.->|"unchanged → reuse, no rebuild"| VM
+  WMD -.->|"../md"| PI
+  WSPEC -.->|"../SPEC.md, outranks all"| PI
+  PI ==>|"writes"| WOKF
+
+  classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
+  classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
+  classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
+  classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
+  class AMD,AOKF,BMD,BOKF data
+  class DRV,FP host
+  class WMD,WSPEC,WOKF helper
+  class PI agent
+  style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
+  style WORK fill:#F4FAFA,stroke:#0E7C86,stroke-width:1.5px,stroke-dasharray:4 3
+  style RUN1 fill:#FFFDF7,stroke:steelblue,stroke-width:1.5px,stroke-dasharray:4 3
+  style RUN2 fill:#FFFDF7,stroke:steelblue,stroke-width:1.5px,stroke-dasharray:4 3
+```
+
+<br>*The same two invocations as a flow. Your folders (blue) sit at arbitrary
+paths and differ per run; the staging area (teal) is the same three paths every
+time, which is why the fingerprint matches and one microVM (gray) serves both
+runs. The host driver (amber) owns every copy in and out — the agent (red)
+never sees a path of yours, only `work/`, where it reads `../md` and
+`../SPEC.md` and writes the wiki. The numbered edges are the order of events:
+inputs are staged, the target wiki is mirrored in so an existing wiki is
+continued rather than restarted, and the wiki is mirrored back out after every
+iteration. Run 2 re-stages the same paths, and mirroring in deletes run 1's
+pages, which is what keeps `wikis/alpha` out of `wikis/beta`.*
+
+<!-- cspell:enable -->
+
 ## Packaging: a pure-Python wheel on PyPI
 
 A stdlib-only project at the repository root, laid out like the four helper
