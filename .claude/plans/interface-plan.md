@@ -50,7 +50,7 @@ md2okf --version | --help
 | inputs | files; `-` or none means stdin | Markdown files, in the order given; a DIR means its `*.md`, sorted, non-recursive; `-` or no argument means stdin (refused on a TTY with usage, exit 2 — a paid, minutes-long run should not start on an idle terminal) |
 | output | stdout | the wiki in `-o DIR` (default `./okf`, created if missing). stdout carries one TSV line per document: `path  iterations  hash-before  hash-after` |
 | diagnostics | stderr | the `Compiling … (iteration n)` and `hash -> hash` lines. `-v` adds Pi's tool calls and prose (today's `jq` view); `-q` prints nothing |
-| exit status | 0 / 1 / 2 | 0 every document converged; 1 a document hit the iteration cap, or an iteration produced no writes — partial work is on disk and named on stderr; 2 usage or environment (`sbx` missing or < 0.43, not logged in, key not proxy-managed, no documents, another run holds the sandbox) |
+| exit status | 0 / 1 / 2 | 0 every document converged, **including a hash-stable first pass** — that is the documented idempotent re-run, not a failure; 1 the run failed: a document hit the iteration cap, a `pi` process exited non-zero, a session produced no tool calls at all, or the wiki was empty before *and* after — partial work is on disk and the document is named on stderr; 2 usage or environment, decided before any work starts (`sbx` missing or < 0.43, not logged in, key not proxy-managed, no documents, another run holds the sandbox) |
 | state | none | one long-lived sandbox named `md2okf` (the name the `sbx secret` workaround is keyed to). Built on first use, reused after, rebuilt when the bundled kit changes or the mount set differs, and on `--fresh` |
 
 **Not in the surface:** `compile`, `shell`, `pi`, `sandbox up/down/status`,
@@ -105,28 +105,32 @@ old mounts, and a build takes minutes. A primitive that accepts arbitrary paths
 therefore cannot mount them directly: a second `-o` would either rebuild every
 time or silently write into the first wiki. Two things follow.
 
-### Reduce the constraint before working around it
+### One constraint worth reducing
 
-Two thirds of the sibling requirement is cheap to remove, in code this
-repository owns, and both changes shrink everything downstream:
+The sibling layout is cheap to satisfy by staging, so only one piece of it is
+worth changing in code this repository owns:
 
-- **Install the helper CLIs into the kit image** instead of resolving them from
-  the workspace. The shims exist only because the workspace is not mounted
-  during `setup.install` (`kits/md2okf/spec.yaml:277-281`). Carrying the four
-  projects in the kit's `files/` and `uv tool install`-ing them at build time
-  drops `scripts:ro` from the mount set, removes the one sibling requirement
-  the agent's prose never mentions (nothing under
-  `kits/md2okf/files/home/.pi/agent/` refers to `../scripts`), and removes the
-  four CLI projects from the assets the package must carry. The cost: editing a
-  CLI needs a kit rebuild, which the fingerprint rule triggers automatically.
 - **Un-gate `merkleokf --nolog`.**
   `scripts/merkleokf/src/merkleokf/merkle.py:110` skips the root log only when
   `root.name == "okf"`, which is why the hash call must name a directory
   literally called `okf`. That is a trap for any `-o DIR`; it is one condition
   plus a test.
-- **Keep `../md/` and `../SPEC.md`.** Load-bearing in `AGENTS.md` and three
-  skills; changing them is a prose migration with agent-behaviour risk and no
-  payoff. Stage them beside the wiki instead.
+- **Keep `../md/`, `../SPEC.md` and `../scripts/`.** Load-bearing in
+  `AGENTS.md`, three skills and the kit's four shims; changing them is a
+  prose-and-kit migration with agent-behaviour risk and no payoff. Stage them
+  beside the wiki instead, which is what the workbench is for.
+
+*Considered and rejected:* installing the four helper CLIs into the kit image —
+carrying their sources under `kits/md2okf/files/` and `uv tool install`-ing them
+at build time — to drop the `scripts:ro` mount. It does not shrink the package,
+because the wheel force-includes the kit tree, so a copy under the kit ships
+anyway; it leaves two source trees for the same four projects with nothing
+pinning them together, which is the failure the zero-overlap rule exists to
+prevent (`AGENTS.md:57`); and the mount it removes costs nothing once the
+workbench stages siblings. Its one real advantage — a pre-installed binary
+instead of `uv tool run --from` per call — is not worth a duplicated tree.
+Publishing the four CLIs to PyPI and pinning them in the kit would buy it
+properly, and is out of scope here.
 
 ### The workbench
 
@@ -142,6 +146,8 @@ and out:
                                                     back to it after every iteration
     md/                      mount, ro           <- the inputs, copied by basename
                                                     (stdin -> stdin.md; a basename clash is exit 2)
+    scripts/                 mount, ro           <- the four helper CLI projects
+                                                    (pyproject.toml + src), staged from the package
     SPEC.md                  mount, ro           <- --spec, or the bundled copy
   sandbox-fingerprint        host-only: kit tree hash + tool version + mount set
   lock                       host-only: flock, one run at a time; a second invocation exits 2
@@ -163,6 +169,7 @@ $XDG_STATE_HOME/md2okf/            the root and work/ are bare mountpoint parent
 └── work/                          not mounts — nothing else of theirs is shared
     ├── okf/          rw, primary mount — the agent's working directory, the wiki root
     ├── md/           ro — the staged inputs for this run        (reached as ../md)
+    ├── scripts/      ro — the four helper CLI projects          (reached as ../scripts)
     └── SPEC.md       ro — --spec, or the bundled copy           (reached as ../SPEC.md)
 $XDG_STATE_HOME/md2okf/sessions/   rw — bind-mounted onto ~/.pi/agent/sessions
 
@@ -170,11 +177,12 @@ never mounted, so invisible inside the VM:
   sandbox-fingerprint, lock                               <- host-side control files
 
 in the image, never mounted:
-  pi, okfctl, inspectmd, inspectokf, sizeokf, merkleokf   <- installed at kit build time
+  pi, okfctl, uv                                          <- installed at kit build time
   ~/.pi/agent/{AGENTS.md, settings.json, models.json, skills/}
+  ~/.local/bin/{inspectmd,inspectokf,sizeokf,merkleokf}   <- shims that run ../scripts/<cli>
 ```
 
-Four mounts, and one invariant: **no read-write mount may be an ancestor of a
+Five mounts, and one invariant: **no read-write mount may be an ancestor of a
 read-only one.** `sbx` enforces `:ro` on the host side — inside a sandbox,
 `sudo mount -o remount,rw` on a read-only workspace returns 0 and writes still
 fail with `EROFS` — so a read-only mount holds even against root in the guest.
@@ -183,8 +191,8 @@ That guarantee survives only while nothing writable contains it: a plain
 parent elsewhere exposes the underlying writable view of everything below it,
 and the kit's own `agentInstructions` state that `sudo` is passwordless
 (`kits/md2okf/spec.yaml:51`). Mounting the state *root* read-write, as today's
-launchers do, would therefore put `work/md` and `work/SPEC.md` one
-`mount --bind` away from writable, and hand the agent the `lock` and
+launchers do, would therefore put `work/md`, `work/scripts` and `work/SPEC.md`
+one `mount --bind` away from writable, and hand the agent the `lock` and
 `sandbox-fingerprint` outright — an injected source document could rewrite the
 spec the run is held to, and `check-okf.sh` would then validate the wiki
 against the tampered `../SPEC.md`. So `sessions/` is mounted, not the root.
@@ -213,7 +221,7 @@ sequenceDiagram
   U->>D: md2okf -o wikis/alpha docs/alpha/
   D->>S: checks, then fingerprint: no sandbox yet<br/>sbx run --detached (minutes, once)
   D->>H: read docs/alpha/*.md and wikis/alpha
-  D->>W: stage: work/md (ro), work/SPEC.md (ro)<br/>mirror in: wikis/alpha → work/okf (rw)
+  D->>W: stage: work/md, work/scripts, work/SPEC.md (all ro)<br/>mirror in: wikis/alpha → work/okf (rw)
   loop per document, until the wiki hash repeats (cap -n)
     D->>S: sbx exec md2okf -- pi --mode json "compile ../md/a.md"
     S->>W: agent writes pages into work/okf
@@ -238,20 +246,20 @@ sequenceDiagram
   D->>U: TSV row per document, exit 0
   end
 
-  Note over W: the four mount paths never change — only their contents do,<br/>which is why one sandbox serves both runs.<br/>lock and fingerprint stay on the host, unmounted
+  Note over W: the five mount paths never change — only their contents do,<br/>which is why one sandbox serves both runs.<br/>lock and fingerprint stay on the host, unmounted
 ```
 
 <br>*Two `md2okf` invocations against different inputs and different outputs.
-The four mount paths — `work/okf` read-write, `work/md` and `work/SPEC.md`
-read-only, and `sessions/` read-write for Pi's transcripts — are the same in
-both runs; only what sits inside them changes, so
+The five mount paths — `work/okf` read-write, `work/md`, `work/scripts` and
+`work/SPEC.md` read-only, and `sessions/` read-write for Pi's transcripts — are
+the same in both runs; only what sits inside them changes, so
 run 2 finds the fingerprint unchanged and reuses the sandbox instead of paying
 for a rebuild. The host driver owns every copy: it stages the inputs and
 mirrors the wiki **in** before the run, so an existing wiki is continued rather
 than restarted, and mirrors it **out** after every iteration, so an interrupted
 run still leaves the last completed pass in `-o DIR`. Mirroring is a sync, not
 an append: re-staging for run 2 deletes run 1's pages from `work/okf`, which is
-what keeps `wikis/alpha` out of `wikis/beta`. The agent sees only the four
+what keeps `wikis/alpha` out of `wikis/beta`. The agent sees only the five
 mounts — never the state root, so the `lock` and `sandbox-fingerprint` it would
 otherwise be able to rewrite are not in its namespace — and the `flock` means
 the second run waits for the first rather than overlapping with it.*
@@ -275,6 +283,7 @@ flowchart LR
   subgraph WORK["the fixed mount paths<br/>$XDG_STATE_HOME/md2okf/work"]
     direction TB
     WMD@{ shape: docs, label: "md/<br/>read-only"}
+    WSCR@{ shape: docs, label: "scripts/<br/>read-only<br/>the four helper CLIs"}
     WSPEC@{ shape: doc, label: "SPEC.md<br/>read-only"}
     WOKF@{ shape: docs, label: "okf/<br/>read-write<br/>the agent's cwd"}
   end
@@ -299,6 +308,7 @@ flowchart LR
   DRV -.->|"reads"| FP
   FP -.->|"unchanged → reuse, no rebuild"| VM
   WMD -.->|"../md"| PI
+  WSCR -.->|"../scripts, via the kit's shims"| PI
   WSPEC -.->|"../SPEC.md, outranks all"| PI
   PI ==>|"writes"| WOKF
   PI -.->|"~/.pi/agent/sessions"| SESS
@@ -309,7 +319,7 @@ flowchart LR
   classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
   class AMD,AOKF,BMD,BOKF data
   class DRV,FP host
-  class WMD,WSPEC,WOKF helper
+  class WMD,WSCR,WSPEC,WOKF helper
   class SESS helper
   class PI agent
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
@@ -319,11 +329,11 @@ flowchart LR
 ```
 
 <br>*The same two invocations as a flow. Your folders (blue) sit at arbitrary
-paths and differ per run; the staging area (teal) is the same three paths every
+paths and differ per run; the staging area (teal) is the same four paths every
 time, which is why the fingerprint matches and one microVM (gray) serves both
 runs. The host driver (amber) owns every copy in and out — the agent (red)
-never sees a path of yours, only `work/`, where it reads `../md` and
-`../SPEC.md` and writes the wiki. The numbered edges are the order of events:
+never sees a path of yours, only `work/`, where it reads `../md`, `../scripts`
+and `../SPEC.md` and writes the wiki. The numbered edges are the order of events:
 inputs are staged, the target wiki is mirrored in so an existing wiki is
 continued rather than restarted, and the wiki is mirrored back out after every
 iteration. Run 2 re-stages the same paths, and mirroring in deletes run 1's
@@ -395,8 +405,8 @@ md2okf/                          the repository — and now the Python project r
 │   ├── test-sandbox-guest.sh             kept; runs inside the VM
 │   ├── test-mount-state.sh               kept; guest-side state helper
 │   └── test-sandbox-mounts.sh            GONE -> tests/test_workbench.py
-├── kits/md2okf/                 CHANGED  the sandbox kit
-│   ├── spec.yaml                CHANGED  installs the helper CLIs; workspace shims deleted
+├── kits/md2okf/                 UNTOUCHED  the sandbox kit, shims and all
+│   ├── spec.yaml                            the four workspace-backed CLI shims stay
 │   └── files/home/
 │       ├── .local/lib/md2okf/mount-state.sh   untouched (guest-side)
 │       └── .pi/agent/                         untouched: AGENTS.md, settings.json,
@@ -428,15 +438,18 @@ pyproject.toml              name = "md2okf"; version from VERSION (hatch regex s
 src/md2okf/
   __init__.py               __version__ from importlib.metadata
   cli.py                    argparse: the one command; main() returns the exit code
-  resources.py              kit_dir(), spec_md(): the installed package's copies,
-                            else the checkout's (kits/md2okf, SPEC.md)
+  resources.py              kit_dir(), spec_md(), clis_dir(): the installed package's
+                            copies, else the checkout's (kits/md2okf, SPEC.md,
+                            scripts/<cli>)
   workbench.py              state dir (XDG precedence), work/ layout, mirror in/out,
                             lock, fingerprint
   sandbox.py                the one sbx seam: present/version/login checks, exists(),
                             create(), remove(), exec(argv, stdin=DEVNULL, stream=…),
                             key check; `python -m md2okf.sandbox` ensures one (maintainers)
-  compile.py                documents(), the two prompts, the Ralph loop, hash, TSV rows
-  events.py                 one `pi --mode json` line -> text (replaces the jq filter)
+  compile.py                documents(), the two prompts, the Ralph loop, hash, TSV rows;
+                            convergence = unchanged hash, iteration 1 included
+  events.py                 one `pi --mode json` line -> text (replaces the jq filter),
+                            and a tool-call count: zero means the skill never ran
 tests/
   test_cli.py test_workbench.py test_sandbox.py test_compile.py test_events.py
   test_resources.py test_package.py       (pytest; the shell tests keep their test-*.sh names)
@@ -455,11 +468,17 @@ tables keep doing that, and the wheel build lists `src/md2okf` explicitly so
 `web2md/`, `pdf2md/` and `md/` cannot leak in.
 
 Wheel contents, via `[tool.hatch.build.targets.wheel.force-include]`:
-`kits/md2okf` → `md2okf/kit` and `SPEC.md` → `md2okf/SPEC.md` (the kit now
-carries the helper CLIs itself). Verified by `tests/test_package.py`, which
-builds the wheel and asserts those paths exist and no `.DS_Store`, `tests/` or
-`uv.lock` does. Load the `context7-docs` skill for hatchling's force-include
-and version-source syntax before writing the file.
+`kits/md2okf` → `md2okf/kit`, `SPEC.md` → `md2okf/SPEC.md`, and for each helper
+CLI `scripts/<cli>/pyproject.toml` and `scripts/<cli>/src` →
+`md2okf/clis/<cli>/…`. Name those two paths per project rather than the project
+directory: the four working directories hold about **40 MB** of ignored `.venv`
+and cache trees against **172 KB** of source, so a recursive directory include
+is a 200-fold blowup, and `tests/`, `uv.lock` and `README.md` are not needed at
+runtime either. `tests/test_package.py` builds the wheel and asserts the wanted
+paths exist and that no `.venv`, `.ruff_cache`, `.pytest_cache`, `tests/`,
+`uv.lock` or `.DS_Store` does. Load the `context7-docs` skill for hatchling's
+force-include and version-source syntax — including whether force-include
+honours VCS ignores — before writing the file.
 
 ### Behaviour to carry over, and from where
 
@@ -478,11 +497,11 @@ and version-source syntax before writing the file.
 - `scripts/lib/sandbox-mounts.sh:38-48` — absolute-or-unset `XDG_STATE_HOME`,
   `mkdir -p`, mode `0700` → `workbench.py`. Drop the `.env` layer.
 - `scripts/lib/sandbox-mounts.sh:56-62` — mount order → `sandbox.create()`,
-  with the workbench paths and two deliberate changes: `scripts:ro` disappears
-  with the kit change, and the writable state mount narrows from the state root
-  to `$XDG_STATE_HOME/md2okf/sessions`. The list becomes `work/okf` (primary,
-  rw), `work/md:ro`, `work/SPEC.md:ro`, `…/md2okf/sessions` (rw) — four mounts,
-  no writable one an ancestor of a read-only one.
+  with the workbench paths and one deliberate change: the writable state mount
+  narrows from the state root to `$XDG_STATE_HOME/md2okf/sessions`. The list
+  becomes `work/okf` (primary, rw), `work/md:ro`, `work/scripts:ro`,
+  `work/SPEC.md:ro`, `…/md2okf/sessions` (rw) — five mounts, same order and
+  count as today, no writable one an ancestor of a read-only one.
 - `scripts/bash.sh:31-36` — the `sbx ls -q | grep -qx` existence check and
   `sbx run --detached --name md2okf -e SBXAGENT_STATE_DIR=… <kit> <mounts>` →
   `sandbox.py`, plus the fingerprint comparison.
@@ -494,16 +513,28 @@ and version-source syntax before writing the file.
 - `kits/md2okf/files/home/.local/lib/md2okf/mount-state.sh` and
   `tests/test-mount-state.sh` — untouched; guest-side.
 
-Six behaviours the shell has implicitly and a Python port silently loses:
+Six behaviours the shell has implicitly, which a Python port silently loses or
+breaks:
 
 - **Exit-status propagation.** `scripts/compile-okf.sh:2` sets `pipefail`, so a
   failing `sbx exec … pi` aborts the run. A `Popen` loop over stdout drops the
   return code, and a Pi that dies on iteration 1 then *looks* like convergence:
   the hash did not change, so the loop calls the document done and exits 0.
   Check the return code explicitly; test it.
-- **"Finished" versus "did nothing".** The convergence test cannot tell them
-  apart. An iteration that produces no writes should be an error on the first
-  pass, not success — exit 1 naming the document.
+- **Convergence versus "did nothing" — do not conflate them.** A hash-stable
+  pass *is* convergence, including on iteration 1: that is exactly what
+  re-compiling an already-compiled document produces, and it is a documented
+  guarantee (`README.md:256`, "compiling the same document twice is safe").
+  `merkleokf --nolog` exists so an appended log entry cannot mask it, and the
+  log is no help as a tie-breaker either — the rule is one entry *per page
+  created or updated* (`kits/…/.pi/agent/AGENTS.md:162-164`), so a run that
+  legitimately changes nothing appends nothing. Keep today's rule: unchanged
+  hash → exit 0, with a row carrying `iterations=1` and equal hashes. The real
+  "Pi exited 0 having done nothing" signal is the event stream, not the hash:
+  `compile-okf/SKILL.md:20-28` makes reading `../SPEC.md` and the source the
+  first two steps, so a session with **zero** `tool_execution_start` events did
+  not follow the skill — that is a failure, as is a wiki that was empty before
+  the run and is still empty after.
 - **An empty source folder.** `shopt -s nullglob`
   (`scripts/compile-okf.sh:103`) means a folder with no `*.md` exits 0 having
   done nothing. For a primitive whose exit status is the verdict, that is exit
@@ -520,9 +551,9 @@ Six behaviours the shell has implicitly and a Python port silently loses:
 ### Repository changes
 
 - Add `pyproject.toml`, `src/md2okf/`, the pytest suite; `uv lock`.
-- `kits/md2okf/spec.yaml`: carry the four CLI projects in `files/` and
-  `uv tool install` them in `setup.install`; delete the four workspace-backed
-  shims (`spec.yaml:281-312`). `scripts:ro` leaves the mount set.
+- `kits/md2okf/`: unchanged, shims included. The workbench stages
+  `work/scripts`, so `$(dirname "${WORKDIR}")/scripts/<cli>` resolves exactly as
+  it does today.
 - `scripts/merkleokf/`: drop the `root.name == "okf"` condition in
   `merkle.py:110`; add the test that `--nolog` works for a wiki directory under
   any name, and keep the existing nested-`okf/` case passing.
@@ -532,8 +563,8 @@ Six behaviours the shell has implicitly and a Python port silently loses:
   precedence cases become `tests/test_workbench.py`).
 - `tests/test-sandbox.sh`: `uv run python -m md2okf.sandbox` in place of its own
   create step, then its existing `sbx exec … sh -l -s`, plus the mount-invariant
-  assertions above. `tests/test-sandbox-guest.sh`: the mount count and the
-  state-mount path change (`sessions/`, not the state root).
+  assertions above. `tests/test-sandbox-guest.sh`: the mount count is unchanged
+  at five, but the state-mount path is now `sessions/`, not the state root.
 - `Makefile`: `wiki` → `uv run md2okf md/` for one release, then goes;
   `check-okf` unchanged; new `install` (`uv tool install --force .`) beside
   `install-clis`; new `test-md2okf` (`uv run --group test pytest tests`) added
@@ -560,9 +591,9 @@ Six behaviours the shell has implicitly and a Python port silently loses:
   "which `make wiki` always builds" → "which `md2okf` rebuilds when the kit
   changes, or on `--fresh`".
 - `CHANGELOG.md` under `[Unreleased]`: Added the `md2okf` command and the PyPI
-  package; Removed the launchers, `sandbox-mounts.sh`, `.env`, the kit's
-  workspace-backed CLI shims; Changed the host requirements, the sandbox reuse
-  rule and `merkleokf --nolog`.
+  package; Removed the launchers, `sandbox-mounts.sh` and `.env`; Changed the
+  host requirements, the sandbox reuse rule, the writable state mount
+  (`sessions/`, not the state root) and `merkleokf --nolog`.
 - `.cspell.json`: `argparse`, `uvx`, `hatchling`, `workbench`, and whatever the
   sources add.
 
@@ -575,9 +606,9 @@ Six behaviours the shell has implicitly and a Python port silently loses:
    deleted rather than ported. Until the workbench exists, `-o` and the inputs
    must resolve inside one checkout; anything else exits 2 with a message that
    says so.
-2. **Constraint reduction** (~half a day). CLIs into the kit image, `--nolog`
-   un-gated, `make validate` and `sbx rm --force md2okf && make test-sandbox`
-   re-run. Independently useful even if the rest stalls.
+2. **Un-gate `merkleokf --nolog`** (~an hour). One condition in `merkle.py`
+   plus tests on both sides. Independently useful even if the rest stalls; the
+   kit is not touched, so no rebuild is needed.
 3. **The primitive** (~1 day). The workbench, `-o` anywhere, `--spec`, stdin,
    the basename-clash and TTY refusals. The surface grows by gaining flags,
    never by respelling the ones shipped in step 1.
@@ -593,13 +624,18 @@ thrown away if they do.
   `make test-clis` unchanged and green.
 - `uv run --group test pytest tests` — offline, with a fake `sbx` recorded per
   test: XDG precedence; mirror in/out including deletion; basename clash → 2;
-  stdin on a TTY → 2; no documents → 2; a non-zero `pi` → non-zero exit, not
-  false convergence; an iteration with no writes → 1; the cap → 1 with the
-  document named; the continuation prompt from iteration 2; `stdin=DEVNULL`;
-  the fingerprint rebuild rule; `events.py` against recorded Pi lines.
+  stdin on a TTY → 2; no documents → 2; a non-zero `pi` → exit 1, not false
+  convergence; a hash-stable first pass → exit 0 with `iterations=1` and equal
+  hashes; a session with zero tool calls → exit 1; a wiki empty before and
+  after → exit 1; the cap → 1 with the document named; the continuation prompt
+  from iteration 2; `stdin=DEVNULL`; the fingerprint rebuild rule; `events.py`
+  against recorded Pi lines.
 - `uv build`, then `unzip -l dist/md2okf-*.whl` shows `md2okf/kit/spec.yaml`,
-  `md2okf/kit/files/home/.pi/agent/AGENTS.md`, `md2okf/SPEC.md`, and no
-  `.DS_Store`, `tests/` or `uv.lock`; `uvx --from dist/*.whl md2okf --help`.
+  `md2okf/kit/files/home/.pi/agent/AGENTS.md`, `md2okf/SPEC.md`,
+  `md2okf/clis/merkleokf/pyproject.toml` and its `src/`, and none of `.venv`,
+  `.ruff_cache`, `.pytest_cache`, `tests/`, `uv.lock` or `.DS_Store`; the
+  archive stays a few hundred KB, not tens of MB;
+  `uvx --from dist/*.whl md2okf --help`.
 - `uv tool install --force .`, then from a directory that is *not* the
   checkout: `md2okf --dry-run -o /tmp/w ~/some.md` prints the mounts, the
   documents and the command line without touching sbx.
@@ -614,20 +650,21 @@ thrown away if they do.
 - Live (paid; needs `sbx login` and the key in `sbx secret`):
   `sbx rm --force md2okf`, then `md2okf -v md/GoogleStyleGuide-abridged.md`
   from the checkout — the wiki lands in `./okf`, stdout has one TSV line, exit
-  0. Run it again with a second `-o` to prove the sandbox is reused across
-  paths. Then `make check-okf` on the result, and `make test-sandbox` against
-  the sandbox it built.
+  0. Run the same document again unchanged — one iteration, equal hashes, exit
+  0 — which is the idempotency guarantee the exit codes must not break. Run it
+  once more with a second `-o` to prove the sandbox is reused across paths.
+  Then `make check-okf` on the result, and `make test-sandbox` against the
+  sandbox it built.
 
 ## Risks and open items
 
 - **Unverified: what `sbx run` does with a workspace path that does not exist.**
   Check on the host before relying on `mkdir -p` placement.
-- **The kit-image CLI install changes the edit loop.** A CLI change stops being
-  visible immediately and needs a kit rebuild; the fingerprint rule makes that
-  automatic, but `make test-clis` stays the fast feedback path.
 - **Force-including non-Python assets** is a packaging detail that must be
-  verified by listing the wheel, and the in-checkout fallback is a second code
-  path — one function, tested.
+  verified by listing the wheel — the helper CLI directories carry ~40 MB of
+  ignored `.venv` and cache trees around 172 KB of source, so an over-broad
+  include is a real failure mode, not a theoretical one. The in-checkout
+  fallback is a second code path — one function, tested.
 - **PyPI registration is a one-time owner action** and blocks step 4 only.
 - **`mount-state.sh` against the narrower mount.** Mounting `sessions/` rather
   than the state root changes the granularity the guest helper was written for.
