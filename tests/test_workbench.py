@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -600,3 +601,34 @@ def test_ensure_sandbox_clears_markers_when_a_recreation_fails(tmp_path, fake_sb
     assert workbench.read_ownership_marker(wb) is None
     assert not wb.fingerprint_path.exists()
     assert not wb.identity_path.exists()
+
+
+def test_ensure_sandbox_stages_tooling_for_every_caller(tmp_path, fake_sbx):
+    """Regression, found by the live stage 3 run.
+
+    stage_clis() had exactly one call site — restage() — so the compile
+    path worked while `python -m md2okf.sandbox` produced a sandbox with
+    an empty scripts mount and four broken CLI shims. Staging tooling is
+    part of ensure_sandbox() now precisely so a caller cannot forget it.
+    """
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    assert list(wb.work_scripts.iterdir()) == []
+
+    workbench.ensure_sandbox(wb)
+
+    assert (wb.work_scripts / "merkleokf" / "pyproject.toml").is_file()
+
+
+def test_ensure_sandbox_restages_tooling_when_reusing(tmp_path, fake_sbx):
+    """A reused sandbox whose staged tooling was wiped must get it back."""
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    workbench.ensure_sandbox(wb)
+
+    for child in wb.work_scripts.iterdir():
+        shutil.rmtree(child)
+    assert list(wb.work_scripts.iterdir()) == []
+
+    assert workbench.ensure_sandbox(wb) == "reuse"
+    assert (wb.work_scripts / "merkleokf" / "pyproject.toml").is_file()

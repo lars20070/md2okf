@@ -211,3 +211,16 @@ def main(argv: list[str] | None = None) -> int:
     except workbench.LockHeld:
         print("md2okf: another md2okf run is using the sandbox; try again later", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        # Ctrl-C is a failed run (exit 1), not a crash: a bare traceback tells
+        # the user nothing about what survived. The lock is already released
+        # by lock()'s own finally, and mirror_out() only ever runs after a
+        # completed iteration, so -o DIR cannot hold a half-written pass --
+        # though the copy itself is not atomic, hence "may be partial" for
+        # the workbench side.
+        print(
+            f"\nmd2okf: interrupted. {output_dir} holds the last completed pass; "
+            f"the workbench copy at {wb.work_okf} may be a partial one.",
+            file=sys.stderr,
+        )
+        return 1

@@ -500,6 +500,23 @@ def _clear_ownership_marker(wb: Workbench) -> None:
     wb.identity_path.unlink(missing_ok=True)
 
 
+def stage_tooling(wb: Workbench) -> None:
+    """Stage the helper CLI projects the kit's shims resolve against.
+
+    Deliberately not part of restage(): this content does not vary per run.
+    It is the packaged CLI sources, identical for every invocation, whereas
+    work/md, work/SPEC.md and work/okf are the run's own inputs and output.
+
+    A sandbox whose work/scripts is empty still starts, and its mounts are
+    still correct — but every inspectmd/inspectokf/sizeokf/merkleokf shim in
+    it fails, because each one is `uv tool run --from
+    $(dirname $WORKDIR)/scripts/<cli>` (kits/md2okf/spec.yaml). That makes
+    this part of "the sandbox is usable", which is why ensure_sandbox() does
+    it for every caller rather than leaving each one to remember.
+    """
+    stage_clis(resources.clis_dir(), wb.work_scripts)
+
+
 def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:
     """Reuse or (re)create the sandbox named SANDBOX_NAME. Returns "reuse" or "created".
 
@@ -513,6 +530,11 @@ def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:
     name = SANDBOX_NAME
     kit_dir = resources.kit_dir()
     fingerprint_value = fingerprint(kit_dir, sandbox.version(), wb.mounts())
+
+    # Before the sandbox exists, so it never observes an empty scripts mount.
+    # Unconditional rather than create-only: a reused sandbox whose staged
+    # tooling was wiped must get it back too.
+    stage_tooling(wb)
 
     state = resolve_sandbox_state(wb, name, fingerprint_value, fresh=fresh)
     if state == "reuse":

@@ -27,17 +27,49 @@ class _Box:
     token: str | None = None
 
 
+class _FakeStdout:
+    """The line iterator, with a close() the driver's cleanup path can call."""
+
+    def __init__(self, lines: list) -> None:
+        self._lines = list(lines)
+        self.closed = False
+
+    def __iter__(self):
+        for line in self._lines:
+            # An exception in the queued lines is raised *during* iteration,
+            # which is how a mid-stream KeyboardInterrupt (Ctrl-C while pi is
+            # still talking) is reproduced.
+            if isinstance(line, BaseException):
+                raise line
+            yield f"{line}\n"
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class FakePopen:
     """Stands in for subprocess.Popen for one streamed `sbx exec ... pi` call."""
 
-    def __init__(self, lines: list[str], returncode: int) -> None:
+    def __init__(self, lines: list, returncode: int) -> None:
         """Pre-load the lines a real Popen.stdout would yield, and the exit code."""
-        self.stdout = iter(f"{line}\n" for line in lines)
+        self.stdout = _FakeStdout(lines)
         self._returncode = returncode
+        self.finished = False
+        self.terminated = False
 
     def wait(self) -> int:
         """Stand in for subprocess.Popen.wait()."""
+        self.finished = True
         return self._returncode
+
+    def poll(self) -> int | None:
+        """None while still running, mirroring subprocess.Popen.poll()."""
+        return self._returncode if self.finished else None
+
+    def terminate(self) -> None:
+        """Record that the driver stopped the conduit."""
+        self.terminated = True
+        self.finished = True
 
 
 @dataclass
@@ -52,14 +84,15 @@ class FakeSbx:
     token_write_fail_names: set[str] = field(default_factory=set)
     openrouter_key: str = "proxy-managed"
     probe_ok: bool = True
-    _pi_queue: list[tuple[list[str], int, object]] = field(default_factory=list)
+    last_popen: FakePopen | None = None
+    _pi_queue: list[tuple[list, int, object]] = field(default_factory=list)
     _merkle_queue: list[tuple[str, int]] = field(default_factory=list)
 
     def register(self, name: str) -> None:
         """Register a sandbox that exists but was never created through us."""
         self.sandboxes[name] = _Box()
 
-    def queue_pi(self, lines: list[str], returncode: int = 0, side_effect=None) -> None:
+    def queue_pi(self, lines: list, returncode: int = 0, side_effect=None) -> None:
         """Queue one `pi --mode json` session's worth of raw stdout lines.
 
         `side_effect`, if given, runs with no arguments as this session
@@ -144,7 +177,8 @@ class FakeSbx:
             lines, rc, side_effect = self._pi_queue.pop(0)
             if side_effect is not None:
                 side_effect()
-            return FakePopen(lines, rc)
+            self.last_popen = FakePopen(lines, rc)
+            return self.last_popen
         raise AssertionError(f"FakeSbx.popen: unhandled tail {tail!r}")
 
 

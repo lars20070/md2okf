@@ -392,3 +392,92 @@ def test_nonzero_pi_exit_includes_diagnostic_output_in_the_error(fake_sbx, tmp_p
 
     with pytest.raises(compile_mod.CompileError, match="the actual reason this failed"):
         compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+
+
+def test_ctrl_c_mid_stream_does_not_mirror_a_partial_iteration(fake_sbx, tmp_path):
+    """Regression, found by an interrupted live run.
+
+    The plan's contract: on interruption, do not mirror out the
+    half-finished iteration. mirror_out() sits after the stream loop, so
+    -o DIR must be untouched -- and the local `sbx exec` conduit must be
+    cleaned up rather than left behind.
+    """
+    fake_sbx.register(NAME)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    output_dir = tmp_path / "out"
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+
+    with pytest.raises(KeyboardInterrupt):
+        compile_mod.compile_document(NAME, _doc(tmp_path), wb, output_dir)
+
+    assert not output_dir.exists()  # nothing half-written reached -o DIR
+    assert fake_sbx.last_popen.terminated is True
+    assert fake_sbx.last_popen.stdout.closed is True
+
+
+def test_stream_is_closed_on_the_normal_path_too(fake_sbx, tmp_path):
+    """close() is in a finally, so it must be harmless after a clean run."""
+    fake_sbx.register(NAME)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_hash("aaaa0000")
+
+    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+
+    # Exited normally, so it was waited on rather than terminated.
+    assert fake_sbx.last_popen.terminated is False
+    assert fake_sbx.last_popen.stdout.closed is True
+
+
+def test_verbose_does_not_echo_pi_protocol_events(fake_sbx, tmp_path):
+    """Regression, found watching a live -v run.
+
+    Pi emits a `message_update` envelope per token. These must not reach
+    -v, or the tool calls it exists to show are buried in thousands of
+    empty-delta JSON objects.
+    """
+    fake_sbx.register(NAME)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(
+        [
+            '{"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": ""}}',
+            '{"type": "message_update", "assistantMessageEvent": {"type": "thinking_delta", "delta": "x"}}',
+            '{"type": "tool_execution_start", "toolName": "Read", "args": {}}',
+            "plain stderr text worth seeing",
+        ]
+    )
+    fake_sbx.queue_hash("aaaa0000")
+
+    seen: list[str] = []
+    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out", on_event=seen.append)
+
+    assert seen == ["Read {}", "plain stderr text worth seeing"]
+
+
+def test_failure_tail_excludes_protocol_json(fake_sbx, tmp_path):
+    """The cause belongs in the message, not a wall of JSON envelopes."""
+    fake_sbx.register(NAME)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(
+        [
+            '{"type": "tool_execution_start"}',
+            '{"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": ""}}',
+            "RuntimeError: the actual reason",
+        ],
+        returncode=1,
+    )
+
+    with pytest.raises(compile_mod.CompileError) as excinfo:
+        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+
+    message = str(excinfo.value)
+    assert "RuntimeError: the actual reason" in message
+    assert "message_update" not in message

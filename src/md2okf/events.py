@@ -65,17 +65,22 @@ def is_tool_call(line: str) -> bool:
 
 
 def process(lines: Iterable[str]) -> Iterator[tuple[str, str | None, bool]]:
-    """Yield (raw line, formatted-or-None, is_tool_call) for each line, in order.
+    """Yield (raw line, display-or-None, is_tool_call) for each line, in order.
 
-    The raw line is always handed back alongside the translation: a line
-    with no recognised translation (malformed JSON, plain stderr text, a
-    stack trace merged in from stderr) is not nothing -- a caller that
-    drops everything without a translation loses exactly the diagnostic
-    text a failure needs.
+    `display` is what a human should actually see, and the distinction it
+    draws matters in both directions:
+
+    - A line that is **not JSON at all** -- plain stderr text, a traceback
+      merged in from stderr -- is shown verbatim. Dropping these is what
+      left a failing run reporting only "pi exited 1" with no cause.
+    - A line that **is** a Pi protocol event we do not render is dropped.
+      Pi emits a `message_update` envelope per *token*, so showing these
+      floods the terminal with thousands of empty-delta JSON objects and
+      buries the tool calls -v exists to reveal.
     """
     for line in lines:
         event = _load(line)
         if event is None:
-            yield line, None, False
+            yield line, line, False  # not JSON: a diagnostic, worth showing
             continue
         yield line, _translate_event(event), event.get("type") == "tool_execution_start"

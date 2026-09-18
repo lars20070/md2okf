@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Check that the sandbox delivers what kits/md2okf/spec.yaml promises: the
-# installed toolchain, the agent config copied in from kits/md2okf/files/, and
-# a proxy-managed OPENROUTER_API_KEY. The checks themselves live in
-# tests/test-sandbox-guest.sh.
+# installed toolchain, the agent config copied in from kits/md2okf/files/, a
+# proxy-managed OPENROUTER_API_KEY, and the driver's mount invariants. The
+# checks themselves live in tests/test-sandbox-guest.sh.
 #
 # Usage: test-sandbox.sh
 #
@@ -15,9 +15,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repo_root}"
 
-# shellcheck source=scripts/lib/sandbox-mounts.sh
-source "${repo_root}/scripts/lib/sandbox-mounts.sh"
-
 kit_name="md2okf" # keyed to `name:` in kits/md2okf/spec.yaml and to sbx secrets
 
 if ! command -v sbx >/dev/null 2>&1; then
@@ -26,15 +23,13 @@ if ! command -v sbx >/dev/null 2>&1; then
 	exit 1
 fi
 
-# The workspace arguments are the least-privilege mount — see
-# scripts/lib/sandbox-mounts.sh.
-if ! sbx ls -q | grep -qx "${kit_name}"; then
-	echo "No ${kit_name} sandbox found — creating one (this takes minutes)."
-	sandbox_workspace_args
-	sbx run --detached --name "${kit_name}" \
-		-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
-		./kits/md2okf/ "${workspace_args[@]}"
-fi
+# The driver owns sandbox creation: it is the only thing that builds the
+# narrowed mount set — work/okf rw, work/{md,scripts,SPEC.md} ro, sessions/ rw,
+# and the state root deliberately unmounted — that the guest-side invariant
+# checks below assert. Creating one here from the legacy shell mounts instead
+# would hand those checks a sandbox that cannot satisfy them. Reuses an
+# existing sandbox when it is ours and its configuration still matches.
+uv run python -m md2okf.sandbox
 
 # `sh -l` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm
 # globals in the user prefix, neither of which is on a non-login PATH. `-s`

@@ -69,6 +69,24 @@ def test_process_yields_triples_in_order():
 
     assert results == [
         (tool_line, "Read {}", True),
-        ("not json", None, False),
+        ("not json", "not json", False),  # non-JSON is a diagnostic: shown verbatim
         (message_line, "hi", False),
     ]
+
+
+def test_process_drops_protocol_events_but_keeps_non_json_diagnostics():
+    """Regression, found watching a live -v run.
+
+    Pi emits a `message_update` envelope per token. Treating every
+    untranslated line as a diagnostic flooded -v with thousands of
+    empty-delta JSON objects and buried the tool calls. A protocol event we
+    do not render must be dropped; genuinely non-JSON output must not be.
+    """
+    delta = json.dumps(
+        {"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": ""}}
+    )
+    traceback_line = "RuntimeError: the actual reason this failed"
+
+    displays = [display for _raw, display, _tool in events.process([delta, traceback_line])]
+
+    assert displays == [None, traceback_line]

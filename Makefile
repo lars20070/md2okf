@@ -143,8 +143,10 @@ test-sandbox:
 	./tests/test-sandbox.sh
 
 # Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
+# The md2okf driver is the documented path now; ./scripts/compile-okf.sh is
+# still here as the rollback if it misbehaves, and goes in a later stage.
 wiki:
-	./scripts/compile-okf.sh
+	uv run md2okf md/
 
 # Fetch the website into md/ as one file.
 scrape:

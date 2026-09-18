@@ -8,6 +8,7 @@ one boundary, to exercise everything above it.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import secrets
 import shutil
@@ -196,6 +197,21 @@ class Exec:
         for line in self._proc.stdout:
             yield line.rstrip("\n")
         self.returncode = self._proc.wait()
+
+    def close(self) -> None:
+        """Best-effort local cleanup, safe to call on an already-finished run.
+
+        Stops the local `sbx exec` conduit so an interrupted run does not
+        leave one behind. Deliberately *only* the local side: `pi` runs
+        inside the VM and killing the conduit does not reap it, and remote
+        process reaping is out of scope (see the plan's deferred items).
+        """
+        if self._proc.poll() is None:
+            with contextlib.suppress(OSError):
+                self._proc.terminate()
+        if self._proc.stdout is not None:
+            with contextlib.suppress(OSError):
+                self._proc.stdout.close()
 
 
 def exec_stream(name: str, argv: list[str]) -> Exec:

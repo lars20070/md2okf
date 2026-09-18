@@ -39,8 +39,14 @@ _DIAGNOSTIC_TAIL_LINES = 20
 
 
 def _diagnostic_tail(raw_lines: list[str]) -> str:
-    """The last few non-blank raw lines, for folding into a failure message."""
-    meaningful = [line for line in raw_lines if line.strip()]
+    """The last few non-JSON lines, for folding into a failure message.
+
+    Pi's own protocol events are JSON objects and say nothing useful about
+    why a run died; what does is whatever arrived on stderr in plain text
+    (a traceback, an sbx diagnostic), merged into the same stream. Keeping
+    only those makes the message the cause rather than a wall of envelopes.
+    """
+    meaningful = [line for line in raw_lines if line.strip() and not line.lstrip().startswith("{")]
     return "\n".join(meaningful[-_DIAGNOSTIC_TAIL_LINES:])
 
 
@@ -213,18 +219,23 @@ def compile_document(
         stream = sandbox.exec_stream(name, ["pi", "--mode", "json", prompt])
         tool_calls = 0
         raw_lines: list[str] = []
-        for line, formatted, is_tool_call in events.process(stream):
-            raw_lines.append(line)
-            if is_tool_call:
-                tool_calls += 1
-            if on_event is not None:
-                # A line events.py could not translate (malformed JSON,
-                # plain stderr text, a traceback merged in from stderr) is
-                # shown raw rather than silently dropped -- verbose means
-                # verbose, not "only the lines we recognised."
-                text = formatted if formatted is not None else line
-                if text.strip():
-                    on_event(text)
+        try:
+            for line, display, is_tool_call in events.process(stream):
+                raw_lines.append(line)
+                if is_tool_call:
+                    tool_calls += 1
+                # events.process() has already decided what is worth showing:
+                # rendered tool calls and assistant prose, plus any non-JSON
+                # diagnostic. Protocol events we do not render come back as
+                # None and are dropped here.
+                if on_event is not None and display and display.strip():
+                    on_event(display)
+        finally:
+            # Reached on Ctrl-C too, so an interrupted run does not leave the
+            # local `sbx exec` conduit behind. mirror_out() is below this
+            # point, which is what keeps a half-finished iteration from ever
+            # reaching -o DIR.
+            stream.close()
         if stream.returncode != 0:
             tail = _diagnostic_tail(raw_lines)
             detail = f": {tail}" if tail else ""

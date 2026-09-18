@@ -172,6 +172,23 @@ def test_ensure_default_sandbox_creates_and_reports(fake_sbx, isolated_state, ca
     assert "created" in capsys.readouterr().out
 
 
+def test_ensure_default_sandbox_stages_the_helper_clis(fake_sbx, isolated_state):
+    """Regression, found by the live stage 3 run.
+
+    This entry point created the mount roots and the sandbox but never
+    staged work/scripts, so the sandbox came up with an empty scripts
+    mount and all four kit shims — each `uv tool run --from
+    $(dirname $WORKDIR)/scripts/<cli>` — failed inside the VM. The unit
+    suite could not see it: the mounts were right and sbx was faked, so
+    only a real sandbox running a real shim showed it.
+    """
+    assert sandbox._ensure_default_sandbox() == 0
+    work_scripts = workbench.Workbench.default().work_scripts
+    for cli_name in ("inspectmd", "inspectokf", "sizeokf", "merkleokf"):
+        assert (work_scripts / cli_name / "pyproject.toml").is_file()
+        assert (work_scripts / cli_name / "src").is_dir()
+
+
 def test_ensure_default_sandbox_reports_reuse_on_a_second_call(fake_sbx, isolated_state, capsys):
     sandbox._ensure_default_sandbox()
     capsys.readouterr()

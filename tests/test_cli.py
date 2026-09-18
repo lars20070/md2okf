@@ -281,3 +281,37 @@ def test_a_second_run_fails_the_lock(tmp_path, capsys, isolated_state, fake_sbx)
         rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
     assert rc == 2
     assert "another md2okf run" in capsys.readouterr().err
+
+
+def test_ctrl_c_exits_1_with_a_message_not_a_traceback(tmp_path, capsys, isolated_state, fake_sbx):
+    """Regression, found by interrupting a live run.
+
+    Ctrl-C used to propagate as a bare KeyboardInterrupt traceback. The
+    plan's contract is a non-zero exit that says what survived, so the user
+    knows -o DIR holds the last completed pass.
+    """
+    doc = _md(tmp_path)
+    output_dir = tmp_path / "out"
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+
+    rc = cli.main(["-o", str(output_dir), str(doc)])
+
+    assert rc == 1
+    out, err = capsys.readouterr()
+    assert out == ""  # no TSV row for a document that never finished
+    assert "interrupted" in err
+    assert str(output_dir) in err  # where the last completed pass is
+    assert "Traceback" not in err
+
+
+def test_ctrl_c_releases_the_lock(tmp_path, isolated_state, fake_sbx):
+    """The lock must not survive an interrupted run, or the next one is stuck."""
+    doc = _md(tmp_path)
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+
+    assert cli.main(["-o", str(tmp_path / "out"), str(doc)]) == 1
+
+    with workbench.lock():  # would raise LockHeld if it had leaked
+        pass

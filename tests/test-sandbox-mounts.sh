@@ -109,8 +109,10 @@ output="$({
 [[ "${output}" != *"logs"* ]] || fail "workspace arguments still contain a logs mount"
 pass "workspace arguments preserve spaces, secure state, and omit logs"
 
-# Every creator must inject the same state path that it mounts.
-for creator in scripts/compile-okf.sh scripts/pi.sh scripts/bash.sh tests/test-sandbox.sh; do
+# Every creator must inject the same state path that it mounts. tests/
+# test-sandbox.sh is deliberately absent: sandbox creation there moved to the
+# md2okf driver, which builds its own narrowed mount set rather than this one.
+for creator in scripts/compile-okf.sh scripts/pi.sh scripts/bash.sh; do
 	grep -q 'sandbox_workspace_args' "${ROOT}/${creator}" ||
 		fail "${creator} does not populate workspace_args"
 	# shellcheck disable=SC2016 # match the creator's literal expansion

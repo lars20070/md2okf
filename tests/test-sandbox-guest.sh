@@ -158,6 +158,159 @@ else
 	fi
 fi
 
+# --- Workbench mount invariants ---------------------------------------------
+#
+# Five mounts: the wiki (rw, this shell's cwd) plus its ../md, ../scripts and
+# ../SPEC.md siblings (ro), and the state directory's sessions/ (rw). Read-only
+# has to mean read-only as a property of the filesystem, not of instructions:
+# the agent treats every source document as untrusted, so a prompt-injected
+# document must not be able to rewrite the spec the run is held to.
+#
+# `sbx` enforces `:ro` on the host side, so a read-only export stays read-only
+# whatever the guest does — but that survives only while nothing writable
+# *contains* it. A plain `mount --bind` does not replicate nested submounts, so
+# binding a writable parent elsewhere would expose the underlying writable view
+# of everything below it. sudo is passwordless here (kits/md2okf/spec.yaml), so
+# these checks try the escape rather than assuming it is impossible.
+
+wiki_root="$(pwd -P)"
+work_dir="$(dirname "${wiki_root}")"
+
+# 0 when a write succeeded (and was cleaned up again), 1 otherwise.
+#
+# The probe runs in a subshell on purpose. `:` is a POSIX *special* builtin,
+# and a redirection failure on one is fatal to the whole shell in dash — the
+# guest's `sh` — so writing this the obvious way silently aborted every check
+# after the first read-only mount instead of reporting it.
+dir_is_writable() {
+	probe="$1/.md2okf-write-probe-$$"
+	if (: >"${probe}") 2>/dev/null; then
+		rm -f "${probe}"
+		return 0
+	fi
+	return 1
+}
+
+# Opening for append needs write permission but truncates nothing, so this is a
+# non-destructive probe that still fails with EROFS on a read-only mount.
+file_is_writable() {
+	(: >>"$1") 2>/dev/null
+}
+
+assert_readonly() {
+	label="$1"
+	path="$2"
+	if [ -d "${path}" ]; then
+		if dir_is_writable "${path}"; then
+			echo "BROKEN ${label} is writable: ${path}"
+			failures=$((failures + 1))
+			return
+		fi
+	elif [ -f "${path}" ]; then
+		if file_is_writable "${path}"; then
+			echo "BROKEN ${label} is writable: ${path}"
+			failures=$((failures + 1))
+			return
+		fi
+	else
+		echo "MISSING ${label}: ${path}"
+		failures=$((failures + 1))
+		return
+	fi
+	echo "ok ${label} is read-only"
+}
+
+# The read-only mounts, reached exactly as the agent config reaches them.
+assert_readonly "../md" "${work_dir}/md"
+assert_readonly "../scripts" "${work_dir}/scripts"
+assert_readonly "../SPEC.md" "${work_dir}/SPEC.md"
+
+# The wiki is the one place the agent may write.
+if dir_is_writable "${wiki_root}"; then
+	echo "ok the wiki root is writable"
+else
+	echo "BROKEN the wiki root is not writable: ${wiki_root}"
+	failures=$((failures + 1))
+fi
+
+# No read-write mount may be an ancestor of a read-only one. This is a path
+# property, checked against the mounts themselves — note the state *root* is
+# deliberately not in this list, because only its sessions/ child is mounted.
+for rw in "${wiki_root}" "${SBXAGENT_STATE_DIR:-/nonexistent}/sessions"; do
+	for ro in "${work_dir}/md" "${work_dir}/scripts" "${work_dir}/SPEC.md"; do
+		case "${ro}/" in
+		"${rw}/"*)
+			echo "BROKEN read-write ${rw} is an ancestor of read-only ${ro}"
+			failures=$((failures + 1))
+			;;
+		*) ;; # not nested: the invariant holds for this pair
+		esac
+	done
+done
+echo "ok no read-write mount is an ancestor of a read-only one"
+
+# Host-side control files must be outside the VM's namespace entirely. The
+# state root exists in here only as the synthetic parent of the sessions/
+# mount, so its siblings — which the host really does write — prove the root
+# itself is not shared. An injected document that could reach these could
+# rewrite the ownership marker the host trusts.
+if [ -n "${SBXAGENT_STATE_DIR:-}" ]; then
+	for host_only in sandbox-fingerprint sandbox-identity; do
+		if [ -e "${SBXAGENT_STATE_DIR}/${host_only}" ]; then
+			echo "BROKEN host-only ${host_only} is visible inside the sandbox"
+			failures=$((failures + 1))
+		else
+			echo "ok host-only ${host_only} is not visible"
+		fi
+	done
+fi
+
+# Re-check the read-only mounts after bind-mounting every writable mount to a
+# scratch path — the plan's specific concern, since a bind of a writable
+# ancestor is what would flatten the nested read-only ones.
+if sudo -n true 2>/dev/null; then
+	for rw in "${wiki_root}" "${SBXAGENT_STATE_DIR:-}/sessions"; do
+		[ -d "${rw}" ] || continue
+		scratch="$(mktemp -d)"
+		if sudo -n mount --bind "${rw}" "${scratch}" 2>/dev/null; then
+			assert_readonly "../md after a bind of ${rw}" "${work_dir}/md"
+			assert_readonly "../SPEC.md after a bind of ${rw}" "${work_dir}/SPEC.md"
+			sudo -n umount "${scratch}" 2>/dev/null || true
+		fi
+		rmdir "${scratch}" 2>/dev/null || true
+	done
+
+	# And the sharper case: bind the shared parent the read-only mounts live
+	# under. A plain bind does not carry nested submounts, so what appears
+	# underneath must not be the host's read-only content in writable form.
+	# An empty stub is fine — writes there land in the VM's own throwaway
+	# layer and never reach the host.
+	scratch="$(mktemp -d)"
+	if sudo -n mount --bind "${work_dir}" "${scratch}" 2>/dev/null; then
+		exposed=0
+		sample="$(find "${work_dir}/md" -maxdepth 1 -type f -name '*.md' 2>/dev/null | head -n 1)"
+		if [ -n "${sample}" ]; then
+			through="${scratch}/md/$(basename "${sample}")"
+			if [ -e "${through}" ] && file_is_writable "${through}"; then
+				echo "BROKEN ../md content is writable through a bind of its parent"
+				failures=$((failures + 1))
+				exposed=1
+			fi
+		fi
+		if [ -e "${scratch}/SPEC.md" ] && file_is_writable "${scratch}/SPEC.md"; then
+			echo "BROKEN ../SPEC.md is writable through a bind of its parent"
+			failures=$((failures + 1))
+			exposed=1
+		fi
+		[ "${exposed}" -eq 0 ] &&
+			echo "ok binding the parent does not expose the read-only mounts"
+		sudo -n umount "${scratch}" 2>/dev/null || true
+	fi
+	rmdir "${scratch}" 2>/dev/null || true
+else
+	echo "ok mount-escape checks skipped (no password-free sudo)"
+fi
+
 # Context7 native Pi package (kits/md2okf/spec.yaml setup.install +
 # settings.json packages). Presence only — no live Context7 API call.
 if timeout 20 pi list 2>/dev/null | grep -q context7-pi; then
