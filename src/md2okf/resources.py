@@ -37,22 +37,21 @@ def _installed_root() -> Path | None:
 def _checkout_path(relative: str, what: str) -> Path:
     """The checkout fallback location for `relative`, verified to exist.
 
-    Packaging (force-include of kit/SPEC.md/clis into the wheel) is stage
-    4's job, not stage 2's -- a wheel built today carries the Python modules
-    only. Installed that way (e.g. via `uv tool install .`), _installed_root
-    returns None, and __file__ resolves somewhere under site-packages: a
-    silent parents[2] would compute a path that does not exist and cannot
-    ever exist, and every caller downstream would report a generic "not a
-    file" error with no clue why. Fail here instead, with the actual cause.
+    A released wheel carries the kit, the spec and the CLI sources, so
+    _installed_root finds them and this path is never taken. It is reached
+    from a checkout (`uv run md2okf`), and by an install built without those
+    assets -- where __file__ resolves under site-packages and a silent
+    parents[2] would compute a path that cannot ever exist, leaving every
+    caller downstream to report a generic "not a file" with no clue why.
+    Fail here instead, with the actual cause.
     """
     candidate = _CHECKOUT_ROOT / relative
     if not candidate.exists():
         raise ResourcesError(
             f"cannot locate {what} ({candidate}). This looks like an installed "
-            "md2okf built without its bundled kit (packaging lands in a later "
-            "stage), and not a development checkout either. Run from a "
-            "checkout with `uv run md2okf`, or install a release that bundles "
-            "the kit."
+            "md2okf built without its bundled kit, and not a development "
+            "checkout either. Run from a checkout with `uv run md2okf`, or "
+            "install a release whose wheel carries the kit."
         )
     return candidate
 

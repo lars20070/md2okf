@@ -125,6 +125,32 @@ jobs:
       - name: Test (pytest)
         run: make test-md2okf
 
+  # Build the distribution and prove it works away from the checkout. Reuses
+  # `make dist` so the definition stays in the Makefile. `uv build` builds the
+  # wheel from the sdist, so an sdist missing kits/, SPEC.md or
+  # scripts/<cli>/ breaks here rather than after a release; the smoke run then
+  # exercises the *bundled* assets, which nothing run from the repository can
+  # do -- resources.py finds the real tree and every lookup succeeds either
+  # way. Offline apart from the installs: --dry-run creates no sandbox.
+  build-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # No git operations after checkout, so don't leave the job token in
+          # .git/config where a later third-party step could read it.
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build and smoke-test the distribution
+        run: make dist
+
   # Validate kits/md2okf/spec.yaml against the current Sandbox Kit schema.
   # Static check — no Docker or login; only the CLI download needs the network.
   validate-kit:

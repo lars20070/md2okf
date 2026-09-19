@@ -18,6 +18,41 @@ build-backend = "hatchling.build"
 path = "VERSION"
 pattern = "(?P<version>.+)"
 
+# The wheel carries the driver plus the three assets resources.py expects
+# beside it -- kit/, SPEC.md and clis/ -- so an installed md2okf works with no
+# checkout.
+#
+# Each helper CLI names its pyproject.toml and src/ rather than its project
+# directory, because a force-included *directory* is recursed without regard
+# for .gitignore: measured, naming scripts/merkleokf alone pulls its uv.lock
+# in, and those four directories hold ~40 MB of .venv and cache trees around
+# 172 KB of source. tests/test_package.py pins that.
+#
+# `packages` is belt-and-braces rather than load-bearing: hatchling finds
+# src/md2okf by name on its own (checked by deleting this line and rebuilding),
+# but stating it keeps the wheel's contents a property of this file rather
+# than of a detection heuristic.
+[tool.hatch.build.targets.wheel]
+packages = ["src/md2okf"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"kits/md2okf" = "md2okf/kit"
+"SPEC.md" = "md2okf/SPEC.md"
+"scripts/inspectmd/pyproject.toml" = "md2okf/clis/inspectmd/pyproject.toml"
+"scripts/inspectmd/src" = "md2okf/clis/inspectmd/src"
+"scripts/inspectokf/pyproject.toml" = "md2okf/clis/inspectokf/pyproject.toml"
+"scripts/inspectokf/src" = "md2okf/clis/inspectokf/src"
+"scripts/sizeokf/pyproject.toml" = "md2okf/clis/sizeokf/pyproject.toml"
+"scripts/sizeokf/src" = "md2okf/clis/sizeokf/src"
+"scripts/merkleokf/pyproject.toml" = "md2okf/clis/merkleokf/pyproject.toml"
+"scripts/merkleokf/src" = "md2okf/clis/merkleokf/src"
+
+# The sdist keeps hatchling's default selection -- every file the VCS does not
+# ignore, about 1.6 MB. `uv build` builds the wheel from the sdist, so the
+# sdist has to carry kits/, SPEC.md and scripts/<cli>/ under their real paths
+# for the force-include above to resolve; naming a subset here would be a
+# footgun for no gain at this size.
+
 [dependency-groups]
 test = ["pytest>=8.4"]
 

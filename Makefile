@@ -21,7 +21,7 @@ CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
 .PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
-	install-clis install test-sandbox wiki scrape
+	install-clis install dist test-sandbox wiki scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
 # Python, and check that VERSION and CHANGELOG.md's latest release agree.
@@ -129,13 +129,31 @@ install-clis:
 	uv tool install --force ./scripts/sizeokf
 	uv tool install --force ./scripts/merkleokf
 
-# Install md2okf itself onto PATH via uv tool. Packaging the kit/SPEC/CLIs
-# into the wheel (force-include) lands in a later stage; until then the
-# installed tool has no bundled kit and fails clearly (ResourcesError) on
-# anything but --help/--version — this target is for verifying the entry
-# point wires up, not yet for real compiling from an install.
+# Install md2okf itself onto PATH via uv tool. The wheel carries the kit,
+# SPEC.md and the four helper CLI projects (see pyproject.toml's
+# force-include), so an installed md2okf compiles without a checkout.
 install:
 	uv tool install --force .
+
+# Build the wheel and the sdist, then prove the artifact works away from this
+# checkout. `uv build` builds the wheel from the sdist, so anything the sdist
+# omits breaks here rather than after a release; installing that wheel and
+# running it from a directory that is not the repository is the only way to
+# exercise the *bundled* kit and spec instead of resources.py's checkout
+# fallback, which would quietly satisfy every lookup from in here.
+dist:
+	rm -rf dist
+	uv build
+	tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	tar xzf dist/md2okf-*.tar.gz -C "$$tmp"; \
+	( cd "$$tmp"/md2okf-*/ && uv build --wheel --out-dir "$$tmp/out" ); \
+	mkdir -p "$$tmp/run/doc"; \
+	printf '# Title\n\nProse.\n' >"$$tmp/run/doc/a.md"; \
+	cd "$$tmp/run"; \
+	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --version; \
+	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --dry-run -o wiki doc/
+	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
 
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
 # key that kits/md2okf/spec.yaml promises.
