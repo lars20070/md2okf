@@ -250,7 +250,12 @@ def _ensure_default_sandbox() -> int:
     except workbench.LockHeld:
         print("md2okf.sandbox: another md2okf run is using the sandbox; try again later", file=sys.stderr)
         return 2
-    except (workbench.UnownedSandboxError, workbench.KeyNotProxyManagedError, SandboxError) as exc:
+    except (
+        workbench.UnsafeLockFile,
+        workbench.UnownedSandboxError,
+        workbench.KeyNotProxyManagedError,
+        SandboxError,
+    ) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2
     print(f"md2okf.sandbox: sandbox {workbench.SANDBOX_NAME!r} {state}")

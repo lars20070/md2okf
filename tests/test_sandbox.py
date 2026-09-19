@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -205,6 +206,22 @@ def test_ensure_default_sandbox_respects_the_run_lock(fake_sbx, isolated_state, 
     with workbench.lock():
         assert sandbox._ensure_default_sandbox() == 2
     assert "another md2okf run" in capsys.readouterr().err
+
+
+def test_ensure_default_sandbox_exits_2_on_an_unusable_lock_file(
+    fake_sbx, isolated_state, capsys, tmp_path, monkeypatch
+):
+    """Regression.
+
+    This entry point takes the same lock as a compile run, but caught only
+    LockHeld -- so a squatted lock path crashed here with a traceback while
+    the CLI returned exit 2 with a message.
+    """
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "lock-{uid}.lock"))
+    os.mkfifo(tmp_path / f"lock-{os.getuid()}.lock")
+
+    assert sandbox._ensure_default_sandbox() == 2
+    assert "not a regular file" in capsys.readouterr().err
 
 
 def test_ensure_default_sandbox_exits_2_on_an_unowned_sandbox(fake_sbx, isolated_state, capsys):

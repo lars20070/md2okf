@@ -211,6 +211,14 @@ def main(argv: list[str] | None = None) -> int:
     except workbench.LockHeld:
         print("md2okf: another md2okf run is using the sandbox; try again later", file=sys.stderr)
         return 2
+    except workbench.UnsafeLockFile as exc:
+        # Caught here rather than with the setup errors above because lock()
+        # is entered after them; it is still an environment problem decided
+        # before any work starts, so exit 2. Kept narrow on purpose: a broad
+        # WorkbenchError clause here would also swallow run-phase failures
+        # that owe the caller exit 1.
+        print(f"md2okf: {exc}", file=sys.stderr)
+        return 2
     except KeyboardInterrupt:
         # Ctrl-C is a failed run (exit 1), not a crash: a bare traceback tells
         # the user nothing about what survived. The lock is already released

@@ -47,6 +47,40 @@ def test_lock_is_released_and_reusable(monkeypatch, tmp_path):
         pass
 
 
+def test_lock_refuses_a_symlinked_lock_path(monkeypatch, tmp_path):
+    """The path is predictable and lives in a world-writable directory.
+
+    Without O_NOFOLLOW, a symlink planted there would be followed and opened
+    read-write as us.
+    """
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
+    target = tmp_path / "victim"
+    target.write_text("keep", encoding="utf-8")
+    (tmp_path / f"md2okf-{os.getuid()}.lock").symlink_to(target)
+
+    with pytest.raises(workbench.UnsafeLockFile), workbench.lock():
+        pass
+    assert target.read_text(encoding="utf-8") == "keep"
+
+
+def test_lock_refuses_a_lock_path_that_is_not_a_regular_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
+    os.mkfifo(tmp_path / f"md2okf-{os.getuid()}.lock")
+
+    with pytest.raises(workbench.UnsafeLockFile, match="not a regular file"), workbench.lock():
+        pass
+
+
+def test_lock_refuses_a_lock_file_owned_by_someone_else(monkeypatch, tmp_path):
+    """A squatted file would let its owner hold, or drop, our mutual exclusion."""
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
+    (tmp_path / f"md2okf-{os.getuid() + 1}.lock").write_text("", encoding="utf-8")
+    monkeypatch.setattr(os, "getuid", lambda: os.stat(tmp_path).st_uid + 1)
+
+    with pytest.raises(workbench.UnsafeLockFile, match="owned by uid"), workbench.lock():
+        pass
+
+
 # --- ensure_roots(): created once, inode-preserving ------------------------
 
 

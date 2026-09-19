@@ -27,6 +27,10 @@ class WorkbenchError(Exception):
     """A checked failure preparing, staging, or mirroring the workbench."""
 
 
+class UnsafeLockFile(WorkbenchError):
+    """The per-user lock path is not a regular file this user owns."""
+
+
 class LockHeld(WorkbenchError):
     """Another md2okf run already holds the sandbox lock."""
 
@@ -95,9 +99,29 @@ def lock():
     Raises LockHeld immediately rather than queueing behind another run.
     Deliberately not under XDG_STATE_HOME: two shells with different
     XDG_STATE_HOME values must still race on the one lock, not take two.
+
+    That fixed, predictable path sits in a world-writable directory, so the
+    file it names is not trusted until it has been checked: O_NOFOLLOW refuses
+    a symlink another user planted there, and the fstat that follows refuses a
+    FIFO or a file somebody else owns -- which would otherwise let them hold
+    this lock for ever, or drop it and let two of our own runs share the one
+    sandbox. Both are refusals, never a silent unlink: removing a file we do
+    not own is the caller's decision, not ours.
     """
     path = Path(LOCK_PATH_TEMPLATE.format(uid=os.getuid()))
-    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    except OSError as exc:
+        raise UnsafeLockFile(f"cannot open the lock file {path}: {exc.strerror}; remove it and retry") from exc
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise UnsafeLockFile(f"the lock path {path} is not a regular file; remove it and retry")
+        if info.st_uid != os.getuid():
+            raise UnsafeLockFile(f"the lock file {path} is owned by uid {info.st_uid}, not by you; remove it and retry")
+    except BaseException:
+        os.close(fd)
+        raise
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

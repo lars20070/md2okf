@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 
 import pytest
@@ -281,6 +282,22 @@ def test_a_second_run_fails_the_lock(tmp_path, capsys, isolated_state, fake_sbx)
         rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
     assert rc == 2
     assert "another md2okf run" in capsys.readouterr().err
+
+
+def test_an_unusable_lock_file_exits_2_with_a_message(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    """A squatted lock path is an environment problem, not a traceback.
+
+    lock() is entered after the setup handlers, so this needs its own clause
+    at the call site or the error escapes as a crash.
+    """
+    doc = _md(tmp_path)
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "lock-{uid}.lock"))
+    os.mkfifo(tmp_path / f"lock-{os.getuid()}.lock")
+
+    rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
+
+    assert rc == 2
+    assert "not a regular file" in capsys.readouterr().err
 
 
 def test_ctrl_c_exits_1_with_a_message_not_a_traceback(tmp_path, capsys, isolated_state, fake_sbx):
