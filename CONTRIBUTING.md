@@ -12,24 +12,35 @@ you only want to compile a wiki, [the README](README.md) is enough.
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION ↔ CHANGELOG.md agreement
 make validate            # check kits/md2okf/spec.yaml against the Sandbox Kit schema
-make test-shell          # host tests for sandbox state mounts
+make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
+make test-md2okf         # pytest, the md2okf driver suite
+make test                # all of the above plus test-sandbox
+make install             # install md2okf onto PATH (uv tool)
 make install-clis        # install the four host CLIs onto PATH
+make dist                # build the wheel and sdist, and smoke-test the artifact
 make test-sandbox        # check the sandbox has the tools, config and key it promises
 make check-okf           # check the generated wiki
 make scrape              # fetch the website into md/ as one file
-make wiki                # compile the OKF wiki
+```
+
+Compiling is the tool's own job, not a make target:
+
+```bash
+uv run md2okf md/                       # from a clone, no install
+md2okf -o wikis/handbook docs/handbook/ # once `make install` has run
 ```
 
 markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
 `uv tool run` and cspell via `npx`, so none of them needs a separate install.
 `make check-okf` needs `okfctl`: `brew install cwest/tap/okfctl`.
 
-CI (`.github/workflows/ci.yml`) runs five jobs on every pull request: `lint`,
-`test-shell`, `test-web2md`, `test-clis`, and `validate-kit`. Each one reuses the
-matching make target, so a green `make lint && make validate && make test-shell
-&& make test-web2md && make test-clis` locally means a green build.
+CI (`.github/workflows/ci.yml`) runs seven jobs on every pull request: `lint`,
+`test-shell`, `test-web2md`, `test-clis`, `test-md2okf`, `build-package`, and
+`validate-kit`. Each one reuses the matching make target, so a green
+`make lint && make validate && make test-shell && make test-web2md &&
+make test-clis && make test-md2okf && make dist` locally means a green build.
 
 ## Validate the kit spec before you finish
 
@@ -51,10 +62,14 @@ check the current kit from scratch, throw the sandbox away first with
 
 ## Working inside the sandbox
 
+Once a sandbox exists — `md2okf` builds one on first use, or
+`uv run python -m md2okf.sandbox` makes one without compiling anything — these
+are the two ways in. They are `sbx` one-liners rather than scripts, because the
+command owns sandbox creation and nothing else needs to:
+
 ```bash
-./scripts/bash.sh                       # interactive shell in the existing sandbox
-./scripts/pi.sh                         # interactive Pi in the same sandbox
-./scripts/compile-okf.sh md/other-docs  # compile a different source folder
+sbx exec -it md2okf -- bash   # interactive shell at the wiki root
+sbx exec -it md2okf -- pi     # interactive Pi in the same sandbox
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
@@ -65,20 +80,26 @@ sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 
 ## Python layout
 
-Python tooling is thin. There is no project at the repo root: `pdf2md/`,
-`web2md/`, `scripts/inspectmd/`, `scripts/inspectokf/`, `scripts/sizeokf/`, and
-`scripts/merkleokf/` are independent uv projects, each with its own
-`pyproject.toml` and (where needed) `uv.lock`, and nothing shared between them.
+Python tooling is thin. The repository root *is* a project — it holds the
+`md2okf` command itself, because the tool is named after the repository and a
+root `pyproject.toml` is what makes `uv tool install git+https://…` work with no
+registry, and what lets the package read `VERSION` as its version source.
+Everything else stays independent: `pdf2md/`, `web2md/`, `scripts/inspectmd/`,
+`scripts/inspectokf/`, `scripts/sizeokf/`, and `scripts/merkleokf/` are separate
+uv projects, each with its own `pyproject.toml` and (where needed) `uv.lock`,
+and nothing shared between them.
 `pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
 scraper's dependencies and its pytest/ruff config; the four `scripts/` projects
 are installable stdlib-only CLIs with their own ruff and pytest. So the heavy
 dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
 rather than being excluded by flag.
 
-`ruff` and `yamllint` belong to neither project; `make lint` runs them
-ephemerally at a pinned version with `uv tool run`, and checks each tracked
-subproject in turn — a new subproject carries its own `[tool.ruff]` and needs no
-Makefile change.
+`ruff` and `yamllint` belong to no project; `make lint` runs them ephemerally at
+a pinned version with `uv tool run`, and checks each tracked subproject in turn
+— a new subproject carries its own `[tool.ruff]` and needs no Makefile change.
+The root project's `[tool.ruff]` excludes the subprojects and the non-project
+Python (`kits/`, `scripts/`, `md/`, `okf/`, agent-tool config), so each file is
+linted once, under its own rules.
 
 ### Helper CLIs
 
@@ -116,12 +137,14 @@ up from `~/.pi/agent/skills/`.
 The kit is `kits/md2okf/`, and the config it carries lives in
 `kits/md2okf/files/home/.pi/agent/`. That config is copied into the sandbox when
 the kit is built, not mounted, so an edit reaches Pi on the next fresh sandbox —
-which `make wiki` always builds. [The kit guide](kits/md2okf/README.md) covers
-the model and provider settings.
+which `md2okf` builds by itself once the kit's hash no longer matches what the
+running one was built from, or immediately on `--fresh`.
+[The kit guide](kits/md2okf/README.md) covers the model and provider settings.
 
-`tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which owns the
-sandbox and calls `sbx`, and the POSIX `sh` script it runs inside the VM), plus
-host-side shell tests for state mount selection and bind relocation.
+`tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which asks the
+driver for a sandbox and then calls `sbx`, and the POSIX `sh` script it runs
+inside the VM), plus `test-mount-state.sh` for the guest-side bind helper. The
+driver's own suite is pytest, under the same `tests/` directory.
 
 ## Checking the wiki
 
@@ -156,9 +179,12 @@ outside `make lint` and outside CI because `okf/` is generated.
 ## Releasing
 
 Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
-a GitHub Release whose notes are the matching section of `CHANGELOG.md`. There
-are no packages or images to publish — the project is consumed by cloning and
-running `make`.
+a GitHub Release whose notes are the matching section of `CHANGELOG.md`.
+
+The wheel and sdist that `make dist` builds are not published yet: publishing to
+PyPI, and the workflow ordering it needs, is the last stage of
+`.claude/plans/interface-plan.md`. Until then the install paths are
+`uv tool install .` from a clone and `uv tool install git+https://…`.
 
 1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
    with a real body (not just a heading).

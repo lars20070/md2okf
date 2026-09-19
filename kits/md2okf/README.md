@@ -11,7 +11,8 @@ The `files/` level is fixed by the Sandbox Kit schema. It cannot be renamed or
 moved.
 
 Config is copied in when the kit is built, not mounted, so an edit reaches Pi on
-the next fresh sandbox — which `make wiki` always builds.
+the next fresh sandbox — which `md2okf` builds when the kit changes, or on
+`--fresh`.
 
 ## Model configuration
 
@@ -58,7 +59,7 @@ Switching to it takes four steps.
    `spec.yaml`, and give it a `credentials` entry like the OpenRouter one:
    `header: Authorization`, `format: "Bearer %s"`, which is how LiteLLM
    authenticates too.
-4. **Hand over the key**, then run `make wiki`, which builds a fresh kit and
+4. **Hand over the key**, then run `md2okf md/`, which builds the kit and
    copies the config in.
 
 ```bash

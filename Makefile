@@ -21,7 +21,7 @@ CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
 .PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
-	install-clis install dist test-sandbox wiki scrape
+	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
 # Python, and check that VERSION and CHANGELOG.md's latest release agree.
@@ -88,10 +88,11 @@ validate:
 # this target.
 test: test-shell test-web2md test-clis test-md2okf test-sandbox
 
-# Host-side shell tests for state-path selection and the session bind helper.
-# The real bind cases skip on hosts without password-free mount capability.
+# Host-side shell test for the guest's session bind helper, which is POSIX sh
+# run inside the VM and so cannot be exercised from pytest. State-path
+# selection moved to tests/test_workbench.py with the driver. The real bind
+# cases skip on hosts without password-free mount capability.
 test-shell:
-	./tests/test-sandbox-mounts.sh
 	./tests/test-mount-state.sh
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
@@ -159,12 +160,6 @@ dist:
 # key that kits/md2okf/spec.yaml promises.
 test-sandbox:
 	./tests/test-sandbox.sh
-
-# Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
-# The md2okf driver is the documented path now; ./scripts/compile-okf.sh is
-# still here as the rollback if it misbehaves, and goes in a later stage.
-wiki:
-	uv run md2okf md/
 
 # Fetch the website into md/ as one file.
 scrape:

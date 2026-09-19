@@ -1,8 +1,8 @@
 # ShellCheck settings for every script in this repository.
 
 # Follow `source` into the file named by a `# shellcheck source=` directive,
-# instead of reporting SC1091 for it. The launchers all source
-# scripts/lib/sandbox-mounts.sh, and checking it in place is the point.
+# instead of reporting SC1091 for it. Nothing sources a shared library today,
+# but the setting costs nothing and is the right default if one returns.
 external-sources=true
 
 # Run every optional check, then switch off the few that cost readability

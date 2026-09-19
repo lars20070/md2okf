@@ -36,5 +36,6 @@ uv run python -m md2okf.sandbox
 # reads the script from stdin, because tests/ is not one of the sandbox's
 # mounts and so cannot be named as a path inside the VM. Feeding stdin from
 # the file also closes it at EOF, which is what stops the guest blocking on a
-# pipe that never ends (scripts/compile-okf.sh:61-65).
+# pipe that never ends -- the same reason md2okf.sandbox runs every
+# non-interactive `pi` with stdin=DEVNULL.
 sbx exec "${kit_name}" -- sh -l -s <"${repo_root}/tests/test-sandbox-guest.sh"

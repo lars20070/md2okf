@@ -70,6 +70,7 @@
     "inspectmd",
     "uvx",
     "hatchling",
+    "sdist",
     "stdlib",
     "context7",
     "upstash",

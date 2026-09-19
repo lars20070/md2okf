@@ -1,7 +1,9 @@
 """Document resolution and the Ralph loop.
 
-Carries over scripts/compile-okf.sh:28-32 (the two prompts) and :74-130 (the
-loop, the cap, and merkleokf --nolog -L 0 as the convergence check).
+The prompts, the loop, the cap and `merkleokf --nolog -L 0` as the convergence
+check are carried over from the retired scripts/compile-okf.sh (see the git
+history for the original, and .claude/plans/interface-plan.md for why each
+rule is what it is).
 """
 
 from __future__ import annotations

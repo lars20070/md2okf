@@ -10,6 +10,28 @@ and this project adheres to
 
 ### Added
 
+- **`md2okf`, one command in place of `make wiki` and three launcher scripts.**
+  Files or folders in, a directory out: `md2okf [-o DIR] [--spec FILE] [-n N]
+  [--fresh] [--dry-run] [-q|-v] [FILE|DIR ...]`. stdout carries one TSV row per
+  document (`path  iterations  hash-before  hash-after`) and nothing else,
+  diagnostics go to stderr, and the exit status is the verdict: 0 every
+  document converged (a hash-stable first pass included — that is the
+  idempotent re-run), 1 the run failed, 2 usage or environment, decided before
+  any work starts. The driver is stdlib-only Python with a pytest suite that
+  fakes the one `sbx` seam, so the Ralph loop, the prompts and the event
+  rendering are testable without a paid sandbox run.
+- **A workbench, so one sandbox serves any input and output.** sbx fixes a
+  sandbox's mounts at creation, so runs are staged through
+  `$XDG_STATE_HOME/md2okf/work` instead: inputs copied in, the target wiki
+  mirrored in before the run and back out after every iteration, the five mount
+  paths never changing. The sandbox is rebuilt only when the kit it was built
+  from changes, when the recorded configuration no longer matches, or on
+  `--fresh` — and one that cannot be proven to belong to the driver is reported,
+  never deleted.
+- `make install` (the command onto PATH), `make test-md2okf` (the driver suite,
+  also in `make test`) and `make dist` (wheel and sdist, plus a smoke test of
+  the built artifact from outside the checkout). CI gains `test-md2okf` and
+  `build-package` jobs.
 - `okfctl` (pinned 0.4.0, checksummed release archive) to the sandbox toolchain,
   and a `curate-okf` skill covering it. It replaces `okf-lint` as the wiki's
   gate and takes ownership of the reserved `index.md` files: the agent runs
@@ -26,6 +48,18 @@ and this project adheres to
 
 ### Changed
 
+- Host requirements are now `sbx` and `uv`; `make` and `jq` are developer tools
+  rather than user ones. The Quickstart is `uv tool install .` then
+  `md2okf my-document.md`.
+- The writable state mount narrows from the state root to
+  `$XDG_STATE_HOME/md2okf/sessions`, so the host-side ownership marker and the
+  staged read-only inputs are outside the sandbox's namespace. The environment
+  variable the guest helper reads is renamed `MD2OKF_STATE_DIR`, and the
+  per-user lock moves to `/tmp/md2okf-<uid>.lock`, outside the configurable
+  state directory.
+- `merkleokf --nolog` now skips the root `log.md` whatever the wiki directory is
+  called, instead of only when it is named `okf` — the hash call is what decides
+  convergence, and `-o` can name any directory.
 - Migrate the wiki to **OKF v0.2**, following `SPEC.md`: every page's legacy
   `timestamp` becomes `generated: { by, at }` (§5.2) with the actor recorded as
   `pi/<model-id>` (§7), and the bundle-root `index.md` marker moves to `"0.2"`.
@@ -60,6 +94,18 @@ and this project adheres to
 
 ### Removed
 
+- The shell compile path: `scripts/compile-okf.sh`, `scripts/bash.sh`,
+  `scripts/pi.sh`, `scripts/lib/sandbox-mounts.sh` and the `make wiki` target.
+  `md2okf` replaces the first, `sbx exec -it md2okf -- bash` (or `-- pi`) the
+  next two, and `src/md2okf/workbench.py` the mount list. `jq` and `make` leave
+  the user-facing requirements with them.
+- `.env` and `.env.example`. A tool that is not tied to a checkout has no
+  repository to read a `.env` from, so an exported absolute `XDG_STATE_HOME` is
+  the one knob, with `~/.local/state` as the default.
+- `tests/test-sandbox-mounts.sh`, whose subject moved into the driver: the
+  state-path and mount-list cases are `tests/test_workbench.py`, and its check
+  that the agent's runtime instructions never call the wiki `../okf` is
+  `tests/test_kit.py`.
 - `okf-lint` (`@thisismydesign/okf-lint`) and its `okf/.okflintrc.json` rule
   file, superseded by `okfctl` and the frontmatter guard. The guard re-implements
   the rules okfctl's spec floor deliberately leaves open — title, description,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -92,6 +93,38 @@ def test_ensure_roots_creates_all_five_mount_sources(tmp_path):
     assert wb.work_scripts.is_dir()
     assert wb.work_spec.is_file()
     assert wb.sessions.is_dir()
+
+
+def test_ensure_roots_secures_the_state_root(tmp_path):
+    """Ported from the retired tests/test-sandbox-mounts.sh.
+
+    The state root holds Pi's transcripts and the host-only ownership marker,
+    so it is created 0700 rather than at the caller's umask.
+    """
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+
+    assert stat.S_IMODE(wb.root.stat().st_mode) == 0o700
+
+
+def test_mounts_are_the_five_workspace_arguments_in_order(tmp_path):
+    """Ported from the retired tests/test-sandbox-mounts.sh.
+
+    Order matters to `sbx run`: the first operand is the primary workspace and
+    becomes the agent's working directory. The access modes are the invariant
+    the guest-side checks rest on -- only okf/ and sessions/ are writable.
+    """
+    wb = workbench.Workbench(root=tmp_path / "md2okf")
+
+    args = [mount.as_arg() for mount in wb.mounts()]
+
+    assert args == [
+        str(wb.work_okf),
+        f"{wb.work_md}:ro",
+        f"{wb.work_scripts}:ro",
+        f"{wb.work_spec}:ro",
+        str(wb.sessions),
+    ]
 
 
 def test_ensure_roots_never_replaces_existing_roots(tmp_path):

@@ -1,7 +1,7 @@
 """Turn Pi's `--mode json` event stream into the host-side progress view.
 
 Replaces the jq filter in the old shell driver
-(`scripts/compile-okf.sh:89-100`): the same three cases, the same 120-character
+(the retired `scripts/compile-okf.sh`): the same three cases, the same 120-character
 cut on tool calls.
 """
 
