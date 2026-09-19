@@ -69,9 +69,10 @@ def collect(
     ``max_level=1`` lists the entries directly inside ``root``, matching
     ``inspectokf -L 1``.
 
-    When ``nolog`` is true, ``okf/log.md`` is omitted entirely (not listed and
-    not mixed into digests). Nested ``log.md`` files and ``log.md`` under other
-    roots are still hashed.
+    When ``nolog`` is true, the walk root's own ``log.md`` is omitted entirely
+    (not listed and not mixed into digests), whatever the root directory is
+    named. Nested ``log.md`` files, and ``log.md`` under any other root, are
+    still hashed.
     """
     entries: list[Entry] = []
     prefix = f"{root.name}/"
@@ -105,9 +106,11 @@ def collect(
                     depth=depth,
                 )
             elif child.suffix == ".md":
-                # Anchored to the walk root, not to any directory named "okf":
-                # a nested okf/ keeps its own log.md, as the docstring promises.
-                if nolog and child.name == "log.md" and root.name == "okf" and child.parent == root:
+                # Anchored to the walk root itself, not to any directory named
+                # "okf": a nested okf/ keeps its own log.md, as the docstring
+                # promises, and the walk root's log.md is skipped whatever the
+                # root directory happens to be called.
+                if nolog and child.name == "log.md" and child.parent == root:
                     continue
                 digest = hash_file(child)
                 files += 1

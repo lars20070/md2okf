@@ -1,9 +1,20 @@
 ---
 name: Release
 
-# A tag push is the release: pushing vX.Y.Z creates a GitHub Release whose
-# notes are the matching section of CHANGELOG.md. There are no artifacts to
-# publish — the project is consumed by cloning and running make.
+# A tag push is the release: pushing vX.Y.Z verifies the repository agrees with
+# itself, builds the distribution once, publishes it to PyPI, and then creates a
+# GitHub Release whose notes are the matching section of CHANGELOG.md and whose
+# assets are those same artifacts.
+#
+# The job order is deliberate and must stay a chain, not a fan-out. Two jobs
+# that both merely `needs: [verify]` would run concurrently, and the one
+# attaching assets could reach a Release that does not exist yet. Publishing
+# first also means a tag on the Releases page always corresponds to a version
+# that is actually installable.
+#
+# One build feeds both publishers, which is what makes a re-run safe: PyPI
+# treats an upload of a byte-identical file as idempotent, so re-running after
+# a partial failure re-uploads the same bytes rather than colliding with them.
 #
 # All the version and notes logic lives in scripts/, so `make lint`
 # shellchecks the helpers and they can be rehearsed locally.
@@ -14,7 +25,8 @@ on:
     # Matches the pattern scripts/check-release-tag.sh enforces.
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
-# Narrowed further per job. The github-release job needs write; verify does not.
+# Narrowed further per job: github-release writes to the repository,
+# publish-pypi mints an OIDC token, and verify and build need neither.
 permissions:
   contents: read
 
@@ -66,12 +78,82 @@ jobs:
       - name: Lint (includes the version-agreement check)
         run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2'
 
+  # Build the wheel and the sdist once, and hand the same bytes to both
+  # publishers below. `make dist` is the same target CI runs on every pull
+  # request: it builds both artifacts, rebuilds the wheel from the sdist in a
+  # scratch directory, and smoke-tests the result from outside the checkout, so
+  # a release cannot ship an sdist that cannot rebuild itself.
+  build:
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # No git operations after checkout, so don't leave the job token in
+          # .git/config where a later third-party step could read it.
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build and smoke-test the distribution
+        run: make dist
+
+      - name: Upload the distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # Publish to PyPI by trusted publishing: no token exists to leak or rotate,
+  # and the `pypi` environment is what PyPI's publisher configuration is keyed
+  # to. A separate job from the build on purpose — the OIDC credential is never
+  # present in the job that produced the artifacts.
+  publish-pypi:
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/md2okf
+    permissions:
+      # Mint the OIDC token PyPI exchanges for an upload token. Nothing else.
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: false
+
+      - name: Download the distribution
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      # `always` rather than uv's default `automatic`: with no credentials
+      # configured the default silently falls back and the upload fails later
+      # as an opaque 403, while `always` fails here, saying the OIDC exchange
+      # is what went wrong.
+      # The artifacts are named rather than left to uv's default `dist/*`:
+      # `uv build` also drops a .gitignore in there, and naming the two files
+      # keeps anything else that appears out of the upload.
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always dist/*.tar.gz dist/*.whl
+
   # Create the GitHub Release. A tag and a Release are different objects and
   # pushing a tag never creates one, so without this the Releases page stays
   # empty however many versions ship. The notes are the changelog's own section,
   # so there is no second description of a release to drift.
   github-release:
-    needs: [verify]
+    # verify for the version output, publish-pypi for the ordering: the assets
+    # attached here are the ones already on PyPI.
+    needs: [verify, publish-pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -85,6 +167,12 @@ jobs:
           # GH_TOKEN below, not with the checkout credential.
           persist-credentials: false
 
+      - name: Download the distribution
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -92,9 +180,13 @@ jobs:
           RELEASE_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          # Skip rather than fail if it exists — re-running a release is normal.
+          # Re-running a release is normal, so converge rather than fail: an
+          # existing Release keeps its notes -- they may have been edited by
+          # hand -- and only its assets are refreshed, which is what a re-run
+          # after a half-finished upload needs.
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "NOTICE: release ${TAG} already exists — not modifying it"
+            echo "NOTICE: release ${TAG} already exists — refreshing its assets only"
+            gh release upload "${TAG}" dist/* --clobber
             exit 0
           fi
           # Read the notes first and only then create, rather than piping one
@@ -108,4 +200,4 @@ jobs:
           # --verify-tag refuses to invent a tag that does not exist, turning a
           # typo into a failure instead of a stray tag.
           printf '%s\n' "${notes}" |
-            gh release create "${TAG}" --title "${TAG}" --verify-tag --notes-file -
+            gh release create "${TAG}" --title "${TAG}" --verify-tag --notes-file - dist/*

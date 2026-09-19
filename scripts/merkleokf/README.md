@@ -20,7 +20,7 @@ merkleokf --version
 merkleokf                      # every file and folder in okf/
 merkleokf -L 0                 # walk root only
 merkleokf -L 1                 # top level only: the categories
-merkleokf --nolog              # omit okf/log.md from listing and digests
+merkleokf --nolog              # omit the walk root's log.md from listing and digests
 merkleokf --level 2 okf
 merkleokf okf/science-nature   # any subfolder
 merkleokf okf/index.md         # a single file
@@ -56,7 +56,7 @@ table.
   timestamp bump or a tag fix is a change and will move the hash. `sizeokf` is
   the one that ignores frontmatter and measures prose — the two answer different
   questions on purpose, and share no code.
-- **Only `*.md` files.** `.DS_Store` and `.okflintrc.json` are ignored, so a
+- **Only `*.md` files.** Dotfiles such as `.DS_Store` are ignored, so a
   hash never flaps because Finder looked at a folder.
 - **Directory digests** cover their children sorted by name, each contributing a
   type tag, its name, and its digest (`d`/`f` + name + digest). Names are
@@ -65,9 +65,10 @@ table.
   filesystems.
 - **Folder digests are always full-depth recursive**, whatever `-L` is set to.
   `-L` decides which entries get a row, never what they cover.
-- **`--nolog`** omits only `okf/log.md` from the listing and from digests.
-  Nested `log.md` files and `log.md` under other root names are still hashed.
-  Ignored when hashing a single file.
+- **`--nolog`** omits only the walk root's own `log.md` from the listing and
+  from digests, whatever the root directory is named. Nested `log.md` files,
+  and `log.md` under any other root, are still hashed. Ignored when hashing a
+  single file.
 - Symlinks are not followed, so cycles cannot hang the walk.
 - A folder with no Markdown still gets a row, showing `0` files.
 - An unreadable file is reported on stderr and contributes a zero digest rather

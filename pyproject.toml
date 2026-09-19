@@ -1,0 +1,117 @@
+[project]
+name = "md2okf"
+dynamic = ["version"]
+description = "Compile Markdown into an OKF wiki with the Pi coding agent, via a sandboxed sbx runtime"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+license = "MIT"
+# Named rather than left to the backend's default globs, because two of these
+# are not md2okf's own licence: the wheel and the sdist redistribute the OKF
+# specification as md2okf/SPEC.md, which is Apache-2.0 (see
+# NOTICE-OKF-SPEC.md). All three land in the distribution's licenses/ folder.
+license-files = ["LICENSE", "LICENSE-OKF-SPEC.txt", "NOTICE-OKF-SPEC.md"]
+keywords = ["okf", "markdown", "wiki", "knowledge-base", "agent", "sandbox"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Documentation",
+  "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+[project.urls]
+Homepage = "https://github.com/lars20070/md2okf"
+Changelog = "https://github.com/lars20070/md2okf/blob/master/CHANGELOG.md"
+Issues = "https://github.com/lars20070/md2okf/issues"
+
+[project.scripts]
+md2okf = "md2okf.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# VERSION is the single source of the package version (see AGENTS.md); this
+# reads it verbatim rather than duplicating it in [project.version].
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>.+)"
+
+# The wheel carries the driver plus the three assets resources.py expects
+# beside it -- kit/, SPEC.md and clis/ -- so an installed md2okf works with no
+# checkout.
+#
+# Each helper CLI names its pyproject.toml and src/ rather than its project
+# directory, because a force-included *directory* is recursed without regard
+# for .gitignore: measured, naming scripts/merkleokf alone pulls its uv.lock
+# in, and those four directories hold ~40 MB of .venv and cache trees around
+# 172 KB of source. tests/test_package.py pins that.
+#
+# `packages` is belt-and-braces rather than load-bearing: hatchling finds
+# src/md2okf by name on its own (checked by deleting this line and rebuilding),
+# but stating it keeps the wheel's contents a property of this file rather
+# than of a detection heuristic.
+[tool.hatch.build.targets.wheel]
+packages = ["src/md2okf"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"kits/md2okf" = "md2okf/kit"
+"SPEC.md" = "md2okf/SPEC.md"
+"scripts/inspectmd/pyproject.toml" = "md2okf/clis/inspectmd/pyproject.toml"
+"scripts/inspectmd/src" = "md2okf/clis/inspectmd/src"
+"scripts/inspectokf/pyproject.toml" = "md2okf/clis/inspectokf/pyproject.toml"
+"scripts/inspectokf/src" = "md2okf/clis/inspectokf/src"
+"scripts/sizeokf/pyproject.toml" = "md2okf/clis/sizeokf/pyproject.toml"
+"scripts/sizeokf/src" = "md2okf/clis/sizeokf/src"
+"scripts/merkleokf/pyproject.toml" = "md2okf/clis/merkleokf/pyproject.toml"
+"scripts/merkleokf/src" = "md2okf/clis/merkleokf/src"
+
+# The sdist otherwise keeps hatchling's default selection -- every file the VCS
+# does not ignore, about 1.6 MB. `uv build` builds the wheel from the sdist, so
+# the sdist has to carry kits/, SPEC.md and scripts/<cli>/ under their real
+# paths for the force-include above to resolve; naming an allowlist here would
+# be a footgun for no gain at this size. Subtracting is different: the two
+# agent-tool directories carry vendored third-party skills with licences of
+# their own, and republishing those under this project's name is not something
+# a source distribution should do silently.
+[tool.hatch.build.targets.sdist]
+exclude = [".claude", ".cursor"]
+
+[dependency-groups]
+test = ["pytest>=8.4"]
+
+# Paths are relative to this file, so they resolve wherever the project is
+# invoked from. pythonpath keeps `import md2okf` working without an install.
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+# This is the repository root, so the tree walk would otherwise reach md/,
+# okf/ (gitignored, usually absent), kits/md2okf/files/.../frontmatter-guard.py
+# (no project of its own), scripts/sync-descriptions.py (ditto), and the
+# skill-tool vendor scripts under .claude/ and .cursor/ -- none of these were
+# linted before this project existed, and none belong to it. web2md/, pdf2md/
+# and scripts/<cli>/ each carry their own [tool.ruff] and are linted under
+# that instead, via their own explicit Makefile invocation, unaffected by this
+# exclude list.
+extend-exclude = ["md", "okf", "kits", "scripts", ".claude", ".cursor"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "RET", "PT", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# A test's name is its documentation; a docstring on each of them would be noise.
+# Fixtures and helpers are still expected to explain themselves.
+"tests/*" = ["D100", "D103"]

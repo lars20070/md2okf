@@ -85,7 +85,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nolog",
         action="store_true",
-        help="ignore okf/log.md (omit from listing and digests; ignored for a file)",
+        help="ignore the walk root's log.md (omit from listing and digests; ignored for a file)",
     )
     return parser
 

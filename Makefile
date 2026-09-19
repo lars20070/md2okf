@@ -1,13 +1,13 @@
 # md2okf — developer task runner.
 #
-# Pi runs in one runtime: the Docker Sandbox (sbx) kit under pi/, which owns the
-# only copy of the agent config (see AGENTS.md).
+# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/md2okf/, which
+# owns the only copy of the agent config (see AGENTS.md).
 #
 # Tool overrides (defaults suit local dev; CI overrides only MARKDOWNLINT):
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (pi/spec.yaml).
+#                 project; the pin matches the sandbox (kits/md2okf/spec.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
@@ -20,8 +20,8 @@ YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
 .DEFAULT_GOAL := lint
-.PHONY: lint lint-okf validate test test-web2md test-clis install-clis \
-	test-sandbox wiki scrape
+.PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
+	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
 # Python, and check that VERSION and CHANGELOG.md's latest release agree.
@@ -42,6 +42,9 @@ CSPELL ?= npx --yes cspell
 # ruff runs once per tracked subproject rather than once over the tree, because
 # each project carries its own [tool.ruff]. Deriving the list from tracked
 # pyproject.toml files means a new subproject is linted the moment it is added.
+# The bare 'pyproject.toml' pattern adds the root md2okf project alongside the
+# '*/pyproject.toml' subprojects; its own [tool.ruff] scopes that walk away
+# from md/, okf/, and everything else that isn't its source.
 lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(MARKDOWNLINT)
@@ -50,7 +53,7 @@ lint:
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
 		| xargs -0 $(CSPELL) --no-progress
-	git ls-files -- '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
+	git ls-files -- 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
 	if [ ! -f VERSION ]; then \
 		echo "lint: VERSION is missing" >&2; exit 1; \
 	fi; \
@@ -67,13 +70,14 @@ lint:
 	fi
 	@echo "All lint checks passed."
 
-# Lint the generated okf/ wiki with okf-lint
-# (https://github.com/thisismydesign/okf-lint). Run via `pnpm dlx`, so nothing
-# needs installing on the host. Rules live in okf/.okflintrc.json. Kept out of
-# `make lint` because okf/ is generated output and gitignored — this is a
-# host-side developer command, not part of the source-tree lint or CI.
-lint-okf:
-	pnpm dlx @thisismydesign/okf-lint ./okf
+# Check the generated okf/ wiki with okfctl (https://github.com/cwest/okfctl)
+# and the frontmatter guard, using the same script the agent runs inside the
+# sandbox — one implementation, two call sites. Needs okfctl on PATH:
+# `brew install cwest/tap/okfctl`. Kept out of `make lint` because okf/ is
+# generated output and gitignored — this is a host-side developer command,
+# not part of the source-tree lint or CI.
+check-okf:
+	kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
 # Validate the sandbox kit spec against the current Sandbox Kit schema.
 validate:
@@ -82,7 +86,14 @@ validate:
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-web2md test-clis test-sandbox
+test: test-shell test-web2md test-clis test-md2okf test-sandbox
+
+# Host-side shell test for the guest's session bind helper, which is POSIX sh
+# run inside the VM and so cannot be exercised from pytest. State-path
+# selection moved to tests/test_workbench.py with the driver. The real bind
+# cases skip on hosts without password-free mount capability.
+test-shell:
+	./tests/test-mount-state.sh
 
 # Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
@@ -104,6 +115,14 @@ test-clis:
 	uv run --project scripts/merkleokf --group test pytest -c scripts/merkleokf/pyproject.toml \
 		scripts/merkleokf/tests
 
+# Unit-test the md2okf driver itself. pytest's default discovery already
+# collects only tests/test_*.py, leaving the tests/*.sh shell suites (run by
+# test-shell and test-sandbox) untouched. Offline: every sbx call goes
+# through the one seam in md2okf.sandbox, which these tests replace with a
+# fake.
+test-md2okf:
+	uv run --group test pytest tests
+
 # Install the four host CLIs onto PATH via uv tool.
 install-clis:
 	uv tool install --force ./scripts/inspectmd
@@ -111,14 +130,36 @@ install-clis:
 	uv tool install --force ./scripts/sizeokf
 	uv tool install --force ./scripts/merkleokf
 
+# Install md2okf itself onto PATH via uv tool. The wheel carries the kit,
+# SPEC.md and the four helper CLI projects (see pyproject.toml's
+# force-include), so an installed md2okf compiles without a checkout.
+install:
+	uv tool install --force .
+
+# Build the wheel and the sdist, then prove the artifact works away from this
+# checkout. `uv build` builds the wheel from the sdist, so anything the sdist
+# omits breaks here rather than after a release; installing that wheel and
+# running it from a directory that is not the repository is the only way to
+# exercise the *bundled* kit and spec instead of resources.py's checkout
+# fallback, which would quietly satisfy every lookup from in here.
+dist:
+	rm -rf dist
+	uv build
+	tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	tar xzf dist/md2okf-*.tar.gz -C "$$tmp"; \
+	( cd "$$tmp"/md2okf-*/ && uv build --wheel --out-dir "$$tmp/out" ); \
+	mkdir -p "$$tmp/run/doc"; \
+	printf '# Title\n\nProse.\n' >"$$tmp/run/doc/a.md"; \
+	cd "$$tmp/run"; \
+	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --version; \
+	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --dry-run -o wiki doc/
+	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
+
 # Check that the sandbox delivers the toolchain, agent config and proxy-managed
-# key that pi/spec.yaml promises.
+# key that kits/md2okf/spec.yaml promises.
 test-sandbox:
 	./tests/test-sandbox.sh
-
-# Compile the OKF wiki with the sandboxed Pi runtime (Docker Sandbox / sbx).
-wiki:
-	./scripts/compile-okf.sh
 
 # Fetch the website into md/ as one file.
 scrape:

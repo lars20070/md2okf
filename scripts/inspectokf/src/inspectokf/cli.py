@@ -42,7 +42,7 @@ def _visibly_empty(path: Path) -> bool | None:
     """Return True if ``path`` has no non-hidden children.
 
     Returns ``None`` when the directory cannot be listed (caller should exit 2).
-    Dotfiles are ignored so a fresh ``okf/`` that only holds ``.okflintrc.json``
+    Dotfiles are ignored so a fresh ``okf/`` that only holds ``.DS_Store``
     is treated as empty, matching ``tree``'s default of hiding names that start
     with ``.``.
     """

@@ -12,7 +12,8 @@
     "scripts/inspectmd/tests/**",
     "scripts/inspectokf/tests/**",
     "scripts/sizeokf/tests/**",
-    "scripts/merkleokf/tests/**"
+    "scripts/merkleokf/tests/**",
+    "tests/**"
   ],
   "words": [
     "okf",
@@ -25,6 +26,7 @@
     "OpenRouter",
     "Ollama",
     "sbx",
+    "sbxenv",
     "npmjs",
     "maxsockets",
     "earendil",
@@ -39,7 +41,6 @@
     "psutil",
     "fdfind",
     "venv",
-    "okflintrc",
     "pycache",
     "httpx",
     "pythonpath",
@@ -54,6 +55,8 @@
     "docstrings",
     "conftest",
     "monkeypatch",
+    "argparse",
+    "workbench",
     "qwen",
     "resumability",
     "resumable",
@@ -67,6 +70,8 @@
     "inspectmd",
     "uvx",
     "hatchling",
+    "sdist",
+    "pypi",
     "stdlib",
     "context7",
     "upstash",
@@ -90,6 +95,9 @@
     "Dramatica",
     "Egri",
     "usermod",
-    "newgrp"
+    "newgrp",
+    "okfctl",
+    "okflintrc",
+    "cwest"
   ]
 }
