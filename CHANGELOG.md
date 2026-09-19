@@ -28,6 +28,19 @@ and this project adheres to
   from changes, when the recorded configuration no longer matches, or on
   `--fresh` — and one that cannot be proven to belong to the driver is reported,
   never deleted.
+- **Publication to PyPI.** `md2okf` is now installable with
+  `uv tool install md2okf` (or runnable with `uvx md2okf`), with the sandbox
+  kit, `SPEC.md` and the four helper CLI projects carried inside the wheel, so
+  it compiles without a checkout. A `vX.Y.Z` tag builds the wheel and sdist
+  once, publishes them by trusted publishing — OIDC, no stored token — and then
+  creates the GitHub Release with those same artifacts attached.
+- `NOTICE-OKF-SPEC.md` and `LICENSE-OKF-SPEC.txt`, recording that the bundled
+  `SPEC.md` is the Open Knowledge Format v0.2 specification, taken verbatim from
+  `GoogleCloudPlatform/open-knowledge-format` and licensed Apache-2.0. Both ship
+  in the wheel and the sdist beside md2okf's own MIT licence. Package metadata
+  gains the README as its long description, an SPDX licence expression, project
+  URLs and classifiers, and the sdist no longer carries the agent-tool
+  directories and their vendored third-party skills.
 - `make install` (the command onto PATH), `make test-md2okf` (the driver suite,
   also in `make test`) and `make dist` (wheel and sdist, plus a smoke test of
   the built artifact from outside the checkout). CI gains `test-md2okf` and

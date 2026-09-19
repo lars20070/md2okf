@@ -181,10 +181,13 @@ outside `make lint` and outside CI because `okf/` is generated.
 Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
 a GitHub Release whose notes are the matching section of `CHANGELOG.md`.
 
-The wheel and sdist that `make dist` builds are not published yet: publishing to
-PyPI, and the workflow ordering it needs, is the last stage of
-`.claude/plans/interface-plan.md`. Until then the install paths are
-`uv tool install .` from a clone and `uv tool install git+https://…`.
+Pushing the tag also publishes: the workflow builds the wheel and sdist once
+with `make dist`, uploads them to PyPI by trusted publishing (no token — the
+`pypi` GitHub environment is what PyPI's publisher configuration is keyed to),
+and only then creates the Release, with those same artifacts attached. The jobs
+are a chain rather than a fan-out on purpose, so nothing can attach assets to a
+Release that does not exist yet, and a re-run is safe because PyPI treats an
+upload of a byte-identical file as idempotent.
 
 1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
    with a real body (not just a heading).

@@ -11,7 +11,7 @@ agent](https://pi.dev) writes a wiki into the output directory: a page per
 topic, an index in every directory, links between them, and a log of what each
 run changed. OKF,
 the [Open Knowledge
-Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf),
+Format](https://github.com/GoogleCloudPlatform/open-knowledge-format),
 is a tree of Markdown files with YAML frontmatter and nothing else — no schema
 registry, no server, nothing to install. The agent takes one source document per
 run and folds it into the wiki already on disk, so documents accumulate rather
@@ -139,12 +139,14 @@ Hand sbx your OpenRouter key once — see [Set up the OpenRouter
 key](#set-up-the-openrouter-key). Then install the command and compile:
 
 ```bash
-uv tool install .                       # from a clone
+uv tool install md2okf                  # from PyPI
 md2okf my-document.md                   # the wiki lands in ./okf
 ```
 
-`uv tool install git+https://github.com/lars20070/md2okf` installs it without a
-clone. The command takes files or folders, and `-o` chooses the output:
+`uvx md2okf …` runs it without installing anything;
+`uv tool install git+https://github.com/lars20070/md2okf` installs the latest
+commit, and `uv tool install .` a clone you have edited. The command takes files
+or folders, and `-o` chooses the output:
 
 ```bash
 md2okf -o wikis/handbook docs/handbook/   # every *.md in that folder
@@ -262,7 +264,7 @@ its siblings as `../md/`, `../scripts/` and `../SPEC.md`.
 | `Makefile` | the developer tasks — lint, validate, tests, installs |
 | `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus repository chores |
 | `kits/md2okf/` | what the driver runs: the Docker Sandbox kit and the config it carries |
-| `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) the wiki is built against |
+| `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against — vendored verbatim, Apache-2.0, see [NOTICE-OKF-SPEC.md](NOTICE-OKF-SPEC.md) |
 | `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |

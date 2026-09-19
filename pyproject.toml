@@ -2,8 +2,31 @@
 name = "md2okf"
 dynamic = ["version"]
 description = "Compile Markdown into an OKF wiki with the Pi coding agent, via a sandboxed sbx runtime"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+license = "MIT"
+# Named rather than left to the backend's default globs, because two of these
+# are not md2okf's own licence: the wheel and the sdist redistribute the OKF
+# specification as md2okf/SPEC.md, which is Apache-2.0 (see
+# NOTICE-OKF-SPEC.md). All three land in the distribution's licenses/ folder.
+license-files = ["LICENSE", "LICENSE-OKF-SPEC.txt", "NOTICE-OKF-SPEC.md"]
+keywords = ["okf", "markdown", "wiki", "knowledge-base", "agent", "sandbox"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Documentation",
+  "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+[project.urls]
+Homepage = "https://github.com/lars20070/md2okf"
+Changelog = "https://github.com/lars20070/md2okf/blob/master/CHANGELOG.md"
+Issues = "https://github.com/lars20070/md2okf/issues"
 
 [project.scripts]
 md2okf = "md2okf.cli:main"
@@ -47,11 +70,16 @@ packages = ["src/md2okf"]
 "scripts/merkleokf/pyproject.toml" = "md2okf/clis/merkleokf/pyproject.toml"
 "scripts/merkleokf/src" = "md2okf/clis/merkleokf/src"
 
-# The sdist keeps hatchling's default selection -- every file the VCS does not
-# ignore, about 1.6 MB. `uv build` builds the wheel from the sdist, so the
-# sdist has to carry kits/, SPEC.md and scripts/<cli>/ under their real paths
-# for the force-include above to resolve; naming a subset here would be a
-# footgun for no gain at this size.
+# The sdist otherwise keeps hatchling's default selection -- every file the VCS
+# does not ignore, about 1.6 MB. `uv build` builds the wheel from the sdist, so
+# the sdist has to carry kits/, SPEC.md and scripts/<cli>/ under their real
+# paths for the force-include above to resolve; naming an allowlist here would
+# be a footgun for no gain at this size. Subtracting is different: the two
+# agent-tool directories carry vendored third-party skills with licences of
+# their own, and republishing those under this project's name is not something
+# a source distribution should do silently.
+[tool.hatch.build.targets.sdist]
+exclude = [".claude", ".cursor"]
 
 [dependency-groups]
 test = ["pytest>=8.4"]

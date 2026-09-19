@@ -71,6 +71,7 @@
     "uvx",
     "hatchling",
     "sdist",
+    "pypi",
     "stdlib",
     "context7",
     "upstash",
