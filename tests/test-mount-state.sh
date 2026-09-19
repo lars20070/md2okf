@@ -38,8 +38,8 @@ pass() {
 }
 
 skip() {
-	[[ -z "${SBXAGENT_REQUIRE_BIND:-}" ]] ||
-		fail "$* — SBXAGENT_REQUIRE_BIND is set"
+	[[ -z "${MD2OKF_REQUIRE_BIND:-}" ]] ||
+		fail "$* — MD2OKF_REQUIRE_BIND is set"
 	echo "skip - $*"
 }
 
@@ -74,7 +74,7 @@ fresh() {
 	STATE="${CASE}/state"
 	LINK="${CASE}/home/agent/sessions"
 	mkdir -p "${CASE}/home/agent"
-	export SBXAGENT_STATE_DIR="${STATE}"
+	export MD2OKF_STATE_DIR="${STATE}"
 }
 
 stub_command() {
@@ -95,12 +95,12 @@ if sudo -n mount --bind "${TEST_ROOT}/bind-probe/src" \
 fi
 
 fresh no-env
-unset SBXAGENT_STATE_DIR
+unset MD2OKF_STATE_DIR
 mkdir -p "${LINK}"
 run_helper "${LINK}" sessions
 assert_eq 0 "${STATUS}" "no-env status"
 [[ -d "${LINK}" && ! -e "${STATE}" ]] || fail "no-env invocation changed state"
-pass "an unset SBXAGENT_STATE_DIR is a no-op"
+pass "an unset MD2OKF_STATE_DIR is a no-op"
 
 if [[ "${BIND_AVAILABLE}" == yes ]]; then
 	fresh first

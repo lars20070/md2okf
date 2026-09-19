@@ -541,7 +541,7 @@ def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:
         return "reuse"
 
     _clear_ownership_marker(wb)
-    token = sandbox.create(name, kit_dir, wb.mounts(), {"SBXAGENT_STATE_DIR": str(wb.root)})
+    token = sandbox.create(name, kit_dir, wb.mounts(), {"MD2OKF_STATE_DIR": str(wb.root)})
     write_ownership_marker(wb, fingerprint_value, token)
     if not sandbox.key_is_proxy_managed(name):
         raise KeyNotProxyManagedError(name)

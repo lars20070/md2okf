@@ -52,7 +52,7 @@ document_folder="$(cd "${markdown_folder}" && pwd)"
 sandbox_workspace_args
 sbx rm --force "${kit_name}" || true
 sbx run --detached --name "${kit_name}" \
-	-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
+	-e "MD2OKF_STATE_DIR=${MD2OKF_STATE_DIR}" \
 	./kits/md2okf/ "${workspace_args[@]}"
 
 # Compile each document into the wiki. `sbx exec` runs with the primary

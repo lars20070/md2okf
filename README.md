@@ -26,7 +26,7 @@ flowchart LR
     direction TB
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
-    STATE["session traces<br> + message board<br/>~/.local/state/sbxagent"]
+    STATE["session traces<br> + message board<br/>~/.local/state/md2okf"]
     DRV["make wiki<br/>scripts/compile-okf.sh"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end

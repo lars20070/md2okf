@@ -39,12 +39,12 @@ agentInstructions:
     - `../md/` — read-only source documents
     - `../scripts/` — read-only, the projects behind the CLIs listed below
     - `../SPEC.md` — read-only, the OKF specification
-    - `$SBXAGENT_STATE_DIR` — writable persistent state for Pi sessions
+    - `$MD2OKF_STATE_DIR/sessions` — writable persistent state for Pi sessions
 
     Nothing else from the user's project is mounted, so no other file of theirs
     is visible or reachable — not the repository, not its history, not its
     configuration. Pi writes sessions to its native `~/.pi/agent/sessions`
-    path, which is bind-mounted onto `$SBXAGENT_STATE_DIR/sessions`. A write
+    path, which is bind-mounted onto `$MD2OKF_STATE_DIR/sessions`. A write
     anywhere outside the wiki and state directory either fails or lands in the
     VM's own filesystem and is lost when the sandbox is removed.
 

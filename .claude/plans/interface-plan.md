@@ -1,4 +1,4 @@
-<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR importlib flock progfile DEVNULL Popen SBXAGENT nullglob pipefail shopt pypi mountpoint EROFS submounts virtiofs rmtree copytree lstat -->
+<!-- cspell:words argparse workbench uvx pipx hatchling sdist GHCR importlib flock progfile DEVNULL Popen nullglob pipefail shopt pypi mountpoint EROFS submounts virtiofs rmtree copytree lstat -->
 
 # Plan: ship `md2okf` as a packaged primitive
 
@@ -286,7 +286,7 @@ one `mount --bind` away from writable, and hand the agent the `lock` and
 `sandbox-fingerprint` outright — an injected source document could rewrite the
 spec the run is held to, and `check-okf.sh` would then validate the wiki
 against the tampered `../SPEC.md`. So `sessions/` is mounted, not the root.
-`SBXAGENT_STATE_DIR` still names the root, which is what the guest helper
+`MD2OKF_STATE_DIR` still names the root, which is what the guest helper
 expects.
 
 Nothing above `work/` is reachable from the wiki, so `../md` and `../SPEC.md`
@@ -600,7 +600,7 @@ honours VCS ignores — before writing the file.
   `work/SPEC.md:ro`, `…/md2okf/sessions` (rw) — five mounts, same order and
   count as today, no writable one an ancestor of a read-only one.
 - `scripts/bash.sh:31-36` — the `sbx ls -q | grep -qx` existence check and
-  `sbx run --detached --name md2okf -e SBXAGENT_STATE_DIR=… <kit> <mounts>` →
+  `sbx run --detached --name md2okf -e MD2OKF_STATE_DIR=… <kit> <mounts>` →
   `sandbox.py`. The existence check is no longer sufficient on its own: it
   gains the recorded sandbox identity, the configuration fingerprint and the
   in-VM probe, all three written or checked as the ownership contract describes.
@@ -910,7 +910,7 @@ Safe to stop here, and this is the last stage.
 - **PyPI registration is a one-time owner action** and blocks stage 5 only.
 - **`mount-state.sh` against the narrower mount.** Mounting `sessions/` rather
   than the state root changes the granularity the guest helper was written for.
-  Its contract (`$SBXAGENT_STATE_DIR/sessions`) is unchanged, and the env var
+  Its contract (`$MD2OKF_STATE_DIR/sessions`) is unchanged, and the env var
   still names the root, but the first live run after the change is the proof.
 - **A guest with sudo can still deny service on the mounts.** All of a
   sandbox's host shares appear to sit on one virtiofs superblock: a

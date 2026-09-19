@@ -129,12 +129,12 @@ fi
 
 # Persistent Pi sessions. The stock path must remain a real directory and be
 # the same bind-mounted directory as the host-backed state target.
-if [ -z "${SBXAGENT_STATE_DIR:-}" ]; then
-	echo "MISSING SBXAGENT_STATE_DIR"
+if [ -z "${MD2OKF_STATE_DIR:-}" ]; then
+	echo "MISSING MD2OKF_STATE_DIR"
 	failures=$((failures + 1))
 else
 	session_link="${HOME}/.pi/agent/sessions"
-	session_target="${SBXAGENT_STATE_DIR}/sessions"
+	session_target="${MD2OKF_STATE_DIR}/sessions"
 	if [ -L "${session_link}" ]; then
 		echo "BROKEN ${session_link} is a symlink"
 		failures=$((failures + 1))
@@ -236,7 +236,7 @@ fi
 # No read-write mount may be an ancestor of a read-only one. This is a path
 # property, checked against the mounts themselves — note the state *root* is
 # deliberately not in this list, because only its sessions/ child is mounted.
-for rw in "${wiki_root}" "${SBXAGENT_STATE_DIR:-/nonexistent}/sessions"; do
+for rw in "${wiki_root}" "${MD2OKF_STATE_DIR:-/nonexistent}/sessions"; do
 	for ro in "${work_dir}/md" "${work_dir}/scripts" "${work_dir}/SPEC.md"; do
 		case "${ro}/" in
 		"${rw}/"*)
@@ -254,9 +254,9 @@ echo "ok no read-write mount is an ancestor of a read-only one"
 # mount, so its siblings — which the host really does write — prove the root
 # itself is not shared. An injected document that could reach these could
 # rewrite the ownership marker the host trusts.
-if [ -n "${SBXAGENT_STATE_DIR:-}" ]; then
+if [ -n "${MD2OKF_STATE_DIR:-}" ]; then
 	for host_only in sandbox-fingerprint sandbox-identity; do
-		if [ -e "${SBXAGENT_STATE_DIR}/${host_only}" ]; then
+		if [ -e "${MD2OKF_STATE_DIR}/${host_only}" ]; then
 			echo "BROKEN host-only ${host_only} is visible inside the sandbox"
 			failures=$((failures + 1))
 		else
@@ -269,7 +269,7 @@ fi
 # scratch path — the plan's specific concern, since a bind of a writable
 # ancestor is what would flatten the nested read-only ones.
 if sudo -n true 2>/dev/null; then
-	for rw in "${wiki_root}" "${SBXAGENT_STATE_DIR:-}/sessions"; do
+	for rw in "${wiki_root}" "${MD2OKF_STATE_DIR:-}/sessions"; do
 		[ -d "${rw}" ] || continue
 		scratch="$(mktemp -d)"
 		if sudo -n mount --bind "${rw}" "${scratch}" 2>/dev/null; then

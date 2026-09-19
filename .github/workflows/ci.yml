@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Test state mounts
-        run: make test-shell SBXAGENT_REQUIRE_BIND=1
+        run: make test-shell MD2OKF_REQUIRE_BIND=1
 
   # Lint Markdown, JSON, YAML, shell, spelling, and Python. Reuses `make lint`
   # so the lint definition lives in one place (the Makefile). markdownlint runs

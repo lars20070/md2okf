@@ -5,9 +5,9 @@
 # A bind mount keeps LINK as a real directory while making its writes land in
 # host-backed state. It must be recreated after every sandbox start.
 set -eu
-[ -n "${SBXAGENT_STATE_DIR:-}" ] || exit 0
+[ -n "${MD2OKF_STATE_DIR:-}" ] || exit 0
 link="$1"
-target="${SBXAGENT_STATE_DIR}/$2"
+target="${MD2OKF_STATE_DIR}/$2"
 
 same_fs() {
 	one="$(stat -c '%d:%i' "$1" 2>/dev/null || stat -f '%d:%i' "$1" 2>/dev/null)"

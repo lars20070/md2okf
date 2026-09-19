@@ -31,7 +31,7 @@ fi
 if ! sbx ls -q | grep -qx "${kit_name}"; then
 	sandbox_workspace_args
 	sbx run --detached --name "${kit_name}" \
-		-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}" \
+		-e "MD2OKF_STATE_DIR=${MD2OKF_STATE_DIR}" \
 		./kits/md2okf/ "${workspace_args[@]}"
 fi
 

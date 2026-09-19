@@ -44,7 +44,7 @@ actual="$({
 	HOME="${HOME_DIR}" XDG_STATE_HOME="${CASE}/exported state" bash -c '
 		source scripts/lib/sandbox-mounts.sh
 		sandbox_workspace_args
-		printf "%s\n" "${SBXAGENT_STATE_DIR}"
+		printf "%s\n" "${MD2OKF_STATE_DIR}"
 	'
 })"
 assert_eq "${CASE}/exported state/md2okf" "${actual}" "exported precedence"
@@ -60,7 +60,7 @@ actual="$({
 	env -u XDG_STATE_HOME HOME="${HOME_DIR}" bash -c '
 		source scripts/lib/sandbox-mounts.sh
 		sandbox_workspace_args
-		printf "%s\n" "${SBXAGENT_STATE_DIR}"
+		printf "%s\n" "${MD2OKF_STATE_DIR}"
 	'
 })"
 assert_eq "${HOME_DIR}/state from env/md2okf" "${actual}" ".env precedence"
@@ -75,7 +75,7 @@ actual="$({
 	HOME="${HOME_DIR}" XDG_STATE_HOME="relative/state" bash -c '
 		source scripts/lib/sandbox-mounts.sh
 		sandbox_workspace_args
-		printf "%s\n" "${SBXAGENT_STATE_DIR}"
+		printf "%s\n" "${MD2OKF_STATE_DIR}"
 	'
 })"
 assert_eq "${HOME_DIR}/.local/state/md2okf" "${actual}" "relative fallback"
@@ -94,10 +94,10 @@ output="$({
 		printf "count=%s\n" "${#workspace_args[@]}"
 		printf "primary=%s\n" "${workspace_args[0]}"
 		for arg in "${workspace_args[@]}"; do printf "arg=%s\n" "${arg}"; done
-		if stat -c %a "${SBXAGENT_STATE_DIR}" >/dev/null 2>&1; then
-			stat -c "mode=%a" "${SBXAGENT_STATE_DIR}"
+		if stat -c %a "${MD2OKF_STATE_DIR}" >/dev/null 2>&1; then
+			stat -c "mode=%a" "${MD2OKF_STATE_DIR}"
 		else
-			stat -f "mode=%Lp" "${SBXAGENT_STATE_DIR}"
+			stat -f "mode=%Lp" "${MD2OKF_STATE_DIR}"
 		fi
 	'
 })"
@@ -121,8 +121,8 @@ for creator in scripts/compile-okf.sh scripts/pi.sh scripts/bash.sh; do
 	grep -q 'sandbox_workspace_args' "${ROOT}/${creator}" ||
 		fail "${creator} does not populate workspace_args"
 	# shellcheck disable=SC2016 # match the creator's literal expansion
-	grep -q -- '-e "SBXAGENT_STATE_DIR=${SBXAGENT_STATE_DIR}"' "${ROOT}/${creator}" ||
-		fail "${creator} does not inject SBXAGENT_STATE_DIR"
+	grep -q -- '-e "MD2OKF_STATE_DIR=${MD2OKF_STATE_DIR}"' "${ROOT}/${creator}" ||
+		fail "${creator} does not inject MD2OKF_STATE_DIR"
 done
 pass "every sandbox creator mounts and injects the shared state directory"
 

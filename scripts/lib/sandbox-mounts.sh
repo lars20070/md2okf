@@ -42,17 +42,17 @@ sandbox_workspace_args() {
 	/*) sandbox_state_home="${XDG_STATE_HOME}" ;;
 	*) sandbox_state_home="${HOME}/.local/state" ;;
 	esac
-	SBXAGENT_STATE_DIR="${sandbox_state_home}/md2okf"
-	export SBXAGENT_STATE_DIR
-	mkdir -p "${SBXAGENT_STATE_DIR}"
-	chmod 700 "${SBXAGENT_STATE_DIR}"
+	MD2OKF_STATE_DIR="${sandbox_state_home}/md2okf"
+	export MD2OKF_STATE_DIR
+	mkdir -p "${MD2OKF_STATE_DIR}"
+	chmod 700 "${MD2OKF_STATE_DIR}"
 
 	# Only sessions/ is mounted, never the state root: the root also holds the
 	# md2okf driver's ownership marker (sandbox-fingerprint, sandbox-identity)
 	# and its work/ staging tree, whose md/, scripts/ and SPEC.md the driver
 	# mounts read-only. Sharing the root read-write would let a guest forge the
 	# ownership proof and rewrite the very spec a run is held to.
-	mkdir -p "${SBXAGENT_STATE_DIR}/sessions"
+	mkdir -p "${MD2OKF_STATE_DIR}/sessions"
 
 	# okf/.okflintrc.json used to be the only tracked file under okf/; it is
 	# gone, .gitignore ignores the rest, and sbx cannot mount a path that does
@@ -71,6 +71,6 @@ sandbox_workspace_args() {
 		"./md:ro"
 		"./scripts:ro"
 		"./SPEC.md:ro"
-		"${SBXAGENT_STATE_DIR}/sessions"
+		"${MD2OKF_STATE_DIR}/sessions"
 	)
 }
