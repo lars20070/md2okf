@@ -47,6 +47,13 @@ sandbox_workspace_args() {
 	mkdir -p "${SBXAGENT_STATE_DIR}"
 	chmod 700 "${SBXAGENT_STATE_DIR}"
 
+	# Only sessions/ is mounted, never the state root: the root also holds the
+	# md2okf driver's ownership marker (sandbox-fingerprint, sandbox-identity)
+	# and its work/ staging tree, whose md/, scripts/ and SPEC.md the driver
+	# mounts read-only. Sharing the root read-write would let a guest forge the
+	# ownership proof and rewrite the very spec a run is held to.
+	mkdir -p "${SBXAGENT_STATE_DIR}/sessions"
+
 	# okf/.okflintrc.json used to be the only tracked file under okf/; it is
 	# gone, .gitignore ignores the rest, and sbx cannot mount a path that does
 	# not exist yet, so a fresh clone needs this created before the mount.
@@ -56,13 +63,14 @@ sandbox_workspace_args() {
 	# md/            source documents, read as data and never modified
 	# scripts/       the four helper CLI projects the kit's shims run
 	# SPEC.md        the OKF spec, which outranks every instruction file
-	# state dir      persistent Pi sessions, mounted read-write
+	# sessions/      persistent Pi sessions, mounted read-write — the only
+	#                state path the sandbox can reach
 	# shellcheck disable=SC2034 # consumed by every script that sources us
 	workspace_args=(
 		"./okf"
 		"./md:ro"
 		"./scripts:ro"
 		"./SPEC.md:ro"
-		"${SBXAGENT_STATE_DIR}"
+		"${SBXAGENT_STATE_DIR}/sessions"
 	)
 }

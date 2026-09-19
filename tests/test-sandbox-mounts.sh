@@ -103,8 +103,13 @@ output="$({
 })"
 [[ "${output}" == *$'count=5'* ]] || fail "workspace array does not have five entries"
 [[ "${output}" == *$'primary=./okf'* ]] || fail "okf is not the primary workspace"
-[[ "${output}" == *"arg=${state_home}/md2okf"* ]] ||
+[[ "${output}" == *"arg=${state_home}/md2okf/sessions"* ]] ||
 	fail "state path containing spaces was not preserved as one array entry"
+# Only sessions/ crosses into the VM. The state root also holds the md2okf
+# driver's ownership marker and its work/ staging tree, so mounting the root
+# would be a writable alias for paths that are meant to be read-only.
+[[ "${output}" != *$'arg='"${state_home}/md2okf"$'\n'* ]] ||
+	fail "the state root is mounted; only its sessions/ child may be"
 [[ "${output}" == *$'mode=700'* ]] || fail "state directory mode is not 0700"
 [[ "${output}" != *"logs"* ]] || fail "workspace arguments still contain a logs mount"
 pass "workspace arguments preserve spaces, secure state, and omit logs"

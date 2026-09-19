@@ -212,7 +212,7 @@ not the kit that built it:
 | `md/` | read-only | source documents, read as data and never modified |
 | `scripts/` | read-only | the four helper CLI projects the agent runs |
 | `SPEC.md` | read-only | the specification that outranks every instruction |
-| `$XDG_STATE_HOME/md2okf` | read-write | persistent Pi session state |
+| `$XDG_STATE_HOME/md2okf/sessions` | read-write | persistent Pi session state |
 
 So the agent's only writable content output is `okf/`; its other writable mount
 is session state outside the repository. The mount list lives in one place,
