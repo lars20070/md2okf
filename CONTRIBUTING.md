@@ -189,6 +189,36 @@ are a chain rather than a fan-out on purpose, so nothing can attach assets to a
 Release that does not exist yet, and a re-run is safe because PyPI treats an
 upload of a byte-identical file as idempotent.
 
+### One-time setup
+
+Trusted publishing is an agreement between two configurations, and neither of
+them lives in this repository, so a fork — or a rebuilt PyPI project — has to
+establish both before the first tag. Each one fails in a way that does not point
+at itself, so both are worth naming.
+
+- **The `pypi` GitHub environment must permit tag refs.** `publish-pypi` is the
+  only job carrying an `environment:`, and this workflow is triggered by tags
+  alone. An environment that restricts deployments to selected *branches*
+  therefore matches nothing, because a branch rule never covers a tag: under
+  Settings → Environments → `pypi` → Deployment branches and tags, add a rule
+  of ref type **Tag** with the pattern `v*`. Until then the job fails *before
+  its first step*, which means there are no logs to fetch and
+  `gh run view --log-failed` answers `log not found`. The message is an
+  annotation instead:
+  `gh api repos/lars20070/md2okf/check-runs/<job-id>/annotations`.
+- **The PyPI publisher must match the token's claims exactly**, and must be on
+  `pypi.org` rather than `test.pypi.org` — separate databases, and a publisher
+  registered on the wrong one is indistinguishable from no publisher at all. The
+  fields are owner `lars20070`, repository `md2okf`, workflow `release.yml` (the
+  filename, not the display name `Release`) and environment `pypi`. A mismatch
+  fails with `invalid-publisher: valid token, but no corresponding publisher`;
+  `uv publish` prints the claims it sent, so compare the configuration against
+  those rather than against this list. Before the project exists this is a
+  *pending* publisher, and the first successful upload converts it into the
+  project's own.
+
+### Cutting a release
+
 1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
    with a real body (not just a heading).
 2. Set `VERSION` to `X.Y.Z`.
@@ -199,5 +229,7 @@ upload of a byte-identical file as idempotent.
 
 The workflow re-runs `make lint` and refuses a tag whose version disagrees with
 `VERSION` (`scripts/check-release-tag.sh`). An empty changelog section fails
-before the Release is created. Re-running is safe: if the Release already
-exists, the job skips it rather than modifying it.
+before the Release is created. Re-running a tag converges rather than failing:
+the build produces the same bytes, PyPI accepts a re-upload of a file it already
+has, and an existing Release keeps its notes — which may have been edited by
+hand — while its assets are refreshed with `gh release upload --clobber`.
