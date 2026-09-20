@@ -29,8 +29,11 @@ reviews:
   poem: false
   abort_on_close: true
   # Generated, gitignored, or manually maintained content that is not reviewed:
-  # the wiki's input and output, the lockfile, and the optional PDF step.
+  # the wiki's input and output, the lockfile, the optional PDF step, and
+  # SPEC.md, which is the upstream OKF revision this repo builds against
+  # rather than code of ours to review.
   path_filters:
+    - "!SPEC.md"
     - "!uv.lock"
     - "!md/**"
     - "!okf/**/*.md"

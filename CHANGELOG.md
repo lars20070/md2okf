@@ -8,6 +8,126 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
+### Added
+
+- **`md2okf`, one command in place of `make wiki` and three launcher scripts.**
+  Files or folders in, a directory out: `md2okf [-o DIR] [--spec FILE] [-n N]
+  [--fresh] [--dry-run] [-q|-v] [FILE|DIR ...]`. stdout carries one TSV row per
+  document (`path  iterations  hash-before  hash-after`) and nothing else,
+  diagnostics go to stderr, and the exit status is the verdict: 0 every
+  document converged (a hash-stable first pass included — that is the
+  idempotent re-run), 1 the run failed, 2 usage or environment, decided before
+  any work starts. The driver is stdlib-only Python with a pytest suite that
+  fakes the one `sbx` seam, so the Ralph loop, the prompts and the event
+  rendering are testable without a paid sandbox run.
+- **A workbench, so one sandbox serves any input and output.** sbx fixes a
+  sandbox's mounts at creation, so runs are staged through
+  `$XDG_STATE_HOME/md2okf/work` instead: inputs copied in, the target wiki
+  mirrored in before the run and back out after every iteration, the five mount
+  paths never changing. The sandbox is rebuilt only when the kit it was built
+  from changes, when the recorded configuration no longer matches, or on
+  `--fresh` — and one that cannot be proven to belong to the driver is reported,
+  never deleted.
+- **Publication to PyPI.** `md2okf` is now installable with
+  `uv tool install md2okf` (or runnable with `uvx md2okf`), with the sandbox
+  kit, `SPEC.md` and the four helper CLI projects carried inside the wheel, so
+  it compiles without a checkout. A `vX.Y.Z` tag builds the wheel and sdist
+  once, publishes them by trusted publishing — OIDC, no stored token — and then
+  creates the GitHub Release with those same artifacts attached.
+- `NOTICE-OKF-SPEC.md` and `LICENSE-OKF-SPEC.txt`, recording that the bundled
+  `SPEC.md` is the Open Knowledge Format v0.2 specification, taken verbatim from
+  `GoogleCloudPlatform/open-knowledge-format` and licensed Apache-2.0. Both ship
+  in the wheel and the sdist beside md2okf's own MIT licence. Package metadata
+  gains the README as its long description, an SPDX licence expression, project
+  URLs and classifiers, and the sdist no longer carries the agent-tool
+  directories and their vendored third-party skills.
+- `make install` (the command onto PATH), `make test-md2okf` (the driver suite,
+  also in `make test`) and `make dist` (wheel and sdist, plus a smoke test of
+  the built artifact from outside the checkout). CI gains `test-md2okf` and
+  `build-package` jobs.
+- `okfctl` (pinned 0.4.0, checksummed release archive) to the sandbox toolchain,
+  and a `curate-okf` skill covering it. It replaces `okf-lint` as the wiki's
+  gate and takes ownership of the reserved `index.md` files: the agent runs
+  `okfctl index build` instead of writing link lists by hand, and the gate's
+  `okfctl index check` fails closed on a stale or hand-edited index.
+- `compile-okf/scripts/check-okf.sh`, one gate with two call sites — the agent
+  runs it before finishing, `make check-okf` runs the same file on the host. It
+  combines `okfctl validate`, a new dependency-free `frontmatter-guard.py`,
+  `okfctl lint`, `okfctl analyze` for links that resolve to nothing, and
+  `okfctl index check`. Lint defects (`broken-link`, `orphan`, `type-hygiene`,
+  `status-lifecycle`, `spec-version`) block; `missing-xref` and `coverage-gap`
+  are printed as advice, since they are judgment calls and the gate runs
+  unattended inside the compile loop.
+
+### Changed
+
+- Host requirements are now `sbx` and `uv`; `make` and `jq` are developer tools
+  rather than user ones. The Quickstart is `uv tool install .` then
+  `md2okf my-document.md`.
+- The writable state mount narrows from the state root to
+  `$XDG_STATE_HOME/md2okf/sessions`, so the host-side ownership marker and the
+  staged read-only inputs are outside the sandbox's namespace. The environment
+  variable the guest helper reads is renamed `MD2OKF_STATE_DIR`, and the
+  per-user lock moves to `/tmp/md2okf-<uid>.lock`, outside the configurable
+  state directory.
+- `merkleokf --nolog` now skips the root `log.md` whatever the wiki directory is
+  called, instead of only when it is named `okf` — the hash call is what decides
+  convergence, and `-o` can name any directory.
+- Migrate the wiki to **OKF v0.2**, following `SPEC.md`: every page's legacy
+  `timestamp` becomes `generated: { by, at }` (§5.2) with the actor recorded as
+  `pi/<model-id>` (§7), and the bundle-root `index.md` marker moves to `"0.2"`.
+  Index links are now relative, which is what `okfctl index build` writes;
+  cross-links in page prose stay bundle-absolute.
+
+- Persist Pi's native `~/.pi/agent/sessions` tree in
+  `$XDG_STATE_HOME/md2okf/sessions`, bind-mounted from host state instead of a
+  repository-local `logs/sessions/`. An exported `XDG_STATE_HOME` takes
+  precedence over the gitignored `.env`, with `~/.local/state` as the fallback;
+  changing it requires rebuilding the sandbox. Existing legacy transcripts are
+  not migrated.
+- Mount only what the agent needs into the sandbox, instead of the whole
+  repository read-write: `okf/` and the external session-state directory
+  read-write, and `md/`, `scripts/` and `SPEC.md` read-only. Nothing else in the
+  repository is visible inside the microVM, so the agent's restriction to
+  `okf/` is now enforced by the filesystem rather than by instructions alone.
+  The mount list lives in `scripts/lib/sandbox-mounts.sh`, shared by every
+  script that creates the sandbox.
+- `okf/` is the primary mount and therefore the working directory inside the
+  VM, so the agent's config and the `compile-okf` lint wrapper now address the
+  read-only mounts as `../md/`, `../scripts/` and `../SPEC.md`.
+- Move the Docker Sandbox kit from `pi/` to `kits/md2okf/`. Scripts, tests, and
+  docs now point at `./kits/md2okf/`.
+- Bump the documented minimum `sbx` version from 0.42.0 to 0.43.0.
+
+### Fixed
+
+- Ensure the `compile-okf` check script is executable after kit setup (`chmod`
+  in `kits/md2okf/spec.yaml`), so `make test-sandbox` passes when the static
+  `files/home/` copy drops the exec bit.
+
+### Removed
+
+- The shell compile path: `scripts/compile-okf.sh`, `scripts/bash.sh`,
+  `scripts/pi.sh`, `scripts/lib/sandbox-mounts.sh` and the `make wiki` target.
+  `md2okf` replaces the first, `sbx exec -it md2okf -- bash` (or `-- pi`) the
+  next two, and `src/md2okf/workbench.py` the mount list. `jq` and `make` leave
+  the user-facing requirements with them.
+- `.env` and `.env.example`. A tool that is not tied to a checkout has no
+  repository to read a `.env` from, so an exported absolute `XDG_STATE_HOME` is
+  the one knob, with `~/.local/state` as the default.
+- `tests/test-sandbox-mounts.sh`, whose subject moved into the driver: the
+  state-path and mount-list cases are `tests/test_workbench.py`, and its check
+  that the agent's runtime instructions never call the wiki `../okf` is
+  `tests/test_kit.py`.
+- `okf-lint` (`@thisismydesign/okf-lint`) and its `okf/.okflintrc.json` rule
+  file, superseded by `okfctl` and the frontmatter guard. The guard re-implements
+  the rules okfctl's spec floor deliberately leaves open — title, description,
+  tags, provenance, the `okf_version` marker and the log's date headings — and
+  adds a format check on provenance timestamps. `prefer-absolute-links` retires
+  with it, for index files only.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added
@@ -21,6 +141,7 @@ and this project adheres to
 
 ### Changed
 
+- Bump the pinned Pi coding agent from 0.84.2 to 0.85.1.
 - Bump the documented minimum `sbx` version from 0.38.0 to 0.42.0.
 - `scripts/bash.sh`, `scripts/pi.sh`, `scripts/compile-okf.sh` and
   `tests/test-sandbox.sh` now invoke `sbx run` with the kit path as the

@@ -102,7 +102,7 @@ def test_main_dotfile_only_skips_tree(
 ):
     wiki = tmp_path / "okf"
     wiki.mkdir()
-    (wiki / ".okflintrc.json").write_text("{}\n", encoding="utf-8")
+    (wiki / ".DS_Store").write_bytes(b"\x00")
     mock_run = MagicMock(return_value=MagicMock(returncode=0))
     monkeypatch.setattr("inspectokf.cli.subprocess.run", mock_run)
     monkeypatch.setattr("inspectokf.cli.shutil.which", lambda _: "/usr/bin/tree")

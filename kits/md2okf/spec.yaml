@@ -1,0 +1,312 @@
+---
+schemaVersion: "2"
+kind: sandbox
+name: md2okf
+displayName: Pi kit
+description: >
+  Runs the Pi terminal coding agent in a Docker Sandbox microVM, configured for
+  OpenRouter and proxy-managed API credentials.
+
+sandbox:
+  image: "docker/sandbox-templates:shell-docker"
+  # Model and provider come from the kit's own config (files/home/.pi/agent/
+  # settings.json + models.json), delivered to ~/.pi/agent/ in the VM. No
+  # --provider/--model flags here — Pi resolves defaults from settings.json.
+  entrypoint:
+    - sh
+    - -c
+    - |
+      set -eu
+      mount_state_status=0
+      sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+        "$HOME/.pi/agent/sessions" sessions || mount_state_status=$?
+      if [ "${mount_state_status}" -ne 0 ]; then
+        echo "md2okf: could not relocate Pi sessions onto state; refusing to start pi" >&2
+        exit "${mount_state_status}"
+      fi
+      exec pi "$@"
+    - md2okf-entrypoint
+
+# The AI profile Pi reads, and the text appended to it.
+agentInstructions:
+  filename: AGENTS.md
+  content: |
+    ## Sandbox environment
+    You are Pi running inside a Docker Sandbox microVM. Your workspace is the
+    OKF wiki itself, mounted read-write, and edits apply directly to the host
+    working tree. Four more host paths are mounted:
+
+    - `../md/` — read-only source documents
+    - `../scripts/` — read-only, the projects behind the CLIs listed below
+    - `../SPEC.md` — read-only, the OKF specification
+    - `$MD2OKF_STATE_DIR/sessions` — writable persistent state for Pi sessions
+
+    Nothing else from the user's project is mounted, so no other file of theirs
+    is visible or reachable — not the repository, not its history, not its
+    configuration. Pi writes sessions to its native `~/.pi/agent/sessions`
+    path, which is bind-mounted onto `$MD2OKF_STATE_DIR/sessions`. A write
+    anywhere outside the wiki and state directory either fails or lands in the
+    VM's own filesystem and is lost when the sandbox is removed.
+
+    `sudo` is passwordless. If a host is blocked by policy, ask the user to allow
+    it with `sbx policy allow network "<host>"`.
+
+    ## Installed tools
+    These commands are on PATH. Use them; do not reinstall them.
+
+    - `curl`, `fdfind` (fd; Ubuntu package `fd-find`), `jq`, `python3`,
+      `rg` (ripgrep), `shellcheck`, `tree`
+    - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring
+      verbs (the curate-okf skill covers it)
+    - `markdownlint-cli2`, `cspell` — Markdown and spelling
+    - `ruff`, `yamllint` — Python and YAML
+    - `inspectmd` — Markdown heading map (line ranges and word counts)
+    - `inspectokf` — wiki directory tree (via `tree`)
+    - `sizeokf` — Markdown content word counts, excluding frontmatter
+    - `merkleokf` — wiki Merkle hash tree, for change detection
+    - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
+
+# Outbound egress allowlist. Default-deny: every host the kit reaches must be
+# listed. Pointing Pi at a different provider means adding its host here too —
+# see "Using another provider" in the README.
+permissions:
+  network:
+    allow:
+      # Model API. Must match credentials[].apiKey.inject[].domain exactly.
+      - "openrouter.ai"
+      # Pi service bootstrap.
+      - "pi.dev"
+      # npm: pi-coding-agent, markdownlint-cli2, cspell.
+      - "registry.npmjs.org:443"
+      # uv tool install: ruff, yamllint (index + wheels).
+      - "pypi.org:443"
+      - "files.pythonhosted.org:443"
+      # apt-get update refreshes every template source, so all of them must
+      # be reachable: Ubuntu amd64 (archive/security), arm64 (ports), and
+      # Docker's apt repo (pre-added by shell-docker).
+      - "archive.ubuntu.com:80"
+      - "security.ubuntu.com:80"
+      - "ports.ubuntu.com:80"
+      - "download.docker.com:443"
+      # mq and okfctl release binaries: github.com redirects to a GitHub CDN
+      # host. Today that is objects.githubusercontent.com; release-assets is
+      # also used for release downloads and must stay allowlisted.
+      - "github.com:443"
+      - "objects.githubusercontent.com:443"
+      - "release-assets.githubusercontent.com:443"
+      # mq docs and language reference, for the agent to consult at runtime.
+      - "mqlang.org/book/"
+      # Context7 docs API (native @upstash/context7-pi extension).
+      - "context7.com:443"
+
+# Credentials declare WHAT the kit needs and how the proxy injects it — not
+# where it lives on the host (that comes from the user bindings / host env).
+# proxyManaged: true sets OPENROUTER_API_KEY inside the container as a
+# proxy-managed sentinel (replaces the v1 environment.proxyManaged list).
+credentials:
+  - service: openrouter
+    apiKey:
+      name: OPENROUTER_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: openrouter.ai
+          header: Authorization
+          format: "Bearer %s"
+
+# Runs once at sandbox create, in order, via `sh -c`. `user` defaults to root
+# ("0"); "1000" is the agent.
+setup:
+  install:
+    # Distro CLI tools the agent shells out to.
+    - command: |
+        set -eu
+        apt-get update
+        apt-get install -y \
+          curl \
+          fd-find \
+          jq \
+          python3 \
+          ripgrep \
+          shellcheck \
+          tree
+      description: Install distro CLI tools
+
+    # npm through the sandbox proxy is flaky: pin, one socket, 10-minute fetch,
+    # five attempts. `npm config` writes ~/.npmrc, so later npm steps inherit it.
+    - command: |
+        set -eu
+        PI_VERSION=0.85.1
+
+        npm config set proxy "$HTTP_PROXY"
+        npm config set https-proxy "$HTTP_PROXY"
+
+        npm_install_retry() {
+          pkg=$1
+          attempt=1
+          until npm install -g --ignore-scripts --maxsockets=1 \
+            --fetch-timeout=600000 "$pkg"
+          do
+            if [ "$attempt" -ge 5 ]; then
+              echo "${pkg} install failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            echo "${pkg} install failed (attempt ${attempt}/5), retrying..."
+            attempt=$((attempt + 1))
+            sleep 5
+          done
+        }
+
+        npm_install_retry "@earendil-works/pi-coding-agent@${PI_VERSION}"
+      user: "1000"
+      description: Configure npm proxy and install Pi
+
+    - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
+      user: "1000"
+      description: Install Markdown and spelling linters
+
+    - command: |
+        set -eu
+        uv tool install ruff@0.16.2
+        uv tool install yamllint@1.38.0
+      user: "1000"
+      description: Install Python linters
+
+    # No apt/uv/npm package; fetched as a pinned, checksummed release binary.
+    - command: |
+        set -eu
+        MQ_VERSION=0.8.2
+
+        case "$(uname -m)" in
+          x86_64) MQ_TARGET=x86_64-unknown-linux-gnu ;;
+          aarch64) MQ_TARGET=aarch64-unknown-linux-gnu ;;
+          *)
+            echo "mq: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        base="https://github.com/harehare/mq/releases/download/v${MQ_VERSION}"
+        curl -fsSL -o "$tmp/mq" "${base}/mq-${MQ_TARGET}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="mq-${MQ_TARGET}/mq-${MQ_TARGET}" '$2 == f { print $1 }' \
+          "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/mq" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "mq: checksum mismatch for ${MQ_TARGET}" >&2
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/mq" "$HOME/.local/bin/mq"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install mq (Markdown query tool)
+
+    # Same story as mq, one release archive rather than a bare binary. The
+    # checksums.txt second column is a plain filename here, so the awk match is
+    # on the archive name. Only okfctl is extracted: the archive also carries
+    # okfctl-search, whose semantic index needs a model download from a host
+    # that is not allowlisted.
+    - command: |
+        set -eu
+        OKFCTL_VERSION=0.4.0
+
+        case "$(uname -m)" in
+          x86_64) OKFCTL_ARCH=amd64 ;;
+          aarch64) OKFCTL_ARCH=arm64 ;;
+          *)
+            echo "okfctl: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        archive="okfctl_${OKFCTL_VERSION}_linux_${OKFCTL_ARCH}.tar.gz"
+        base="https://github.com/cwest/okfctl/releases/download/v${OKFCTL_VERSION}"
+        curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "okfctl: checksum mismatch for ${archive}" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$archive" -C "$tmp" okfctl
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/okfctl" "$HOME/.local/bin/okfctl"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install okfctl (OKF bundle tool)
+
+    # Native Pi package (not MCP): tools + context7-docs skill under ~/.pi/agent/npm/.
+    - command: |
+        set -eu
+        CONTEXT7_PI_VERSION=0.1.2
+        pi install "npm:@upstash/context7-pi@${CONTEXT7_PI_VERSION}"
+      user: "1000"
+      description: Install Context7 Pi extension
+
+    # Static files/home/ copies do not reliably preserve the git 100755 bit;
+    # set it explicitly so the compile-okf skill can invoke the wrapper.
+    - command: |
+        set -eu
+        scripts=/home/agent/.pi/agent/skills/compile-okf/scripts
+        chmod 0755 "$scripts/check-okf.sh"
+      description: Make the compile-okf check script executable
+
+  # Bind mounts do not survive a sandbox stop. The startup hook covers normal
+  # starts and sbx exec; the entrypoint above is a second required call site for
+  # starts where the hook is not replayed. The helper is idempotent.
+  startup:
+    - command:
+        - sh
+        - -c
+        - |
+          set -eu
+          HOME="${HOME:-/home/agent}"
+          export HOME
+          sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+            "$HOME/.pi/agent/sessions" sessions
+      user: "agent"
+      description: Bind-mount Pi sessions onto persistent state
+
+  # Workspace is not mounted during setup.install, so the CLIs are shims that
+  # resolve from ${WORKDIR} — the workspace path — rather than from a copy
+  # (always tracks the tree). ${WORKDIR} is the wiki, and the projects sit in
+  # the scripts/ mount beside it, hence the dirname.
+  files:
+    - path: /home/agent/.local/bin/inspectmd
+      mode: "0755"
+      description: Workspace-backed inspectmd CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectmd" inspectmd "$@"
+
+    - path: /home/agent/.local/bin/inspectokf
+      mode: "0755"
+      description: Workspace-backed inspectokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectokf" inspectokf "$@"
+
+    - path: /home/agent/.local/bin/sizeokf
+      mode: "0755"
+      description: Workspace-backed sizeokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/sizeokf" sizeokf "$@"
+
+    - path: /home/agent/.local/bin/merkleokf
+      mode: "0755"
+      description: Workspace-backed merkleokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/merkleokf" merkleokf "$@"

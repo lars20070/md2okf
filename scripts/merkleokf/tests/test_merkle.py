@@ -127,12 +127,13 @@ def test_nolog_skips_okf_log_only(tmp_path: Path):
     assert root_without.files == baseline.files
 
 
-def test_nolog_ignores_log_under_other_roots(tmp_path: Path):
+def test_nolog_is_not_gated_on_the_root_directory_name(tmp_path: Path):
+    """The exclusion follows the walk root, not a directory literally named okf."""
     root = _wiki(tmp_path, name="wiki")
-    (root / "log.md").write_text("# counted\n", encoding="utf-8")
+    (root / "log.md").write_text("# root log\n", encoding="utf-8")
     entries, root_entry = collect(root, nolog=True)
-    assert "wiki/log.md" in _by_path(entries)
-    assert root_entry.files == 6  # 5 from _wiki + log.md
+    assert "wiki/log.md" not in _by_path(entries)
+    assert root_entry.files == 5  # 5 from _wiki, log.md excluded
 
 
 def test_nolog_keeps_log_under_a_nested_okf_directory(tmp_path: Path):
