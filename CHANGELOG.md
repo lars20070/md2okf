@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
 ### Added
 
 - **`md2okf`, one command in place of `make wiki` and three launcher scripts.**
