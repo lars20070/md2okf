@@ -158,8 +158,11 @@ def _ensure_sandbox(wb: workbench.Workbench, args: argparse.Namespace) -> int | 
     try:
         workbench.ensure_sandbox(wb, fresh=args.fresh)
     except (
-        workbench.UnownedSandboxError,
-        workbench.KeyNotProxyManagedError,
+        # The base, not just UnownedSandboxError and KeyNotProxyManagedError:
+        # ensure_sandbox also stages the tooling, and a staging failure there
+        # arrives as a plain WorkbenchError. Catching only the two subclasses
+        # let that one through as a traceback.
+        workbench.WorkbenchError,
         sandbox.SandboxError,
         resources.ResourcesError,
     ) as exc:

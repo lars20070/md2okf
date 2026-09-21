@@ -42,6 +42,19 @@ and this project adheres to
   this project: the `--mode json` wire format is unchanged, and all three of
   0.86.0's breaking changes are extension- or SDK-level.
 
+### Fixed
+
+- **`--shell` and `--agent` no longer mount an empty `SPEC.md`.** `ensure_roots`
+  can only create the spec mount empty — sbx cannot mount a path that does not
+  exist — and only a compile's `restage` filled it, so an interactive session on
+  a workbench that had never compiled handed the agent a 0-byte `../SPEC.md`.
+  That is the one file outranking every instruction it has, and an agent reading
+  it empty wrote a wiki declaring `okf_version: ""`, which `okfctl index build`
+  then dropped, leaving the frontmatter guard and the index check looking as
+  though they contradicted each other. `stage_tooling` now floors the mount with
+  the bundled spec, filling it only when empty, so a compile's `--spec` still
+  governs the session that follows it.
+
 ### Removed
 
 - **`scripts/sync-descriptions.py`.** It rewrote each `index.md` entry's

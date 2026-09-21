@@ -602,6 +602,39 @@ def test_ensure_sandbox_creates_and_writes_the_marker(tmp_path, fake_sbx):
     assert workbench.read_ownership_marker(wb) is not None
 
 
+def test_stage_tooling_fills_the_empty_spec_placeholder(tmp_path):
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    assert wb.work_spec.stat().st_size == 0
+    inode_before = wb.work_spec.stat().st_ino
+
+    workbench.stage_tooling(wb)
+
+    assert wb.work_spec.read_bytes() == resources.spec_md().read_bytes()
+    # The bind mount resolves this inode, so the fill must not replace the file.
+    assert wb.work_spec.stat().st_ino == inode_before
+
+
+def test_stage_tooling_leaves_an_already_staged_spec_alone(tmp_path):
+    """A compile's --spec survives the --shell/--agent that follows it."""
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    wb.work_spec.write_text("# Custom spec\n\n**Version 0.3**\n", encoding="utf-8")
+
+    workbench.stage_tooling(wb)
+
+    assert wb.work_spec.read_text(encoding="utf-8") == "# Custom spec\n\n**Version 0.3**\n"
+
+
+def test_stage_tooling_converts_an_unreadable_spec_to_workbench_error(tmp_path, monkeypatch):
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    monkeypatch.setattr(resources, "spec_md", lambda: tmp_path / "missing" / "SPEC.md")
+
+    with pytest.raises(workbench.WorkbenchError, match="staging the sandbox tooling failed"):
+        workbench.stage_tooling(wb)
+
+
 def test_ensure_sandbox_reuses_a_previously_created_one(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()

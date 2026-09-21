@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import ExecvpCalled
 
-from md2okf import __version__, cli, sandbox, workbench
+from md2okf import __version__, cli, resources, sandbox, workbench
 
 
 def _md(tmp_path: Path, name: str = "doc.md") -> Path:
@@ -365,6 +365,28 @@ def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, 
     shapes = [c[:3] for c in fake_sbx.calls]
     assert ["sbx", "run", "--detached"] in shapes
     assert shapes.index(["sbx", "run", "--detached"]) < shapes.index(["sbx", "exec", "-it"])
+
+
+@pytest.mark.parametrize("flag", ["--shell", "--agent"])
+def test_interactive_never_mounts_an_empty_spec(flag, isolated_state, fake_sbx, a_tty):
+    """Regression: a never-compiled workbench handed the agent a 0-byte SPEC.md."""
+    with pytest.raises(ExecvpCalled):
+        cli.main([flag])
+
+    work_spec = isolated_state / "xdg-state" / "md2okf" / "work" / "SPEC.md"
+    assert work_spec.stat().st_size > 0
+    assert b"**Version" in work_spec.read_bytes()
+
+
+@pytest.mark.parametrize("flag", ["--shell", "--agent"])
+def test_interactive_reports_an_unreadable_spec_rather_than_raising(
+    flag, capsys, monkeypatch, isolated_state, fake_sbx, a_tty
+):
+    """A packaged spec that cannot be read is a diagnostic and exit 2, not a traceback."""
+    monkeypatch.setattr(resources, "spec_md", lambda: isolated_state / "missing" / "SPEC.md")
+
+    assert cli.main([flag]) == 2
+    assert "md2okf: staging the sandbox tooling failed" in capsys.readouterr().err
 
 
 def test_shell_with_fresh_recreates_the_sandbox_before_entering_it(isolated_state, fake_sbx, a_tty):
