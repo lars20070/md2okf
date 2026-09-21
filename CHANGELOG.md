@@ -42,6 +42,14 @@ and this project adheres to
   this project: the `--mode json` wire format is unchanged, and all three of
   0.86.0's breaking changes are extension- or SDK-level.
 
+### Removed
+
+- **`scripts/sync-descriptions.py`.** It rewrote each `index.md` entry's
+  description from the linked page's frontmatter, from before `okfctl` owned
+  the indexes. `okfctl index build` now regenerates them inside the sandbox, so
+  the script was a second implementation of a job already done — and an unwired
+  one: nothing in `make`, the kit or any skill invoked it.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added

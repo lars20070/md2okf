@@ -509,7 +509,7 @@ md2okf/                          the repository — and now the Python project r
 │                                              size-okf, merkle-okf}
 ├── scripts/                     CHANGED  only the helper CLI projects and chores remain
 │   ├── inspectmd/ inspectokf/ sizeokf/ merkleokf/   pyproject.toml + src/ + tests/
-│   ├── validate-spec.sh release-notes.sh check-release-tag.sh sync-descriptions.py
+│   ├── validate-spec.sh release-notes.sh check-release-tag.sh
 │   ├── compile-okf.sh                    GONE -> src/md2okf/compile.py, events.py
 │   ├── bash.sh  pi.sh                    GONE -> sbx exec one-liners in CONTRIBUTING.md
 │   └── lib/sandbox-mounts.sh             GONE -> workbench.py + sandbox.py
