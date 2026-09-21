@@ -125,10 +125,17 @@ jobs:
       # Mint the OIDC token PyPI exchanges for an upload token. Nothing else.
       id-token: write
     steps:
+      # This job deliberately never checks the repository out -- it publishes
+      # bytes the build job already produced -- so $GITHUB_WORKSPACE is empty
+      # and setup-uv finds no pyproject.toml to read a uv version from. That is
+      # the intent, not an oversight: the action is pinned here and the upload
+      # needs no project metadata, so mute the warning rather than check out a
+      # tree this job must not have.
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: false
+          ignore-empty-workdir: true
 
       - name: Download the distribution
         uses: actions/download-artifact@v8
