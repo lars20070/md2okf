@@ -1,6 +1,7 @@
 {
   "recommendations": [
     "bierner.markdown-footnotes",
-    "tamasfe.even-better-toml"
+    "tamasfe.even-better-toml",
+    "ms-python.python"
   ]
 }
