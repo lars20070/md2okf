@@ -1,14 +1,16 @@
 """The one seam onto the `sbx` CLI.
 
 Every process this package spawns to talk to a sandbox goes through
-:func:`_run` or :class:`Exec` in this module, and nowhere else — so a test
-only ever needs to fake ``subprocess.run``/``subprocess.Popen`` once, at this
-one boundary, to exercise everything above it.
+:func:`_run`, :class:`Exec` or :func:`exec_interactive` in this module, and
+nowhere else — so a test only ever needs to fake ``subprocess.run``,
+``subprocess.Popen`` and ``os.execvp`` once, at this one boundary, to exercise
+everything above it.
 """
 
 from __future__ import annotations
 
 import contextlib
+import os
 import re
 import secrets
 import shutil
@@ -17,6 +19,7 @@ import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
 MIN_VERSION = (0, 43, 0)
 
@@ -222,6 +225,24 @@ def exec_stream(name: str, argv: list[str]) -> Exec:
 def exec_capture(name: str, argv: list[str]) -> subprocess.CompletedProcess[str]:
     """Run a short `argv` inside `name` and capture it whole (e.g. a hash check)."""
     return _run(["sbx", "exec", name, "--", *argv])
+
+
+def exec_interactive(name: str, argv: list[str]) -> NoReturn:
+    """Replace this process with an interactive `sbx exec -it`. Never returns.
+
+    Process replacement rather than a child: `sbx` inherits this terminal
+    outright, so the TTY, job control, Ctrl-C and the exit code are the
+    guest's own and need no propagation. execvp does not flush Python's
+    buffers, hence the explicit flushes -- without them anything printed
+    above this is lost when stdout is a pipe.
+
+    preflight() has already established that `sbx` is on PATH, so there is no
+    OSError to handle here.
+    """
+    full = ["sbx", "exec", "-it", name, "--", *argv]
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execvp(full[0], full)  # noqa: S606
 
 
 def _ensure_default_sandbox() -> int:

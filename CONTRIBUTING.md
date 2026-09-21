@@ -62,14 +62,33 @@ check the current kit from scratch, throw the sandbox away first with
 
 ## Working inside the sandbox
 
-Once a sandbox exists — `md2okf` builds one on first use, or
-`uv run python -m md2okf.sandbox` makes one without compiling anything — these
-are the two ways in. They are `sbx` one-liners rather than scripts, because the
-command owns sandbox creation and nothing else needs to:
+Two flags open the sandbox, building or refreshing it first when none exists or
+the running one no longer matches `kits/md2okf/`:
 
 ```bash
-sbx exec -it md2okf -- bash   # interactive shell at the wiki root
-sbx exec -it md2okf -- pi     # interactive Pi in the same sandbox
+md2okf --shell   # interactive shell at the wiki root
+md2okf --agent   # interactive agent session in the same sandbox
+```
+
+Only `--fresh` combines with either; `-o`, `--spec`, `-n`, `-q`, `-v`,
+`--dry-run` and input paths are refused rather than ignored — though a value
+that equals the default (`-o okf`) is indistinguishable from not passing it,
+and goes through. Both also need a terminal on stdin, and say so before
+building anything. The flag is `--agent` rather than `--pi` so that swapping
+the agent framework later would not change a published interface.
+
+**For looking, not for authoring.** You land in the workbench's `work/okf`,
+holding whatever the last compile left, staged with neither your documents nor
+`SPEC.md`. Nothing written there survives: the next compile mirrors its own
+wiki in over the top, and one started *during* a session clears the directory
+underneath it. Entry itself is refused while a compile holds the lock.
+
+The raw one-liners remain the fallback — for a machine without the driver on
+PATH, or a flag these do not pass through:
+
+```bash
+sbx exec -it md2okf -- bash
+sbx exec md2okf -- pi --list-models deepseek
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:

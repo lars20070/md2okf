@@ -151,11 +151,20 @@ uv run md2okf -o wikis/other docs/other/     # any input folder, any output fold
 uv run md2okf --dry-run md/                  # resolve and print; no sandbox, nothing paid
 uv run md2okf -n 20 md/                      # raise the per-document iteration cap
 uv run python -m md2okf.sandbox              # ensure the sandbox exists, compile nothing
-sbx exec -it md2okf -- bash                  # shell into it; `-- pi` for interactive Pi
+uv run md2okf --shell                        # ensure the sandbox, then shell into it
+uv run md2okf --agent                        # ensure the sandbox, then open the agent
+sbx exec -it md2okf -- bash                  # the same, minus the ensure step
 sbx rm --force md2okf                        # discard it; the next run rebuilds
 ./scripts/release-notes.sh X.Y.Z             # print CHANGELOG.md notes for a release
 ./scripts/check-release-tag.sh vX.Y.Z        # assert a tag matches VERSION
 ```
+
+`--shell` and `--agent` are for inspecting the sandbox, not for authoring: they
+stage nothing, and the next compile clears `work/okf` over whatever a session
+left there. Only `--fresh` combines with them — every other compile option is
+refused rather than ignored, unless its value happens to equal the default.
+Both need a terminal on stdin, and refuse before touching the sandbox without
+one.
 
 `make check-okf` is host-only and needs a generated `okf/` plus `okfctl` on
 PATH (`brew install cwest/tap/okfctl`); it sits outside `make lint` and outside

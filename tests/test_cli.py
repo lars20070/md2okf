@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 import pytest
+from conftest import ExecvpCalled
 
 from md2okf import __version__, cli, sandbox, workbench
 
@@ -332,3 +333,105 @@ def test_ctrl_c_releases_the_lock(tmp_path, isolated_state, fake_sbx):
 
     with workbench.lock():  # would raise LockHeld if it had leaked
         pass
+
+
+# --- interactive entry: --shell and --agent ---------------------------------
+#
+# A successful hand-over has no exit code to assert on -- exec_interactive
+# replaces the process -- so these assert on the argv carried by ExecvpCalled,
+# which FakeSbx raises in execvp's place.
+
+
+def _exec_calls(fake_sbx):
+    return [c for c in fake_sbx.calls if c[:3] == ["sbx", "exec", "-it"]]
+
+
+def test_shell_execs_an_interactive_bash_in_the_sandbox(isolated_state, fake_sbx, a_tty):
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--shell"])
+    assert excinfo.value.argv == ["sbx", "exec", "-it", workbench.SANDBOX_NAME, "--", "bash"]
+
+
+def test_agent_execs_a_bare_interactive_agent_in_the_sandbox(isolated_state, fake_sbx, a_tty):
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--agent"])
+    assert excinfo.value.argv == ["sbx", "exec", "-it", workbench.SANDBOX_NAME, "--", "pi"]
+
+
+def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, a_tty):
+    with pytest.raises(ExecvpCalled):
+        cli.main(["--shell"])
+
+    shapes = [c[:3] for c in fake_sbx.calls]
+    assert ["sbx", "run", "--detached"] in shapes
+    assert shapes.index(["sbx", "run", "--detached"]) < shapes.index(["sbx", "exec", "-it"])
+
+
+def test_shell_with_fresh_recreates_the_sandbox_before_entering_it(isolated_state, fake_sbx, a_tty):
+    for argv in (["--shell"], ["--shell", "--fresh"]):
+        with pytest.raises(ExecvpCalled):
+            cli.main(argv)
+
+    run_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]
+    assert len(run_calls) == 2  # the second entry reused nothing
+
+
+def test_shell_reports_when_another_run_holds_the_lock(capsys, isolated_state, fake_sbx, a_tty):
+    """Regression: the interactive path needs its own LockHeld handler.
+
+    main()'s sits inside the compile-path try, which the early return never
+    enters, so a held lock would otherwise escape as a traceback.
+    """
+    with workbench.lock():
+        rc = cli.main(["--shell"])
+
+    assert rc == 2
+    assert "another md2okf run" in capsys.readouterr().err
+    assert _exec_calls(fake_sbx) == []
+
+
+def test_shell_does_not_read_stdin_when_no_paths_are_given(monkeypatch, isolated_state, fake_sbx, a_tty):
+    """--shell must short-circuit before _resolve_inputs, which reads stdin."""
+
+    def explode(_paths):
+        raise AssertionError("--shell must not resolve documents")
+
+    monkeypatch.setattr(cli.compile_mod, "resolve_documents", explode)
+    with pytest.raises(ExecvpCalled):
+        cli.main(["--shell"])
+
+
+def test_shell_rejects_positional_paths(tmp_path, capsys, isolated_state, fake_sbx):
+    rc = cli.main(["--shell", str(_md(tmp_path))])
+    assert rc == 2
+    assert "takes no FILE|DIR" in capsys.readouterr().err
+    assert fake_sbx.calls == []
+
+
+def test_shell_rejects_compile_only_options(capsys, isolated_state, fake_sbx):
+    for option in (["-o", "wikis/x"], ["--spec", "S.md"], ["-n", "3"], ["-q"], ["-v"], ["--dry-run"]):
+        rc = cli.main(["--shell", *option])
+        assert rc == 2, option
+        assert "has no meaning with --shell" in capsys.readouterr().err, option
+    assert fake_sbx.calls == []
+
+
+def test_shell_and_agent_together_are_rejected(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--shell", "--agent"])
+    assert excinfo.value.code == 2
+    assert "not allowed with" in capsys.readouterr().err
+
+
+def test_interactive_entry_without_a_tty_touches_no_sandbox(capsys, isolated_state, fake_sbx):
+    """`sbx exec -it` cannot work without a terminal, so refuse before the lifecycle.
+
+    Checked here rather than left to sbx because ensure_sandbox() runs first:
+    failing later would mean a sandbox built for nothing, or with --fresh a
+    working one destroyed and rebuilt.
+    """
+    for flag in ("--shell", "--agent"):
+        rc = cli.main([flag])  # no a_tty fixture: pytest's stdin is not a terminal
+        assert rc == 2, flag
+        assert "needs a terminal" in capsys.readouterr().err, flag
+    assert fake_sbx.calls == []

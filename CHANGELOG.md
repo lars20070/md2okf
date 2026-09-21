@@ -8,6 +8,21 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`md2okf --shell` and `md2okf --agent`, which open the sandbox.** Both build
+  or refresh it first when none exists or the running one no longer matches
+  `kits/md2okf/`, so the prerequisite behind the bare
+  `sbx exec -it md2okf -- bash` — knowing to run `python -m md2okf.sandbox`
+  first, and that a stale sandbox is entered silently — is gone. The terminal
+  is handed over with `execvp` rather than a child process, so the TTY, job
+  control, Ctrl-C and the exit code are the guest's own. These are for
+  inspecting the sandbox, not authoring in it: nothing is staged, and a session
+  leaves nothing behind that the next compile will not clear. Only `--fresh`
+  combines with them; every other compile option is refused rather than
+  ignored. The flag is `--agent` rather than `--pi` so that changing the agent
+  framework later would not change a published interface.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added

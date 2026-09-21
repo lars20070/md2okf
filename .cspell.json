@@ -42,6 +42,7 @@
     "fdfind",
     "venv",
     "pyvenv",
+    "execvp",
     "pycache",
     "httpx",
     "pythonpath",

@@ -154,6 +154,18 @@ md2okf -n 20 long-document.md             # raise the iteration cap
 md2okf --dry-run md/                      # resolve and print, run nothing
 ```
 
+Two flags open the sandbox instead of compiling, building or refreshing it
+first, so there is nothing to set up beforehand:
+
+```bash
+md2okf --shell                            # an interactive shell at the wiki root
+md2okf --agent                            # an interactive agent session
+```
+
+Both are for inspecting the sandbox rather than authoring in it: they stage no
+documents, and nothing written in a session is kept — the next compile mirrors
+its own wiki in over the top. Only `--fresh` combines with them.
+
 Session state defaults to `~/.local/state/md2okf`; export `XDG_STATE_HOME` to
 put it elsewhere. Changing it once a sandbox exists takes one manual step — see
 [Session state](#session-state).
