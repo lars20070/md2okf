@@ -7,7 +7,7 @@ Ollama model or a cloud model through OpenRouter.
 Expect to check the output. `prettier`, `markdownlint-cli2` and `cspell` catch
 most of what marker gets wrong, but none of it runs unattended, and none of it
 is wired into `make`. This step is manual, and optional: it exists only to
-produce a file for `md/`, which `make wiki` then compiles.
+produce a file for `md/`, which `md2okf` then compiles.
 
 ## PDF to Markdown conversion
 

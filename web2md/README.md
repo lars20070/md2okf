@@ -2,7 +2,7 @@
 
 `md/` wants clean, structured Markdown. When the source is a documentation site
 rather than a file, this scraper walks it and writes one Markdown document into
-`md/`, ready for `make wiki`. It targets the [Google developer documentation
+`md/`, ready for `md2okf`. It targets the [Google developer documentation
 style guide](https://developers.google.com/style).
 
 No language model is involved, so the result is deterministic — unlike the PDF

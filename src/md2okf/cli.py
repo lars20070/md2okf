@@ -13,11 +13,42 @@ from pathlib import Path
 from md2okf import __version__, resources, sandbox, workbench
 from md2okf import compile as compile_mod
 
+# One string, two call sites (the compile path and the interactive one), so the
+# two cannot drift into saying different things about the same condition.
+LOCK_HELD_MESSAGE = "md2okf: another md2okf run is using the sandbox; try again later"
+
+# With --shell/--agent only --fresh still means something: the sandbox is
+# entered, not driven. The rest are refused rather than ignored, because
+# `--shell -o mywiki` reads like "mount this output", and quietly doing nothing
+# with it would mislead more than saying no does.
+_COMPILE_ONLY_OPTIONS = (
+    ("output", "-o"),
+    ("spec", "--spec"),
+    ("n", "-n"),
+    ("quiet", "-q"),
+    ("verbose", "-v"),
+    ("dry_run", "--dry-run"),
+)
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="md2okf",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Compile Markdown into an OKF wiki with the Pi coding agent.",
+        # Held to 79 columns so it renders in a standard terminal; the epilog is
+        # printed verbatim. These are the only three variables a user of the
+        # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
+        epilog="""\
+Environment:
+  OPENROUTER_API_KEY  required, but read from `sbx secret`, never from this
+                      environment
+  XDG_STATE_HOME      session state and the run workbench. Absolute paths
+                      only; a relative value counts as unset.
+                      (default: ~/.local/state)
+  SPEC_MD             spec the frontmatter guard reads when checking a wiki
+                      outside this repository
+""",
     )
     parser.add_argument(
         "paths", nargs="*", metavar="FILE|DIR", help="Markdown files or folders; '-' or none means stdin"
@@ -33,6 +64,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fresh", action="store_true", help="recreate the sandbox even if it could be reused")
     parser.add_argument("--dry-run", action="store_true", help="resolve and print what would run; do nothing paid")
+    interactive = parser.add_mutually_exclusive_group()
+    interactive.add_argument(
+        "--shell", action="store_true", help="open an interactive shell in the sandbox"
+    )
+    interactive.add_argument(
+        "--agent", action="store_true", help="open an interactive agent session in the sandbox"
+    )
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
         "-q", "--quiet", action="store_true", help="suppress progress and TSV rows (fatal errors still print)"
@@ -120,14 +158,92 @@ def _ensure_sandbox(wb: workbench.Workbench, args: argparse.Namespace) -> int | 
     try:
         workbench.ensure_sandbox(wb, fresh=args.fresh)
     except (
-        workbench.UnownedSandboxError,
-        workbench.KeyNotProxyManagedError,
+        # The base, not just UnownedSandboxError and KeyNotProxyManagedError:
+        # ensure_sandbox also stages the tooling, and a staging failure there
+        # arrives as a plain WorkbenchError. Catching only the two subclasses
+        # let that one through as a traceback.
+        workbench.WorkbenchError,
         sandbox.SandboxError,
         resources.ResourcesError,
     ) as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
     return None
+
+
+def _reject_compile_only_options(args: argparse.Namespace, parser: argparse.ArgumentParser, flag: str) -> int | None:
+    """Refuse the compile options an interactive session cannot honour.
+
+    Compares each value against the parser's own default rather than tracking
+    which options were explicitly given, which would mean a custom action for
+    every one of them. A user who spells out the default anyway (`-o okf`) is
+    not caught, which costs nothing: naming the default changes neither what
+    runs nor what they see.
+    """
+    if args.paths:
+        print(f"md2okf: {flag} takes no FILE|DIR arguments", file=sys.stderr)
+        return 2
+    for attr, option in _COMPILE_ONLY_OPTIONS:
+        if getattr(args, attr) != parser.get_default(attr):
+            print(f"md2okf: {option} has no meaning with {flag}", file=sys.stderr)
+            return 2
+    return None
+
+
+def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:  # noqa: RET503
+    """Make the sandbox current, then hand this terminal over to it.
+
+    Returns an exit code only on refusal: on success exec_interactive replaces
+    this process and nothing below it runs.
+
+    LockHeld and UnsafeLockFile are caught here rather than reusing main()'s
+    handlers, which sit inside the compile-path `try` that this path never
+    enters -- a held lock would otherwise surface as a traceback.
+
+    The RET503 waiver is that missing final return: exec_interactive is
+    annotated NoReturn, which ruff does not follow across the module boundary.
+    """
+    flag = "--shell" if args.shell else "--agent"
+
+    refusal = _reject_compile_only_options(args, parser, flag)
+    if refusal is not None:
+        return refusal
+
+    # Before preflight, and so before anything that touches the sandbox:
+    # `sbx exec -it` needs a terminal, so without one this invocation can only
+    # fail. Letting it fail down there instead would mean a sandbox built over
+    # minutes -- or with --fresh a working one destroyed and rebuilt -- for a
+    # session that was never going to open. Only stdin is checked; redirecting
+    # stdout is a reasonable thing to do and `-i` does not care.
+    if not sys.stdin.isatty():
+        print(f"md2okf: {flag} needs a terminal on stdin", file=sys.stderr)
+        return 2
+
+    try:
+        sandbox.preflight()
+    except sandbox.SandboxError as exc:
+        print(f"md2okf: {exc}", file=sys.stderr)
+        return 2
+
+    wb = workbench.Workbench.default()
+    try:
+        # Held through setup and the whole interactive session. Python creates
+        # the descriptor close-on-exec, so survive_exec makes this one
+        # inheritable: the replacement `sbx exec -it` process retains the flock
+        # and releases it when the session exits. Setup failures still leave the
+        # context normally and release it here.
+        with workbench.lock(survive_exec=True):
+            wb.ensure_roots()
+            failure = _ensure_sandbox(wb, args)
+            if failure is not None:
+                return failure
+            sandbox.exec_interactive(workbench.SANDBOX_NAME, ["bash"] if args.shell else ["pi"])
+    except workbench.LockHeld:
+        print(LOCK_HELD_MESSAGE, file=sys.stderr)
+        return 2
+    except workbench.UnsafeLockFile as exc:
+        print(f"md2okf: {exc}", file=sys.stderr)
+        return 2
 
 
 def _run(
@@ -184,7 +300,13 @@ def _run(
 
 def main(argv: list[str] | None = None) -> int:
     """Parse argv, run, and return a process exit code."""
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    # Before _resolve_inputs, which reads stdin when no paths are given --
+    # `md2okf --shell` would otherwise block waiting for a document.
+    if args.shell or args.agent:
+        return _enter_sandbox(args, parser)
 
     resolved = _resolve_inputs(args)
     if isinstance(resolved, int):
@@ -209,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
         with workbench.lock():
             return _run(args, documents, spec_path, output_dir, wb)
     except workbench.LockHeld:
-        print("md2okf: another md2okf run is using the sandbox; try again later", file=sys.stderr)
+        print(LOCK_HELD_MESSAGE, file=sys.stderr)
         return 2
     except workbench.UnsafeLockFile as exc:
         # Caught here rather than with the setup errors above because lock()

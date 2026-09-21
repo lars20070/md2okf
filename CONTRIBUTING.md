@@ -10,7 +10,8 @@ you only want to compile a wiki, [the README](README.md) is enough.
 
 ```bash
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md agreement
+                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
+                         # subproject (scripts/sync-versions.sh --check)
 make validate            # check kits/md2okf/spec.yaml against the Sandbox Kit schema
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite
@@ -62,14 +63,36 @@ check the current kit from scratch, throw the sandbox away first with
 
 ## Working inside the sandbox
 
-Once a sandbox exists — `md2okf` builds one on first use, or
-`uv run python -m md2okf.sandbox` makes one without compiling anything — these
-are the two ways in. They are `sbx` one-liners rather than scripts, because the
-command owns sandbox creation and nothing else needs to:
+Two flags open the sandbox, building or refreshing it first when none exists or
+the running one no longer matches `kits/md2okf/`:
 
 ```bash
-sbx exec -it md2okf -- bash   # interactive shell at the wiki root
-sbx exec -it md2okf -- pi     # interactive Pi in the same sandbox
+md2okf --shell   # interactive shell at the wiki root
+md2okf --agent   # interactive agent session in the same sandbox
+```
+
+Only `--fresh` combines with either; `-o`, `--spec`, `-n`, `-q`, `-v`,
+`--dry-run` and input paths are refused rather than ignored — though a value
+that equals the default (`-o okf`) is indistinguishable from not passing it,
+and goes through. Both also need a terminal on stdin, and say so before
+building anything. The flag is `--agent` rather than `--pi` so that swapping
+the agent framework later would not change a published interface.
+
+**For looking, not for authoring.** You land in the workbench's `work/okf`,
+holding whatever the last compile left. No compile run is restaged: helper CLIs
+are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
+documents and spec otherwise remain. Nothing written to `work/okf` survives
+the next compile, but that compile cannot start underneath an active session:
+the interactive command holds the workbench lock until it exits. Pi transcripts
+persist under `sessions/`. Entry is likewise refused while a compile holds the
+lock.
+
+The raw one-liners remain the fallback — for a machine without the driver on
+PATH, or a flag these do not pass through:
+
+```bash
+sbx exec -it md2okf -- bash
+sbx exec md2okf -- pi --list-models deepseek
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
@@ -100,6 +123,19 @@ a pinned version with `uv tool run`, and checks each tracked subproject in turn
 The root project's `[tool.ruff]` excludes the subprojects and the non-project
 Python (`kits/`, `scripts/`, `md/`, `okf/`, agent-tool config), so each file is
 linted once, under its own rules.
+
+### Virtual environments are per-platform
+
+A venv pins an absolute interpreter path and platform-specific wheels, so it
+cannot be shared between a macOS host and a Linux sandbox bind-mounting the same
+tree. On Linux, export `UV_PROJECT_ENVIRONMENT=.venv-linux` so the default
+`.venv/` stays macOS-only. Keep the value **relative**: the repo holds seven
+independent uv projects, and a relative path gives each its own, where an
+absolute one would collapse them into a single shared environment. `make`
+exports it for you on Linux, so the targets above are correct either way — a
+bare `uv run` or `uv sync` is not. `uv.lock` is the portable artifact: share the
+lock, never the venv. A venv left behind by the other platform needs no cleanup;
+uv detects the dangling interpreter and rebuilds it.
 
 ### Helper CLIs
 
@@ -189,15 +225,50 @@ are a chain rather than a fan-out on purpose, so nothing can attach assets to a
 Release that does not exist yet, and a re-run is safe because PyPI treats an
 upload of a byte-identical file as idempotent.
 
+### One-time setup
+
+Trusted publishing is an agreement between two configurations, and neither of
+them lives in this repository, so a fork — or a rebuilt PyPI project — has to
+establish both before the first tag. Each one fails in a way that does not point
+at itself, so both are worth naming.
+
+- **The `pypi` GitHub environment must permit tag refs.** `publish-pypi` is the
+  only job carrying an `environment:`, and this workflow is triggered by tags
+  alone. An environment that restricts deployments to selected *branches*
+  therefore matches nothing, because a branch rule never covers a tag: under
+  Settings → Environments → `pypi` → Deployment branches and tags, add a rule
+  of ref type **Tag** with the pattern `v*`. Until then the job fails *before
+  its first step*, which means there are no logs to fetch and
+  `gh run view --log-failed` answers `log not found`. The message is an
+  annotation instead:
+  `gh api repos/lars20070/md2okf/check-runs/<job-id>/annotations`.
+- **The PyPI publisher must match the token's claims exactly**, and must be on
+  `pypi.org` rather than `test.pypi.org` — separate databases, and a publisher
+  registered on the wrong one is indistinguishable from no publisher at all. The
+  fields are owner `lars20070`, repository `md2okf`, workflow `release.yml` (the
+  filename, not the display name `Release`) and environment `pypi`. A mismatch
+  fails with `invalid-publisher: valid token, but no corresponding publisher`;
+  `uv publish` prints the claims it sent, so compare the configuration against
+  those rather than against this list. Before the project exists this is a
+  *pending* publisher, and the first successful upload converts it into the
+  project's own.
+
+### Cutting a release
+
 1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
    with a real body (not just a heading).
 2. Set `VERSION` to `X.Y.Z`.
-3. Land that commit on `master`. `make lint` fails if `VERSION` and the latest
-   changelog release heading disagree.
-4. Sanity-check the notes: `./scripts/release-notes.sh X.Y.Z`
-5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Run `./scripts/sync-versions.sh`, which writes `X.Y.Z` into every other
+   project's `pyproject.toml` and refreshes each `uv.lock`. One version covers
+   the whole repository, the helper CLIs included.
+4. Land that commit on `master`. `make lint` fails if `VERSION` disagrees with
+   the latest changelog release heading, or with any subproject's version.
+5. Sanity-check the notes: `./scripts/release-notes.sh X.Y.Z`
+6. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 The workflow re-runs `make lint` and refuses a tag whose version disagrees with
 `VERSION` (`scripts/check-release-tag.sh`). An empty changelog section fails
-before the Release is created. Re-running is safe: if the Release already
-exists, the job skips it rather than modifying it.
+before the Release is created. Re-running a tag converges rather than failing:
+the build produces the same bytes, PyPI accepts a re-upload of a file it already
+has, and an existing Release keeps its notes — which may have been edited by
+hand — while its assets are refreshed with `gh release upload --clobber`.

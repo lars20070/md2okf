@@ -93,12 +93,16 @@ def state_home() -> Path:
 
 
 @contextlib.contextmanager
-def lock():
+def lock(*, survive_exec: bool = False):
     """Acquire the non-blocking, per-user sandbox lock.
 
     Raises LockHeld immediately rather than queueing behind another run.
     Deliberately not under XDG_STATE_HOME: two shells with different
     XDG_STATE_HOME values must still race on the one lock, not take two.
+
+    When ``survive_exec`` is true, make the descriptor inheritable so an
+    ``exec`` replacement keeps the lock until that process exits. The default
+    remains close-on-exec for every non-interactive caller.
 
     That fixed, predictable path sits in a world-writable directory, so the
     file it names is not trusted until it has been checked: O_NOFOLLOW refuses
@@ -127,6 +131,8 @@ def lock():
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             raise LockHeld(str(path)) from exc
+        if survive_exec:
+            os.set_inheritable(fd, True)
         yield
     finally:
         with contextlib.suppress(OSError):
@@ -525,11 +531,11 @@ def _clear_ownership_marker(wb: Workbench) -> None:
 
 
 def stage_tooling(wb: Workbench) -> None:
-    """Stage the helper CLI projects the kit's shims resolve against.
+    """Stage the helper CLI projects, and floor the spec mount.
 
     Deliberately not part of restage(): this content does not vary per run.
     It is the packaged CLI sources, identical for every invocation, whereas
-    work/md, work/SPEC.md and work/okf are the run's own inputs and output.
+    work/md and work/okf are the run's own inputs and output.
 
     A sandbox whose work/scripts is empty still starts, and its mounts are
     still correct — but every inspectmd/inspectokf/sizeokf/merkleokf shim in
@@ -537,8 +543,29 @@ def stage_tooling(wb: Workbench) -> None:
     $(dirname $WORKDIR)/scripts/<cli>` (kits/md2okf/spec.yaml). That makes
     this part of "the sandbox is usable", which is why ensure_sandbox() does
     it for every caller rather than leaving each one to remember.
+
+    work/SPEC.md is split between the two: restage() owns its per-run content
+    (--spec, or the bundled default), and this owns its *floor*. ensure_roots()
+    can only create it empty, because sbx cannot mount a path that does not
+    exist, and --shell/--agent stage nothing -- so on a workbench that has
+    never compiled, an interactive session was handed a 0-byte spec. That is
+    the one file outranking every instruction the agent has, and an agent that
+    reads it empty writes a wiki declaring `okf_version: ""`. Filled only when
+    empty, never overwritten: after a compile with --spec, the session that
+    follows still sees the spec its wiki was actually built against.
+
+    Any OSError here becomes a WorkbenchError, for restage()'s reason: an
+    unreadable packaged spec, or a workbench that cannot be written, is a
+    diagnostic and an exit code, never a traceback. resources.spec_md() does
+    not verify the installed case (nor do kit_dir/clis_dir), and the existence
+    check the compile path gets from _resolve_inputs does not run here.
     """
-    stage_clis(resources.clis_dir(), wb.work_scripts)
+    try:
+        stage_clis(resources.clis_dir(), wb.work_scripts)
+        if wb.work_spec.stat().st_size == 0:
+            rewrite_spec(wb.work_spec, resources.spec_md())
+    except OSError as exc:
+        raise WorkbenchError(f"staging the sandbox tooling failed: {exc}") from exc
 
 
 def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:

@@ -97,9 +97,9 @@ target-version = "py312"
 line-length = 120
 # This is the repository root, so the tree walk would otherwise reach md/,
 # okf/ (gitignored, usually absent), kits/md2okf/files/.../frontmatter-guard.py
-# (no project of its own), scripts/sync-descriptions.py (ditto), and the
-# skill-tool vendor scripts under .claude/ and .cursor/ -- none of these were
-# linted before this project existed, and none belong to it. web2md/, pdf2md/
+# (no project of its own), and the skill-tool vendor scripts under .claude/ and
+# .cursor/ -- none of these were linted before this project existed, and none
+# belong to it. web2md/, pdf2md/
 # and scripts/<cli>/ each carry their own [tool.ruff] and are linted under
 # that instead, via their own explicit Makefile invocation, unaffected by this
 # exclude list.

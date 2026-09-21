@@ -6,7 +6,101 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-09-21
+
+### Added
+
+- **`md2okf --shell` and `md2okf --agent`, which open the sandbox.** Both build
+  or refresh it first when none exists or the running one no longer matches
+  `kits/md2okf/`, so the prerequisite behind the bare
+  `sbx exec -it md2okf -- bash` — knowing to run `python -m md2okf.sandbox`
+  first, and that a stale sandbox is entered silently — is gone. The terminal
+  is handed over with `execvp` rather than a child process, so the TTY, job
+  control, Ctrl-C and the exit code are the guest's own. These are for
+  inspecting the sandbox, not authoring in it: they do not restage a compile
+  run. Helper CLIs are refreshed, an empty spec mount gets the bundled spec, and
+  prior workbench content otherwise remains. The next compile replaces
+  `work/okf`; Pi transcripts persist. The workbench lock stays held until the
+  interactive session exits, so a concurrent compile or `--fresh` invocation
+  is refused. Only `--fresh` combines with them; every other compile option is
+  refused rather than ignored. The flag is `--agent` rather than `--pi` so that
+  changing the agent framework later would not change a published interface.
+
+### Changed
+
+- **The default model is now `deepseek/deepseek-v4-pro`**, in place of
+  `qwen/qwen3.6-35b-a3b`. Every compile runs on it unless `settings.json` says
+  otherwise, so the cost and the quality of a run both move with this. The
+  routing pin it needs was already in `models.json` — DeepInfra only, no
+  fallbacks — and, being a model Pi's catalogue knows, it keeps the catalogue's
+  1M context and 384K output rather than the 16,384-token default that truncates
+  a long `write` mid-argument.
+- **One version for the whole repository.** `VERSION` now governs every project
+  in the tree, not just the driver: the four host CLIs (`inspectmd`,
+  `inspectokf`, `sizeokf`, `merkleokf`), `web2md` and `pdf2md` all move from
+  their standalone `0.1.0` to the repo version. `./scripts/sync-versions.sh`
+  writes the literal into each `pyproject.toml` and refreshes each `uv.lock`,
+  and `make lint` runs its `--check` form, so a release cannot ship a CLI whose
+  `--version` disagrees with the tag. The version stays a literal rather than a
+  dynamic read of `../../VERSION` because the CLIs are also built from a staged
+  copy holding only `pyproject.toml` and `src/`, where no path above the project
+  root exists.
+- Bump the pinned Pi coding agent from 0.85.1 to 0.86.1, and pin `cacheWarming`
+  to `"streaming"` alongside it. 0.86 adds cost-aware prompt-cache warming and
+  defaults it on, so the kit states its position rather than inheriting one
+  that can move again on the next bump. Nothing else in the release reaches
+  this project: the `--mode json` wire format is unchanged, and all three of
+  0.86.0's breaking changes are extension- or SDK-level.
+- The `inspect-md` skill now states what its section ranges actually cover: a
+  span ends at the next heading of **any** level, so a parent section does not
+  contain its children and each has to be read by its own index. It also records
+  that `-L` filters the map without renumbering `Index`, and that frontmatter
+  and headings inside fenced code are left out.
+- `tree` is documented as a host requirement for `inspectokf`, and
+  `make install-clis` now warns when it is missing rather than leaving the
+  binary to report it at first use. Only the host is affected: the sandbox
+  installs its own copy, so a compile never needed one.
+- Linux gets its own uv environments. A venv is not portable across platforms
+  and a direct-mode sandbox shares the tree with the macOS host, so `make`
+  exports `UV_PROJECT_ENVIRONMENT=.venv-linux` on Linux and the default `.venv/`
+  stays macOS-only. The value is relative on purpose: each of the seven uv
+  projects then gets its own, where an absolute path would collapse them into
+  one shared environment.
+- The README overview diagram names the agent's skills by their skill ids
+  (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`, `curate-okf`) rather
+  than by the binaries behind four of them, which is the distinction every one
+  of those skills makes in its own first paragraph. `curate-okf` joins the
+  diagram, and the session-state node names the `sessions` directory the driver
+  actually mounts.
+
+### Fixed
+
+- **`--shell` and `--agent` no longer mount an empty `SPEC.md`.** `ensure_roots`
+  can only create the spec mount empty — sbx cannot mount a path that does not
+  exist — and only a compile's `restage` filled it, so an interactive session on
+  a workbench that had never compiled handed the agent a 0-byte `../SPEC.md`.
+  That is the one file outranking every instruction it has, and an agent reading
+  it empty wrote a wiki declaring `okf_version: ""`, which `okfctl index build`
+  then dropped, leaving the frontmatter guard and the index check looking as
+  though they contradicted each other. `stage_tooling` now floors the mount with
+  the bundled spec, filling it only when empty, so a compile's `--spec` still
+  governs the session that follows it.
+- Stale documentation left over from 0.2.0. `AGENTS.md` described the release
+  workflow as creating a notes-only GitHub Release, from before it built,
+  published to PyPI and attached the artifacts; `CONTRIBUTING.md` described
+  `make lint` as checking `VERSION` against `CHANGELOG.md` alone, from before it
+  also checked every subproject; and the `pdf2md` and `web2md` guides still sent
+  their output to `make wiki`, a target `md2okf` replaced. `CONTRIBUTING.md`
+  also documents the per-platform venv rule that until now only `AGENTS.md`
+  carried, so a contributor on Linux is told before `uv` writes the wrong one.
+
+### Removed
+
+- **`scripts/sync-descriptions.py`.** It rewrote each `index.md` entry's
+  description from the linked page's frontmatter, from before `okfctl` owned
+  the indexes. `okfctl index build` now regenerates them inside the sandbox, so
+  the script was a second implementation of a job already done — and an unwired
+  one: nothing in `make`, the kit or any skill invoked it.
 
 ## [0.2.0] - 2026-09-20
 

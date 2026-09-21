@@ -16,6 +16,30 @@ Never run `git commit` or `git push` (including pushing tags) in this repo.
 Stage changes, draft the commit message, and hand it to the user — they run
 the commit and push themselves.
 
+## Python environments
+
+A virtual environment is not portable across platforms: it pins an absolute
+interpreter path, a platform-specific `home` in `pyvenv.cfg`, and wheels
+compiled for one OS and architecture. The host is macOS while development
+sandboxes are Linux, and a direct-mode sandbox bind-mounts the same tree, so one
+`.venv/` cannot serve both — whichever side synced last wins and the other
+breaks. `uv.lock` is the portable artifact: share the lock, never the venv.
+
+On Linux, set `UV_PROJECT_ENVIRONMENT` before any `uv` command, so the default
+`.venv/` stays macOS-only. In a Docker Sandbox that means the persistent
+environment file:
+
+```bash
+echo 'export UV_PROJECT_ENVIRONMENT=.venv-linux' >> /etc/sandbox-persistent.sh
+```
+
+Keep the value **relative**. The repo holds seven independent uv projects, and a
+relative path gives each its own `.venv-linux/`, where an absolute one would
+collapse all seven into a single shared environment and break the zero-overlap
+rule. `make` exports this itself on Linux, so those targets are correct either
+way — bare `uv run` and `uv sync` are not. A venv left behind by the other
+platform needs no cleanup: uv detects the dangling interpreter and rebuilds it.
+
 ## Repository map
 
 md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one Pi run
@@ -104,7 +128,8 @@ the guest-side bind helper.
 
 ```bash
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md agreement
+                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
+                         # subproject (scripts/sync-versions.sh --check)
 make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite (offline)
@@ -127,11 +152,33 @@ uv run md2okf -o wikis/other docs/other/     # any input folder, any output fold
 uv run md2okf --dry-run md/                  # resolve and print; no sandbox, nothing paid
 uv run md2okf -n 20 md/                      # raise the per-document iteration cap
 uv run python -m md2okf.sandbox              # ensure the sandbox exists, compile nothing
-sbx exec -it md2okf -- bash                  # shell into it; `-- pi` for interactive Pi
+uv run md2okf --shell                        # ensure the sandbox, then shell into it
+uv run md2okf --agent                        # ensure the sandbox, then open the agent
+sbx exec -it md2okf -- bash                  # the same, minus the ensure step
 sbx rm --force md2okf                        # discard it; the next run rebuilds
+./scripts/sync-versions.sh                   # write VERSION into every subproject
 ./scripts/release-notes.sh X.Y.Z             # print CHANGELOG.md notes for a release
 ./scripts/check-release-tag.sh vX.Y.Z        # assert a tag matches VERSION
 ```
+
+`VERSION` is the one version for the whole repository. The root project reads it
+directly (`[tool.hatch.version]`), and every other project — the four host CLIs,
+`web2md`, `pdf2md` — carries a literal that `./scripts/sync-versions.sh` writes
+and refreshes each `uv.lock` for. A literal rather than a dynamic read of
+`../../VERSION`, because the CLIs are also built from a staged copy that holds
+only `pyproject.toml` and `src/` (`stage_clis`), where a path above the project
+root does not exist. Bump `VERSION`, then run the script; `make lint` fails on
+any project left behind.
+
+`--shell` and `--agent` are for inspecting the sandbox, not for authoring. They
+do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
+gets the bundled spec, and prior workbench content otherwise remains in place.
+The next compile replaces `work/okf`; Pi transcripts persist under `sessions/`.
+The command holds the workbench lock until the session exits, so a concurrent
+compile or `--fresh` invocation is refused. Only `--fresh` combines with them —
+every other compile option is refused rather than ignored, unless its value
+happens to equal the default. Both need a terminal on stdin, and refuse before
+touching the sandbox without one.
 
 `make check-okf` is host-only and needs a generated `okf/` plus `okfctl` on
 PATH (`brew install cwest/tap/okfctl`); it sits outside `make lint` and outside
@@ -144,8 +191,10 @@ touches a sandbox — `md2okf`, `make test-sandbox`, `sbx exec` — needs an act
 `sbx login` session; `make validate`, `make dist` and the pytest suites are
 static and do not.
 
-Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
-a notes-only GitHub Release from the matching `CHANGELOG.md` section. See
+Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`: it verifies the
+tag against `VERSION`, builds the wheel and sdist once, publishes them to PyPI
+by trusted publishing, and then creates a GitHub Release whose notes are the
+matching `CHANGELOG.md` section and whose assets are those same artifacts. See
 [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
 ## Always validate the sandbox kit spec before finishing

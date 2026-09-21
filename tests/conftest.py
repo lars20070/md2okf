@@ -4,10 +4,11 @@
 what it calls is enough to exercise every layer above it — workbench, compile,
 cli — without ever shelling out to a real `sbx`.
 
-That seam is three functions, not two: subprocess.run and subprocess.Popen,
+That seam is four functions, not one: subprocess.run and subprocess.Popen,
 *and* shutil.which, which `present()` uses to decide whether `sbx` exists at
-all. Leaving which unfaked made the suite quietly depend on the developer's
-own machine having sbx installed — green locally, seven failures in CI, where
+all, *and* os.execvp, which the interactive `--shell`/`--agent` path uses.
+Leaving which unfaked made the suite quietly depend on the developer's own
+machine having sbx installed — green locally, seven failures in CI, where
 nothing reaches a faked subprocess because preflight() bails first.
 """
 
@@ -15,11 +16,26 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
+from typing import NoReturn
 
 import pytest
 
+from md2okf import cli as cli_module
 from md2okf import sandbox as sandbox_module
 from md2okf import workbench as workbench_module
+
+
+class ExecvpCalled(Exception):
+    """Raised in place of os.execvp, which replaces the process and never returns.
+
+    A fake that returned instead would exercise a path production does not
+    have: after a real execvp this process is gone, so there is no "after".
+    """
+
+    def __init__(self, argv: list[str]) -> None:
+        """Carry the full argv the caller would have exec'd."""
+        super().__init__(" ".join(argv))
+        self.argv = argv
 
 
 @dataclass
@@ -181,6 +197,11 @@ class FakeSbx:
             return self.last_popen
         raise AssertionError(f"FakeSbx.popen: unhandled tail {tail!r}")
 
+    def execvp(self, file: str, argv: list[str]) -> NoReturn:
+        """Stand in for os.execvp (interactive `sbx exec -it`), which never returns."""
+        self.calls.append(list(argv))
+        raise ExecvpCalled(list(argv))
+
 
 @pytest.fixture
 def fake_sbx(monkeypatch: pytest.MonkeyPatch) -> FakeSbx:
@@ -189,14 +210,30 @@ def fake_sbx(monkeypatch: pytest.MonkeyPatch) -> FakeSbx:
     A test that wants the opposite -- `sbx` absent -- re-patches `which`
     itself; a monkeypatch in the test body is applied after this fixture
     and so wins.
+
+    execvp is patched unconditionally, not only for the tests that expect it:
+    a bug that reached it during an unrelated test would otherwise replace the
+    pytest process with an interactive shell.
     """
     fake = FakeSbx()
     monkeypatch.setattr(sandbox_module.subprocess, "run", fake.run)
     monkeypatch.setattr(sandbox_module.subprocess, "Popen", fake.popen)
+    monkeypatch.setattr(sandbox_module.os, "execvp", fake.execvp)
     # Faked alongside the subprocess calls, so the suite is the same whether
     # or not the machine running it happens to have sbx installed.
     monkeypatch.setattr(sandbox_module.shutil, "which", lambda name: f"/usr/bin/{name}")
     return fake
+
+
+@pytest.fixture
+def a_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make stdin look like a terminal, which --shell/--agent require.
+
+    pytest replaces sys.stdin with a stand-in whose isatty() is False, so
+    without this every interactive-entry test would be refused before it
+    reached the behaviour it is there to check.
+    """
+    monkeypatch.setattr(cli_module.sys.stdin, "isatty", lambda: True)
 
 
 @pytest.fixture

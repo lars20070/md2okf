@@ -19,12 +19,22 @@ PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
+# A venv is not portable across platforms, and a direct-mode sandbox shares this
+# tree with the macOS host, so Linux gets its own environment directory and the
+# default .venv/ stays macOS-only (see AGENTS.md). Relative on purpose: each of
+# the seven uv projects then gets its own, where an absolute path would collapse
+# them into one shared environment. `?=` so an explicit setting still wins.
+ifeq ($(shell uname -s),Linux)
+export UV_PROJECT_ENVIRONMENT ?= .venv-linux
+endif
+
 .DEFAULT_GOAL := lint
 .PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
 	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
-# Python, and check that VERSION and CHANGELOG.md's latest release agree.
+# Python, and check that VERSION agrees with both CHANGELOG.md's latest release
+# and every subproject's declared version (scripts/sync-versions.sh --check).
 # Driving every check off `git ls-files` means a newly added file is covered the
 # moment it is tracked, rather than when someone remembers to extend a
 # hand-maintained list here.
@@ -68,6 +78,7 @@ lint:
 		echo "lint: VERSION is $$repo_version but CHANGELOG.md's latest release is $$changelog_version" >&2; \
 		exit 1; \
 	fi
+	./scripts/sync-versions.sh --check
 	@echo "All lint checks passed."
 
 # Check the generated okf/ wiki with okfctl (https://github.com/cwest/okfctl)
@@ -124,11 +135,18 @@ test-md2okf:
 	uv run --group test pytest tests
 
 # Install the four host CLIs onto PATH via uv tool.
+#
+# inspectokf shells out to `tree`, which the sandbox installs for itself but a
+# host may not have. A warning rather than a failure: the other three do not
+# need it, the installs themselves succeed either way, and inspectokf already
+# reports the missing binary at first use. This only moves that message earlier.
 install-clis:
 	uv tool install --force ./scripts/inspectmd
 	uv tool install --force ./scripts/inspectokf
 	uv tool install --force ./scripts/sizeokf
 	uv tool install --force ./scripts/merkleokf
+	@command -v tree >/dev/null || echo "install-clis: 'tree' is not on PATH;" \
+		"inspectokf needs it (brew install tree, or apt-get install tree)" >&2
 
 # Install md2okf itself onto PATH via uv tool. The wheel carries the kit,
 # SPEC.md and the four helper CLI projects (see pyproject.toml's

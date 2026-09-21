@@ -1,6 +1,6 @@
 [project]
 name = "pdf2md"
-version = "0.1.0"
+version = "0.2.1"
 description = "Convert a PDF into Markdown with marker"
 requires-python = ">=3.12"
 dependencies = ["marker-pdf>=1.10.2", "psutil>=7.2.2"]

@@ -27,14 +27,14 @@ flowchart LR
     direction TB
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
-    STATE["session traces<br> + message board<br/>~/.local/state/md2okf"]
-    DRV["md2okf<br/>the host driver"]
+    STATE["session traces<br/>~/.local/state/md2okf/sessions"]
+    DRV["host driver<br>md2okf -o okf/ md/"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
 
   subgraph VM["sbx microVM"]
     PI["Pi agent with<br/>/compile-okf skill"]
-    TOOLS["skills<br>/inspectmd<br/>/inspectokf<br/>/sizeokf<br/>/merkleokf"]
+    TOOLS["skills<br>/inspect-md<br/>/inspect-okf<br/>/size-okf<br/>/merkle-okf<br/>/curate-okf"]
     LINT["okfctl linter"]
   end
 
@@ -77,8 +77,9 @@ flowchart LR
 <br>*Host tooling (amber) builds the microVM from the kit and drives it with one
 `sbx exec` per source document. Inside, the Pi agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
-only content it may change. Skills and the linter (teal) support it — the four
-tools survey the source markdown and wiki, and the linter must pass before a run ends. Session
+only content it may change. Skills and the linter (teal) support it — four of
+them survey the source markdown and wiki, `curate-okf` maintains its nodes and
+indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx proxy, which injects the
 OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
@@ -94,6 +95,7 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - [What lands in okf/](#what-lands-in-okf)
 - [Getting Markdown in](#getting-markdown-in)
 - [Set up the OpenRouter key](#set-up-the-openrouter-key)
+- [Environment](#environment)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Getting help](#getting-help)
@@ -113,6 +115,9 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - [okfctl](https://github.com/cwest/okfctl), only for the host-side `make
   check-okf`: `brew install cwest/tap/okfctl`. The sandbox installs its own
   pinned copy, so a compile does not need it.
+- `tree`, only for the host-side `inspectokf` from `make install-clis`:
+  `brew install tree`. The sandbox installs its own copy, so a compile does not
+  need it.
 
 ## Quickstart
 
@@ -139,8 +144,8 @@ Hand sbx your OpenRouter key once — see [Set up the OpenRouter
 key](#set-up-the-openrouter-key). Then install the command and compile:
 
 ```bash
-uv tool install md2okf                  # from PyPI
-md2okf my-document.md                   # the wiki lands in ./okf
+uv tool install md2okf                  # Install from PyPI
+md2okf my-document.md                   # The wiki lands in ./okf
 ```
 
 `uvx md2okf …` runs it without installing anything;
@@ -149,14 +154,28 @@ commit, and `uv tool install .` a clone you have edited. The command takes files
 or folders, and `-o` chooses the output:
 
 ```bash
-md2okf -o wikis/handbook docs/handbook/   # every *.md in that folder
-md2okf -n 20 long-document.md             # raise the iteration cap
-md2okf --dry-run md/                      # resolve and print, run nothing
+md2okf -o wikis/handbook docs/handbook/   # Every *.md in that folder
+md2okf -n 20 long-document.md             # Raise the iteration cap
+md2okf --dry-run md/                      # Resolve and print, run nothing
 ```
 
-Session state defaults to `~/.local/state/md2okf`; export `XDG_STATE_HOME` to
-put it elsewhere. Changing it once a sandbox exists takes one manual step — see
-[Session state](#session-state).
+Two flags open the sandbox instead of compiling, building or refreshing it
+first, so there is nothing to set up beforehand:
+
+```bash
+md2okf --shell                            # Interactive shell at the wiki root
+md2okf --agent                            # Interactive agent session
+```
+
+Both are for inspecting the sandbox rather than authoring in it. They do not
+restage a compile run: helper CLIs are refreshed, an empty spec mount gets the
+bundled spec, and prior workbench content otherwise remains. The next compile
+replaces `work/okf`; Pi transcripts persist. The workbench lock remains held
+until the session exits, so a concurrent compile or `--fresh` invocation is
+refused. Only `--fresh` combines with them.
+
+Session state defaults to `~/.local/state/md2okf` — see
+[Environment](#environment) to put it elsewhere.
 
 Each document gets its own agent run, and each run reports the wiki's root hash
 before and after (tool calls and agent prose stream in between):
@@ -325,6 +344,20 @@ command reads the key from `sbx secret`, never from your shell environment, and
 refuses to start if it is not proxy-managed. To point the
 agent at a different provider, see [the kit guide](kits/md2okf/README.md).
 
+## Environment
+
+Three variables are worth knowing about, and only the first two are yours to
+set. `md2okf --help` lists the same three.
+
+| Variable | What it does |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Required. `md2okf` takes the key from `sbx secret` and refuses to start unless it is proxy-managed — see [Set up the OpenRouter key](#set-up-the-openrouter-key). |
+| `XDG_STATE_HOME` | Optional. Where session state and the run workbench live. Absolute paths only — a relative value counts as unset — and the default is `~/.local/state`. Changing it once a sandbox exists takes one manual step; see [Session state](#session-state). |
+| `SPEC_MD` | Optional. The spec the frontmatter guard reads, which defaults to the sibling of the bundle root. Needed when checking a wiki outside this repository: `SPEC_MD=/path/to/SPEC.md check-okf.sh /some/wiki`. |
+
+Everything else the sandbox uses is set by `md2okf` itself: `MD2OKF_STATE_DIR`
+and `WORKDIR` are injected at creation, and nothing reads them from your shell.
+
 ## Troubleshooting
 
 **`sbx` reports unknown fields from `kits/md2okf/spec.yaml`.** Your sbx is older
@@ -344,10 +377,6 @@ record it left behind is under the old state root. It can also mean something
 else created it — an older release, or a manual `sbx run`. Either way `md2okf`
 will not delete a sandbox it cannot prove it owns, and `--fresh` will not either:
 run `sbx rm --force md2okf` yourself and try again.
-
-**Checking a wiki outside this repository.** The frontmatter guard reads the
-spec as a sibling of the bundle, so `check-okf.sh /some/wiki` needs `SPEC_MD`
-pointed at a copy of [`SPEC.md`](SPEC.md).
 
 ## Development
 
