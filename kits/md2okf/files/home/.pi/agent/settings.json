@@ -1,6 +1,6 @@
 {
   "defaultProvider": "openrouter",
-  "defaultModel": "qwen/qwen3.6-35b-a3b",
+  "defaultModel": "deepseek/deepseek-v4-pro",
   "packages": [
     "npm:@upstash/context7-pi@0.1.2"
   ]
