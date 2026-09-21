@@ -170,7 +170,9 @@ md2okf --agent                            # Interactive agent session
 Both are for inspecting the sandbox rather than authoring in it. They do not
 restage a compile run: helper CLIs are refreshed, an empty spec mount gets the
 bundled spec, and prior workbench content otherwise remains. The next compile
-replaces `work/okf`; Pi transcripts persist. Only `--fresh` combines with them.
+replaces `work/okf`; Pi transcripts persist. The workbench lock remains held
+until the session exits, so a concurrent compile or `--fresh` invocation is
+refused. Only `--fresh` combines with them.
 
 Session state defaults to `~/.local/state/md2okf` — see
 [Environment](#environment) to put it elsewhere.

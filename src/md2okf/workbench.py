@@ -93,12 +93,16 @@ def state_home() -> Path:
 
 
 @contextlib.contextmanager
-def lock():
+def lock(*, survive_exec: bool = False):
     """Acquire the non-blocking, per-user sandbox lock.
 
     Raises LockHeld immediately rather than queueing behind another run.
     Deliberately not under XDG_STATE_HOME: two shells with different
     XDG_STATE_HOME values must still race on the one lock, not take two.
+
+    When ``survive_exec`` is true, make the descriptor inheritable so an
+    ``exec`` replacement keeps the lock until that process exits. The default
+    remains close-on-exec for every non-interactive caller.
 
     That fixed, predictable path sits in a world-writable directory, so the
     file it names is not trusted until it has been checked: O_NOFOLLOW refuses
@@ -127,6 +131,8 @@ def lock():
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             raise LockHeld(str(path)) from exc
+        if survive_exec:
+            os.set_inheritable(fd, True)
         yield
     finally:
         with contextlib.suppress(OSError):

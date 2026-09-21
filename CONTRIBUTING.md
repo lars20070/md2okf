@@ -81,10 +81,11 @@ the agent framework later would not change a published interface.
 **For looking, not for authoring.** You land in the workbench's `work/okf`,
 holding whatever the last compile left. No compile run is restaged: helper CLIs
 are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
-documents and spec otherwise remain. Nothing written to `work/okf` survives:
-the next compile mirrors its own wiki in over the top, and one started *during*
-a session clears the directory underneath it. Pi transcripts persist under
-`sessions/`. Entry itself is refused while a compile holds the lock.
+documents and spec otherwise remain. Nothing written to `work/okf` survives
+the next compile, but that compile cannot start underneath an active session:
+the interactive command holds the workbench lock until it exits. Pi transcripts
+persist under `sessions/`. Entry is likewise refused while a compile holds the
+lock.
 
 The raw one-liners remain the fallback — for a machine without the driver on
 PATH, or a flag these do not pass through:

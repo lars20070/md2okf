@@ -174,9 +174,11 @@ any project left behind.
 do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
 gets the bundled spec, and prior workbench content otherwise remains in place.
 The next compile replaces `work/okf`; Pi transcripts persist under `sessions/`.
-Only `--fresh` combines with them — every other compile option is refused rather
-than ignored, unless its value happens to equal the default. Both need a
-terminal on stdin, and refuse before touching the sandbox without one.
+The command holds the workbench lock until the session exits, so a concurrent
+compile or `--fresh` invocation is refused. Only `--fresh` combines with them —
+every other compile option is refused rather than ignored, unless its value
+happens to equal the default. Both need a terminal on stdin, and refuse before
+touching the sandbox without one.
 
 `make check-okf` is host-only and needs a generated `okf/` plus `okfctl` on
 PATH (`brew install cwest/tap/okfctl`); it sits outside `make lint` and outside

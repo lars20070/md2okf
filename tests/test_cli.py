@@ -367,6 +367,47 @@ def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, 
     assert shapes.index(["sbx", "run", "--detached"]) < shapes.index(["sbx", "exec", "-it"])
 
 
+def test_interactive_holds_the_lock_through_process_replacement(
+    monkeypatch, isolated_state, fake_sbx, a_tty
+):
+    """Both halves of the guarantee, because either alone leaves it broken.
+
+    The lock must still be held when execvp is called, or a compile could
+    start between setup and hand-over; and the call must ask for
+    survive_exec, or the flock dies with this process image and the session
+    that replaces it runs unprotected. Only the first is observable in
+    process, so the second is asserted on the call.
+
+    real_lock is used inside the fake exec so that probe does not land in the
+    recorded kwargs.
+    """
+    real_lock = workbench.lock
+    lock_kwargs = []
+
+    def spy(**kwargs):
+        lock_kwargs.append(kwargs)
+        return real_lock(**kwargs)
+
+    monkeypatch.setattr(workbench, "lock", spy)
+    observed = False
+
+    def execvp_while_locked(_file, argv):
+        nonlocal observed
+        with pytest.raises(workbench.LockHeld), real_lock():
+            pass
+        observed = True
+        raise ExecvpCalled(list(argv))
+
+    monkeypatch.setattr(sandbox.os, "execvp", execvp_while_locked)
+    with pytest.raises(ExecvpCalled):
+        cli.main(["--shell"])
+
+    assert observed
+    assert lock_kwargs == [{"survive_exec": True}]
+    with real_lock():  # The fake exec raised, so the context released it.
+        pass
+
+
 @pytest.mark.parametrize("flag", ["--shell", "--agent"])
 def test_interactive_never_mounts_an_empty_spec(flag, isolated_state, fake_sbx, a_tty):
     """Regression: a never-compiled workbench handed the agent a 0-byte SPEC.md."""

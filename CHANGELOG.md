@@ -20,10 +20,11 @@ and this project adheres to
   inspecting the sandbox, not authoring in it: they do not restage a compile
   run. Helper CLIs are refreshed, an empty spec mount gets the bundled spec, and
   prior workbench content otherwise remains. The next compile replaces
-  `work/okf`; Pi transcripts persist. Only `--fresh` combines with them; every
-  other compile option is refused rather than ignored. The flag is `--agent`
-  rather than `--pi` so that changing the agent framework later would not
-  change a published interface.
+  `work/okf`; Pi transcripts persist. The workbench lock stays held until the
+  interactive session exits, so a concurrent compile or `--fresh` invocation
+  is refused. Only `--fresh` combines with them; every other compile option is
+  refused rather than ignored. The flag is `--agent` rather than `--pi` so that
+  changing the agent framework later would not change a published interface.
 
 ### Changed
 

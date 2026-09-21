@@ -34,6 +34,26 @@ def test_state_home_relative_value_counts_as_unset(monkeypatch, tmp_path):
 # --- the lock ------------------------------------------------------------
 
 
+def _lock_fds(monkeypatch):
+    """Capture the descriptors lock() opens, so a test can read their flags.
+
+    Asserting on the descriptor itself rather than on a call to
+    os.set_inheritable: whether the flock can cross an exec is a property of
+    the fd, and that is what the interactive path depends on.
+    """
+    seen = []
+    real_open = os.open
+
+    def record(path, flags, mode=0o777):
+        fd = real_open(path, flags, mode)
+        if str(path).endswith(".lock"):
+            seen.append(fd)
+        return fd
+
+    monkeypatch.setattr(workbench.os, "open", record)
+    return seen
+
+
 def test_lock_is_non_blocking_and_exclusive(monkeypatch, tmp_path):
     monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
     with workbench.lock(), pytest.raises(workbench.LockHeld), workbench.lock():
@@ -46,6 +66,27 @@ def test_lock_is_released_and_reusable(monkeypatch, tmp_path):
         pass
     with workbench.lock():
         pass
+
+
+def test_lock_can_survive_process_replacement(monkeypatch, tmp_path):
+    """--shell/--agent hand the flock to the exec'd `sbx`, which needs an inheritable fd."""
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
+    fds = _lock_fds(monkeypatch)
+    with workbench.lock(survive_exec=True):
+        assert os.get_inheritable(fds[-1]) is True
+
+
+def test_lock_is_close_on_exec_by_default(monkeypatch, tmp_path):
+    """The other half: a compile's lock must not reach the `sbx` children it spawns.
+
+    subprocess closes them anyway (close_fds defaults true), so this pins the
+    intent rather than the only defence -- survive_exec is meant to be the
+    exception the interactive path asks for, not the standing behaviour.
+    """
+    monkeypatch.setattr(workbench, "LOCK_PATH_TEMPLATE", str(tmp_path / "md2okf-{uid}.lock"))
+    fds = _lock_fds(monkeypatch)
+    with workbench.lock():
+        assert os.get_inheritable(fds[-1]) is False
 
 
 def test_lock_refuses_a_symlinked_lock_path(monkeypatch, tmp_path):

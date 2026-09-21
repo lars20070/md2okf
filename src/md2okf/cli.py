@@ -227,25 +227,23 @@ def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
     wb = workbench.Workbench.default()
     try:
-        # Held across the ensure step only, then released before the exec
-        # below. ensure_sandbox() can `sbx rm --force` on --fresh or a
-        # fingerprint mismatch, which must not land on a sandbox a concurrent
-        # compile is using; the session that follows needs no such protection,
-        # and could not have it anyway -- execvp drops the flock (O_CLOEXEC)
-        # whatever scope it is written in.
-        with workbench.lock():
+        # Held through setup and the whole interactive session. Python creates
+        # the descriptor close-on-exec, so survive_exec makes this one
+        # inheritable: the replacement `sbx exec -it` process retains the flock
+        # and releases it when the session exits. Setup failures still leave the
+        # context normally and release it here.
+        with workbench.lock(survive_exec=True):
             wb.ensure_roots()
             failure = _ensure_sandbox(wb, args)
             if failure is not None:
                 return failure
+            sandbox.exec_interactive(workbench.SANDBOX_NAME, ["bash"] if args.shell else ["pi"])
     except workbench.LockHeld:
         print(LOCK_HELD_MESSAGE, file=sys.stderr)
         return 2
     except workbench.UnsafeLockFile as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
-
-    sandbox.exec_interactive(workbench.SANDBOX_NAME, ["bash"] if args.shell else ["pi"])
 
 
 def _run(
