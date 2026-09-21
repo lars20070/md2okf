@@ -28,13 +28,13 @@ flowchart LR
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
     STATE["session traces<br/>~/.local/state/md2okf/sessions"]
-    DRV["host driver<br>uvx md2okf -o okf/ md/"]
+    DRV["host driver<br>md2okf -o okf/ md/"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
 
   subgraph VM["sbx microVM"]
     PI["Pi agent with<br/>/compile-okf skill"]
-    TOOLS["skills<br>/inspectmd<br/>/inspectokf<br/>/sizeokf<br/>/merkleokf<br/>/curateokf"]
+    TOOLS["skills<br>/inspect-md<br/>/inspect-okf<br/>/size-okf<br/>/merkle-okf<br/>/curate-okf"]
     LINT["okfctl linter"]
   end
 
@@ -77,8 +77,9 @@ flowchart LR
 <br>*Host tooling (amber) builds the microVM from the kit and drives it with one
 `sbx exec` per source document. Inside, the Pi agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
-only content it may change. Skills and the linter (teal) support it — the four
-tools survey the source markdown and wiki, and the linter must pass before a run ends. Session
+only content it may change. Skills and the linter (teal) support it — four of
+them survey the source markdown and wiki, `curate-okf` maintains its nodes and
+indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx proxy, which injects the
 OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
@@ -143,8 +144,8 @@ Hand sbx your OpenRouter key once — see [Set up the OpenRouter
 key](#set-up-the-openrouter-key). Then install the command and compile:
 
 ```bash
-uv tool install md2okf                  # from PyPI
-md2okf my-document.md                   # the wiki lands in ./okf
+uv tool install md2okf                  # Install from PyPI
+md2okf my-document.md                   # The wiki lands in ./okf
 ```
 
 `uvx md2okf …` runs it without installing anything;
@@ -153,22 +154,23 @@ commit, and `uv tool install .` a clone you have edited. The command takes files
 or folders, and `-o` chooses the output:
 
 ```bash
-md2okf -o wikis/handbook docs/handbook/   # every *.md in that folder
-md2okf -n 20 long-document.md             # raise the iteration cap
-md2okf --dry-run md/                      # resolve and print, run nothing
+md2okf -o wikis/handbook docs/handbook/   # Every *.md in that folder
+md2okf -n 20 long-document.md             # Raise the iteration cap
+md2okf --dry-run md/                      # Resolve and print, run nothing
 ```
 
 Two flags open the sandbox instead of compiling, building or refreshing it
 first, so there is nothing to set up beforehand:
 
 ```bash
-md2okf --shell                            # an interactive shell at the wiki root
-md2okf --agent                            # an interactive agent session
+md2okf --shell                            # Interactive shell at the wiki root
+md2okf --agent                            # Interactive agent session
 ```
 
-Both are for inspecting the sandbox rather than authoring in it: they stage no
-documents, and nothing written in a session is kept — the next compile mirrors
-its own wiki in over the top. Only `--fresh` combines with them.
+Both are for inspecting the sandbox rather than authoring in it. They do not
+restage a compile run: helper CLIs are refreshed, an empty spec mount gets the
+bundled spec, and prior workbench content otherwise remains. The next compile
+replaces `work/okf`; Pi transcripts persist. Only `--fresh` combines with them.
 
 Session state defaults to `~/.local/state/md2okf` — see
 [Environment](#environment) to put it elsewhere.

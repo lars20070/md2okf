@@ -10,7 +10,8 @@ you only want to compile a wiki, [the README](README.md) is enough.
 
 ```bash
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md agreement
+                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
+                         # subproject (scripts/sync-versions.sh --check)
 make validate            # check kits/md2okf/spec.yaml against the Sandbox Kit schema
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite
@@ -78,10 +79,12 @@ building anything. The flag is `--agent` rather than `--pi` so that swapping
 the agent framework later would not change a published interface.
 
 **For looking, not for authoring.** You land in the workbench's `work/okf`,
-holding whatever the last compile left, staged with neither your documents nor
-`SPEC.md`. Nothing written there survives: the next compile mirrors its own
-wiki in over the top, and one started *during* a session clears the directory
-underneath it. Entry itself is refused while a compile holds the lock.
+holding whatever the last compile left. No compile run is restaged: helper CLIs
+are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
+documents and spec otherwise remain. Nothing written to `work/okf` survives:
+the next compile mirrors its own wiki in over the top, and one started *during*
+a session clears the directory underneath it. Pi transcripts persist under
+`sessions/`. Entry itself is refused while a compile holds the lock.
 
 The raw one-liners remain the fallback — for a machine without the driver on
 PATH, or a flag these do not pass through:
@@ -119,6 +122,19 @@ a pinned version with `uv tool run`, and checks each tracked subproject in turn
 The root project's `[tool.ruff]` excludes the subprojects and the non-project
 Python (`kits/`, `scripts/`, `md/`, `okf/`, agent-tool config), so each file is
 linted once, under its own rules.
+
+### Virtual environments are per-platform
+
+A venv pins an absolute interpreter path and platform-specific wheels, so it
+cannot be shared between a macOS host and a Linux sandbox bind-mounting the same
+tree. On Linux, export `UV_PROJECT_ENVIRONMENT=.venv-linux` so the default
+`.venv/` stays macOS-only. Keep the value **relative**: the repo holds seven
+independent uv projects, and a relative path gives each its own, where an
+absolute one would collapse them into a single shared environment. `make`
+exports it for you on Linux, so the targets above are correct either way — a
+bare `uv run` or `uv sync` is not. `uv.lock` is the portable artifact: share the
+lock, never the venv. A venv left behind by the other platform needs no cleanup;
+uv detects the dangling interpreter and rebuilds it.
 
 ### Helper CLIs
 

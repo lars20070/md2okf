@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-09-21
 
 ### Added
 
@@ -17,14 +17,23 @@ and this project adheres to
   first, and that a stale sandbox is entered silently — is gone. The terminal
   is handed over with `execvp` rather than a child process, so the TTY, job
   control, Ctrl-C and the exit code are the guest's own. These are for
-  inspecting the sandbox, not authoring in it: nothing is staged, and a session
-  leaves nothing behind that the next compile will not clear. Only `--fresh`
-  combines with them; every other compile option is refused rather than
-  ignored. The flag is `--agent` rather than `--pi` so that changing the agent
-  framework later would not change a published interface.
+  inspecting the sandbox, not authoring in it: they do not restage a compile
+  run. Helper CLIs are refreshed, an empty spec mount gets the bundled spec, and
+  prior workbench content otherwise remains. The next compile replaces
+  `work/okf`; Pi transcripts persist. Only `--fresh` combines with them; every
+  other compile option is refused rather than ignored. The flag is `--agent`
+  rather than `--pi` so that changing the agent framework later would not
+  change a published interface.
 
 ### Changed
 
+- **The default model is now `deepseek/deepseek-v4-pro`**, in place of
+  `qwen/qwen3.6-35b-a3b`. Every compile runs on it unless `settings.json` says
+  otherwise, so the cost and the quality of a run both move with this. The
+  routing pin it needs was already in `models.json` — DeepInfra only, no
+  fallbacks — and, being a model Pi's catalogue knows, it keeps the catalogue's
+  1M context and 384K output rather than the 16,384-token default that truncates
+  a long `write` mid-argument.
 - **One version for the whole repository.** `VERSION` now governs every project
   in the tree, not just the driver: the four host CLIs (`inspectmd`,
   `inspectokf`, `sizeokf`, `merkleokf`), `web2md` and `pdf2md` all move from
@@ -41,6 +50,27 @@ and this project adheres to
   that can move again on the next bump. Nothing else in the release reaches
   this project: the `--mode json` wire format is unchanged, and all three of
   0.86.0's breaking changes are extension- or SDK-level.
+- The `inspect-md` skill now states what its section ranges actually cover: a
+  span ends at the next heading of **any** level, so a parent section does not
+  contain its children and each has to be read by its own index. It also records
+  that `-L` filters the map without renumbering `Index`, and that frontmatter
+  and headings inside fenced code are left out.
+- `tree` is documented as a host requirement for `inspectokf`, and
+  `make install-clis` now warns when it is missing rather than leaving the
+  binary to report it at first use. Only the host is affected: the sandbox
+  installs its own copy, so a compile never needed one.
+- Linux gets its own uv environments. A venv is not portable across platforms
+  and a direct-mode sandbox shares the tree with the macOS host, so `make`
+  exports `UV_PROJECT_ENVIRONMENT=.venv-linux` on Linux and the default `.venv/`
+  stays macOS-only. The value is relative on purpose: each of the seven uv
+  projects then gets its own, where an absolute path would collapse them into
+  one shared environment.
+- The README overview diagram names the agent's skills by their skill ids
+  (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`, `curate-okf`) rather
+  than by the binaries behind four of them, which is the distinction every one
+  of those skills makes in its own first paragraph. `curate-okf` joins the
+  diagram, and the session-state node names the `sessions` directory the driver
+  actually mounts.
 
 ### Fixed
 
@@ -54,6 +84,14 @@ and this project adheres to
   though they contradicted each other. `stage_tooling` now floors the mount with
   the bundled spec, filling it only when empty, so a compile's `--spec` still
   governs the session that follows it.
+- Stale documentation left over from 0.2.0. `AGENTS.md` described the release
+  workflow as creating a notes-only GitHub Release, from before it built,
+  published to PyPI and attached the artifacts; `CONTRIBUTING.md` described
+  `make lint` as checking `VERSION` against `CHANGELOG.md` alone, from before it
+  also checked every subproject; and the `pdf2md` and `web2md` guides still sent
+  their output to `make wiki`, a target `md2okf` replaced. `CONTRIBUTING.md`
+  also documents the per-platform venv rule that until now only `AGENTS.md`
+  carried, so a contributor on Linux is told before `uv` writes the wrong one.
 
 ### Removed
 

@@ -170,12 +170,13 @@ only `pyproject.toml` and `src/` (`stage_clis`), where a path above the project
 root does not exist. Bump `VERSION`, then run the script; `make lint` fails on
 any project left behind.
 
-`--shell` and `--agent` are for inspecting the sandbox, not for authoring: they
-stage nothing, and the next compile clears `work/okf` over whatever a session
-left there. Only `--fresh` combines with them — every other compile option is
-refused rather than ignored, unless its value happens to equal the default.
-Both need a terminal on stdin, and refuse before touching the sandbox without
-one.
+`--shell` and `--agent` are for inspecting the sandbox, not for authoring. They
+do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
+gets the bundled spec, and prior workbench content otherwise remains in place.
+The next compile replaces `work/okf`; Pi transcripts persist under `sessions/`.
+Only `--fresh` combines with them — every other compile option is refused rather
+than ignored, unless its value happens to equal the default. Both need a
+terminal on stdin, and refuse before touching the sandbox without one.
 
 `make check-okf` is host-only and needs a generated `okf/` plus `okfctl` on
 PATH (`brew install cwest/tap/okfctl`); it sits outside `make lint` and outside
@@ -188,8 +189,10 @@ touches a sandbox — `md2okf`, `make test-sandbox`, `sbx exec` — needs an act
 `sbx login` session; `make validate`, `make dist` and the pytest suites are
 static and do not.
 
-Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which creates
-a notes-only GitHub Release from the matching `CHANGELOG.md` section. See
+Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`: it verifies the
+tag against `VERSION`, builds the wheel and sdist once, publishes them to PyPI
+by trusted publishing, and then creates a GitHub Release whose notes are the
+matching `CHANGELOG.md` section and whose assets are those same artifacts. See
 [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
 ## Always validate the sandbox kit spec before finishing

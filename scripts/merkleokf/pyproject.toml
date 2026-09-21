@@ -1,6 +1,6 @@
 [project]
 name = "merkleokf"
-version = "0.2.0"
+version = "0.2.1"
 description = "Print a Merkle hash tree for an OKF wiki folder"
 requires-python = ">=3.12"
 dependencies = []
