@@ -52,10 +52,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="resolve and print what would run; do nothing paid")
     interactive = parser.add_mutually_exclusive_group()
     interactive.add_argument(
-        "--shell", action="store_true", help="open an interactive shell in the sandbox instead of compiling"
+        "--shell", action="store_true", help="open an interactive shell in the sandbox"
     )
     interactive.add_argument(
-        "--agent", action="store_true", help="open an interactive agent session in the sandbox instead of compiling"
+        "--agent", action="store_true", help="open an interactive agent session in the sandbox"
     )
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
