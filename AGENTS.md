@@ -128,7 +128,8 @@ the guest-side bind helper.
 
 ```bash
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md agreement
+                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
+                         # subproject (scripts/sync-versions.sh --check)
 make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite (offline)
@@ -155,9 +156,19 @@ uv run md2okf --shell                        # ensure the sandbox, then shell in
 uv run md2okf --agent                        # ensure the sandbox, then open the agent
 sbx exec -it md2okf -- bash                  # the same, minus the ensure step
 sbx rm --force md2okf                        # discard it; the next run rebuilds
+./scripts/sync-versions.sh                   # write VERSION into every subproject
 ./scripts/release-notes.sh X.Y.Z             # print CHANGELOG.md notes for a release
 ./scripts/check-release-tag.sh vX.Y.Z        # assert a tag matches VERSION
 ```
+
+`VERSION` is the one version for the whole repository. The root project reads it
+directly (`[tool.hatch.version]`), and every other project — the four host CLIs,
+`web2md`, `pdf2md` — carries a literal that `./scripts/sync-versions.sh` writes
+and refreshes each `uv.lock` for. A literal rather than a dynamic read of
+`../../VERSION`, because the CLIs are also built from a staged copy that holds
+only `pyproject.toml` and `src/` (`stage_clis`), where a path above the project
+root does not exist. Bump `VERSION`, then run the script; `make lint` fails on
+any project left behind.
 
 `--shell` and `--agent` are for inspecting the sandbox, not for authoring: they
 stage nothing, and the next compile clears `work/okf` over whatever a session

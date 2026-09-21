@@ -33,7 +33,8 @@ endif
 	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
-# Python, and check that VERSION and CHANGELOG.md's latest release agree.
+# Python, and check that VERSION agrees with both CHANGELOG.md's latest release
+# and every subproject's declared version (scripts/sync-versions.sh --check).
 # Driving every check off `git ls-files` means a newly added file is covered the
 # moment it is tracked, rather than when someone remembers to extend a
 # hand-maintained list here.
@@ -77,6 +78,7 @@ lint:
 		echo "lint: VERSION is $$repo_version but CHANGELOG.md's latest release is $$changelog_version" >&2; \
 		exit 1; \
 	fi
+	./scripts/sync-versions.sh --check
 	@echo "All lint checks passed."
 
 # Check the generated okf/ wiki with okfctl (https://github.com/cwest/okfctl)

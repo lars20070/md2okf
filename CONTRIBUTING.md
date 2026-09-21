@@ -241,10 +241,13 @@ at itself, so both are worth naming.
 1. Move `[Unreleased]` entries into a dated `## [X.Y.Z] - YYYY-MM-DD` section
    with a real body (not just a heading).
 2. Set `VERSION` to `X.Y.Z`.
-3. Land that commit on `master`. `make lint` fails if `VERSION` and the latest
-   changelog release heading disagree.
-4. Sanity-check the notes: `./scripts/release-notes.sh X.Y.Z`
-5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
+3. Run `./scripts/sync-versions.sh`, which writes `X.Y.Z` into every other
+   project's `pyproject.toml` and refreshes each `uv.lock`. One version covers
+   the whole repository, the helper CLIs included.
+4. Land that commit on `master`. `make lint` fails if `VERSION` disagrees with
+   the latest changelog release heading, or with any subproject's version.
+5. Sanity-check the notes: `./scripts/release-notes.sh X.Y.Z`
+6. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
 The workflow re-runs `make lint` and refuses a tag whose version disagrees with
 `VERSION` (`scripts/check-release-tag.sh`). An empty changelog section fails

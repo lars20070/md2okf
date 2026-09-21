@@ -1,6 +1,6 @@
 [project]
 name = "web2md"
-version = "0.1.0"
+version = "0.2.0"
 description = "Scrape a documentation site into a single Markdown file"
 requires-python = ">=3.12"
 dependencies = [

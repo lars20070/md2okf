@@ -25,6 +25,16 @@ and this project adheres to
 
 ### Changed
 
+- **One version for the whole repository.** `VERSION` now governs every project
+  in the tree, not just the driver: the four host CLIs (`inspectmd`,
+  `inspectokf`, `sizeokf`, `merkleokf`), `web2md` and `pdf2md` all move from
+  their standalone `0.1.0` to the repo version. `./scripts/sync-versions.sh`
+  writes the literal into each `pyproject.toml` and refreshes each `uv.lock`,
+  and `make lint` runs its `--check` form, so a release cannot ship a CLI whose
+  `--version` disagrees with the tag. The version stays a literal rather than a
+  dynamic read of `../../VERSION` because the CLIs are also built from a staged
+  copy holding only `pyproject.toml` and `src/`, where no path above the project
+  root exists.
 - Bump the pinned Pi coding agent from 0.85.1 to 0.86.1, and pin `cacheWarming`
   to `"streaming"` alongside it. 0.86 adds cost-aware prompt-cache warming and
   defaults it on, so the kit states its position rather than inheriting one
