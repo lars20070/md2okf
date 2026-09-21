@@ -23,6 +23,15 @@ and this project adheres to
   ignored. The flag is `--agent` rather than `--pi` so that changing the agent
   framework later would not change a published interface.
 
+### Changed
+
+- Bump the pinned Pi coding agent from 0.85.1 to 0.86.1, and pin `cacheWarming`
+  to `"streaming"` alongside it. 0.86 adds cost-aware prompt-cache warming and
+  defaults it on, so the kit states its position rather than inheriting one
+  that can move again on the next bump. Nothing else in the release reaches
+  this project: the `--mode json` wire format is unchanged, and all three of
+  0.86.0's breaking changes are extension- or SDK-level.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added

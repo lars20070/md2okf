@@ -135,7 +135,7 @@ setup:
     # five attempts. `npm config` writes ~/.npmrc, so later npm steps inherit it.
     - command: |
         set -eu
-        PI_VERSION=0.85.1
+        PI_VERSION=0.86.1
 
         npm config set proxy "$HTTP_PROXY"
         npm config set https-proxy "$HTTP_PROXY"

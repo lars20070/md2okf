@@ -1,6 +1,7 @@
 {
   "defaultProvider": "openrouter",
   "defaultModel": "deepseek/deepseek-v4-pro",
+  "cacheWarming": "streaming",
   "packages": [
     "npm:@upstash/context7-pi@0.1.2"
   ]
