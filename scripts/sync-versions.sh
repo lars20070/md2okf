@@ -40,6 +40,18 @@ if [[ -z "${version}" ]]; then
 	exit 1
 fi
 
+# Writing needs uv, so demand it before the first rewrite rather than at the
+# first `uv lock`. Without this, `set -e` aborts mid-loop with one
+# pyproject.toml already bumped, its lock stale and the rest untouched -- a
+# half-applied release that only shows up later as a confusing `make lint`
+# failure about the lock. --check reads and never locks, so it is exempt: that
+# is the form `make lint` and CI run.
+if [[ "${check_only}" == false ]] && ! command -v uv >/dev/null 2>&1; then
+	echo "sync-versions: uv is not on PATH, and refreshing each uv.lock needs it" >&2
+	echo "sync-versions: install it (https://docs.astral.sh/uv/), or use --check to report drift only" >&2
+	exit 1
+fi
+
 # The version a project's own uv.lock records for itself, or "" when the lock
 # is absent or the project is dynamic (uv omits the field for those, which is
 # why the root md2okf lock needs nothing here).
