@@ -10,8 +10,10 @@
 # and it must not become committable just because it went unused.
 .env
 
-# Python
-.venv/
+# Python. The glob covers per-platform environments beside the default .venv:
+# a venv is not portable across platforms, so a macOS host and a Linux sandbox
+# sharing this tree each need their own (selected by UV_PROJECT_ENVIRONMENT).
+.venv*/
 __pycache__/
 .pytest_cache/
 .ruff_cache/

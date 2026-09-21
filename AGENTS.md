@@ -16,6 +16,30 @@ Never run `git commit` or `git push` (including pushing tags) in this repo.
 Stage changes, draft the commit message, and hand it to the user — they run
 the commit and push themselves.
 
+## Python environments
+
+A virtual environment is not portable across platforms: it pins an absolute
+interpreter path, a platform-specific `home` in `pyvenv.cfg`, and wheels
+compiled for one OS and architecture. The host is macOS while development
+sandboxes are Linux, and a direct-mode sandbox bind-mounts the same tree, so one
+`.venv/` cannot serve both — whichever side synced last wins and the other
+breaks. `uv.lock` is the portable artifact: share the lock, never the venv.
+
+On Linux, set `UV_PROJECT_ENVIRONMENT` before any `uv` command, so the default
+`.venv/` stays macOS-only. In a Docker Sandbox that means the persistent
+environment file:
+
+```bash
+echo 'export UV_PROJECT_ENVIRONMENT=.venv-linux' >> /etc/sandbox-persistent.sh
+```
+
+Keep the value **relative**. The repo holds seven independent uv projects, and a
+relative path gives each its own `.venv-linux/`, where an absolute one would
+collapse all seven into a single shared environment and break the zero-overlap
+rule. `make` exports this itself on Linux, so those targets are correct either
+way — bare `uv run` and `uv sync` are not. A venv left behind by the other
+platform needs no cleanup: uv detects the dangling interpreter and rebuilds it.
+
 ## Repository map
 
 md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one Pi run

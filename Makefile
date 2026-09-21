@@ -19,6 +19,15 @@ PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
+# A venv is not portable across platforms, and a direct-mode sandbox shares this
+# tree with the macOS host, so Linux gets its own environment directory and the
+# default .venv/ stays macOS-only (see AGENTS.md). Relative on purpose: each of
+# the seven uv projects then gets its own, where an absolute path would collapse
+# them into one shared environment. `?=` so an explicit setting still wins.
+ifeq ($(shell uname -s),Linux)
+export UV_PROJECT_ENVIRONMENT ?= .venv-linux
+endif
+
 .DEFAULT_GOAL := lint
 .PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
 	install-clis install dist test-sandbox scrape
