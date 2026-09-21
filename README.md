@@ -27,14 +27,14 @@ flowchart LR
     direction TB
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
-    STATE["session traces<br> + message board<br/>~/.local/state/md2okf"]
-    DRV["md2okf<br/>the host driver"]
+    STATE["session traces<br/>~/.local/state/md2okf/sessions"]
+    DRV["host driver<br>uvx md2okf -o okf/ md/"]
     KIT["kits/md2okf/spec.yaml<br/>kits/md2okf/files/"]
   end
 
   subgraph VM["sbx microVM"]
     PI["Pi agent with<br/>/compile-okf skill"]
-    TOOLS["skills<br>/inspectmd<br/>/inspectokf<br/>/sizeokf<br/>/merkleokf"]
+    TOOLS["skills<br>/inspectmd<br/>/inspectokf<br/>/sizeokf<br/>/merkleokf<br/>/curateokf"]
     LINT["okfctl linter"]
   end
 
