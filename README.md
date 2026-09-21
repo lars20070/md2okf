@@ -114,6 +114,9 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - [okfctl](https://github.com/cwest/okfctl), only for the host-side `make
   check-okf`: `brew install cwest/tap/okfctl`. The sandbox installs its own
   pinned copy, so a compile does not need it.
+- `tree`, only for the host-side `inspectokf` from `make install-clis`:
+  `brew install tree`. The sandbox installs its own copy, so a compile does not
+  need it.
 
 ## Quickstart
 

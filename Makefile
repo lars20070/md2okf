@@ -135,11 +135,18 @@ test-md2okf:
 	uv run --group test pytest tests
 
 # Install the four host CLIs onto PATH via uv tool.
+#
+# inspectokf shells out to `tree`, which the sandbox installs for itself but a
+# host may not have. A warning rather than a failure: the other three do not
+# need it, the installs themselves succeed either way, and inspectokf already
+# reports the missing binary at first use. This only moves that message earlier.
 install-clis:
 	uv tool install --force ./scripts/inspectmd
 	uv tool install --force ./scripts/inspectokf
 	uv tool install --force ./scripts/sizeokf
 	uv tool install --force ./scripts/merkleokf
+	@command -v tree >/dev/null || echo "install-clis: 'tree' is not on PATH;" \
+		"inspectokf needs it (brew install tree, or apt-get install tree)" >&2
 
 # Install md2okf itself onto PATH via uv tool. The wheel carries the kit,
 # SPEC.md and the four helper CLI projects (see pyproject.toml's
