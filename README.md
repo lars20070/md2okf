@@ -94,6 +94,7 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - [What lands in okf/](#what-lands-in-okf)
 - [Getting Markdown in](#getting-markdown-in)
 - [Set up the OpenRouter key](#set-up-the-openrouter-key)
+- [Environment](#environment)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Getting help](#getting-help)
@@ -166,9 +167,8 @@ Both are for inspecting the sandbox rather than authoring in it: they stage no
 documents, and nothing written in a session is kept — the next compile mirrors
 its own wiki in over the top. Only `--fresh` combines with them.
 
-Session state defaults to `~/.local/state/md2okf`; export `XDG_STATE_HOME` to
-put it elsewhere. Changing it once a sandbox exists takes one manual step — see
-[Session state](#session-state).
+Session state defaults to `~/.local/state/md2okf` — see
+[Environment](#environment) to put it elsewhere.
 
 Each document gets its own agent run, and each run reports the wiki's root hash
 before and after (tool calls and agent prose stream in between):
@@ -337,6 +337,20 @@ command reads the key from `sbx secret`, never from your shell environment, and
 refuses to start if it is not proxy-managed. To point the
 agent at a different provider, see [the kit guide](kits/md2okf/README.md).
 
+## Environment
+
+Three variables are worth knowing about, and only the first two are yours to
+set. `md2okf --help` lists the same three.
+
+| Variable | What it does |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Required. `md2okf` takes the key from `sbx secret` and refuses to start unless it is proxy-managed — see [Set up the OpenRouter key](#set-up-the-openrouter-key). |
+| `XDG_STATE_HOME` | Optional. Where session state and the run workbench live. Absolute paths only — a relative value counts as unset — and the default is `~/.local/state`. Changing it once a sandbox exists takes one manual step; see [Session state](#session-state). |
+| `SPEC_MD` | Optional. The spec the frontmatter guard reads, which defaults to the sibling of the bundle root. Needed when checking a wiki outside this repository: `SPEC_MD=/path/to/SPEC.md check-okf.sh /some/wiki`. |
+
+Everything else the sandbox uses is set by `md2okf` itself: `MD2OKF_STATE_DIR`
+and `WORKDIR` are injected at creation, and nothing reads them from your shell.
+
 ## Troubleshooting
 
 **`sbx` reports unknown fields from `kits/md2okf/spec.yaml`.** Your sbx is older
@@ -356,10 +370,6 @@ record it left behind is under the old state root. It can also mean something
 else created it — an older release, or a manual `sbx run`. Either way `md2okf`
 will not delete a sandbox it cannot prove it owns, and `--fresh` will not either:
 run `sbx rm --force md2okf` yourself and try again.
-
-**Checking a wiki outside this repository.** The frontmatter guard reads the
-spec as a sibling of the bundle, so `check-okf.sh /some/wiki` needs `SPEC_MD`
-pointed at a copy of [`SPEC.md`](SPEC.md).
 
 ## Development
 

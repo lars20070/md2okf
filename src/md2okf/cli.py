@@ -34,7 +34,21 @@ _COMPILE_ONLY_OPTIONS = (
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="md2okf",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Compile Markdown into an OKF wiki with the Pi coding agent.",
+        # Held to 79 columns so it renders in a standard terminal; the epilog is
+        # printed verbatim. These are the only three variables a user of the
+        # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
+        epilog="""\
+Environment:
+  OPENROUTER_API_KEY  required, but read from `sbx secret`, never from this
+                      environment
+  XDG_STATE_HOME      session state and the run workbench. Absolute paths
+                      only; a relative value counts as unset.
+                      (default: ~/.local/state)
+  SPEC_MD             spec the frontmatter guard reads when checking a wiki
+                      outside this repository
+""",
     )
     parser.add_argument(
         "paths", nargs="*", metavar="FILE|DIR", help="Markdown files or folders; '-' or none means stdin"
