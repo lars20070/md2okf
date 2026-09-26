@@ -8,23 +8,26 @@ rule is what it is).
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from md2okf import events, sandbox, workbench
+from md2okf import sandbox, workbench
+
+if TYPE_CHECKING:
+    from md2okf.agents import Agent
 
 DEFAULT_MAX_ITERATIONS = 10
 
-COMPILE_PROMPT = (
-    "Load the compile-okf skill: read ~/.pi/agent/skills/compile-okf/SKILL.md, "
-    "then follow it to compile {document} directly into the workspace root. "
-    "You are already in the OKF wiki; never create an okf/ child directory."
-)
-# Appended on Ralph loop iterations after the first, so Pi knows it may be
-# resuming unfinished work rather than starting the document over.
+# The first-turn prompt is the agent's own (Agent.compile_prompt): each runtime
+# activates the compile procedure its kit installs in its own way. This is
+# appended on Ralph loop iterations after the first, for every agent, so it
+# knows it may be resuming unfinished work rather than starting the document
+# over.
 CONTINUATION_PROMPT = (
     "This is a follow-up pass on this document: the wiki may already hold "
     "partial work from a previous pass. Compare the source against what is "
@@ -33,23 +36,44 @@ CONTINUATION_PROMPT = (
 
 _HASH_RE = re.compile(r"^[0-9a-f]+$")
 
-# How much of pi's raw output to fold into a CompileError on a non-zero exit.
+# How much of the agent's raw output to fold into a CompileError on a failed turn.
 # Bounded so one runaway session can't blow up an error message, generous
 # enough that the actual cause (a traceback, sbx's own diagnostic text) is
 # almost always still in view.
 _DIAGNOSTIC_TAIL_LINES = 20
 
 
-def _diagnostic_tail(raw_lines: list[str]) -> str:
-    """The last few non-JSON lines, for folding into a failure message.
+def _is_protocol_envelope(line: str) -> bool:
+    """Whether `line` is a whole JSON object -- an event of the agent's protocol."""
+    try:
+        return isinstance(json.loads(line), dict)
+    except ValueError:
+        return False
 
-    Pi's own protocol events are JSON objects and say nothing useful about
-    why a run died; what does is whatever arrived on stderr in plain text
-    (a traceback, an sbx diagnostic), merged into the same stream. Keeping
-    only those makes the message the cause rather than a wall of envelopes.
+
+def _diagnostic_tail(raw_lines: list[str]) -> str:
+    """The last few lines that are not protocol events, for folding into a failure message.
+
+    The agent's own protocol events are JSON objects and mostly say nothing
+    useful about why a run died; what does is whatever arrived on stderr in
+    plain text (a traceback, an sbx diagnostic), merged into the same stream.
+    Keeping only those makes the message the cause rather than a wall of
+    envelopes. A protocol event that *does* state the cause reaches the
+    message separately, as Event.failure.
+
+    "Not a protocol event" means "does not parse as a JSON object", not "does
+    not start with {": a line cut short mid-object is a symptom worth seeing,
+    and every agent's envelopes are whole JSON objects, whatever their shape.
     """
-    meaningful = [line for line in raw_lines if line.strip() and not line.lstrip().startswith("{")]
+    meaningful = [line for line in raw_lines if line.strip() and not _is_protocol_envelope(line)]
     return "\n".join(meaningful[-_DIAGNOSTIC_TAIL_LINES:])
+
+
+def _failure_message(agent: Agent, returncode: int | None, failure: str | None, raw_lines: list[str]) -> str:
+    """One failed turn, described: how it ended, then the protocol's own reason, then plain-text context."""
+    status = f"{agent.name} exited {returncode}" if returncode != 0 else f"{agent.name} reported a failed turn"
+    detail = [part for part in (failure, _diagnostic_tail(raw_lines)) if part]
+    return f"{status}: " + "\n".join(detail) if detail else status
 
 
 class UsageError(Exception):
@@ -184,6 +208,7 @@ def wiki_root_hash(name: str, work_okf: Path) -> str:
 
 
 def compile_document(
+    agent: Agent,
     name: str,
     doc: Document,
     wb: workbench.Workbench,
@@ -193,9 +218,9 @@ def compile_document(
     on_progress: Callable[[str], None] | None = None,
     on_event: Callable[[str], None] | None = None,
 ) -> Row:
-    """Run the Ralph loop for one document.
+    """Run the Ralph loop for one document with `agent`, in sandbox `name`.
 
-    Re-runs Pi on the same document until merkleokf --nolog -L 0 reports an
+    Re-runs the agent on the same document until merkleokf --nolog -L 0 reports an
     unchanged wiki root hash, capped at max_iterations. Mirrors work_okf out
     to output_dir after every iteration, so an interruption leaves the last
     completed pass on disk. A hash-stable first pass is convergence, not
@@ -214,36 +239,48 @@ def compile_document(
         if on_progress is not None:
             on_progress(f"Compiling document {doc.display} (iteration {iteration})")
 
-        prompt = COMPILE_PROMPT.format(document=document_path)
+        prompt = agent.compile_prompt(document_path)
         if iteration > 1:
             prompt = f"{prompt} {CONTINUATION_PROMPT}"
 
-        stream = sandbox.exec_stream(name, ["pi", "--mode", "json", prompt])
+        stream = sandbox.exec_stream(name, agent.compile_args(prompt))
         tool_calls = 0
+        failure: str | None = None
         raw_lines: list[str] = []
         try:
-            for line, display, is_tool_call in events.process(stream):
-                raw_lines.append(line)
-                if is_tool_call:
+            for event in agent.protocol.process(stream):
+                # Only what the protocol chose to show can explain a failure:
+                # a line it hides is either an envelope or noise it knows
+                # about (Codex's stdin notice), and keeping just these also
+                # spares holding a whole session's token-by-token envelopes.
+                if event.display is not None:
+                    raw_lines.append(event.raw)
+                if event.is_tool_call:
                     tool_calls += 1
-                # events.process() has already decided what is worth showing:
+                if event.failure is not None:
+                    failure = event.failure
+                # The protocol has already decided what is worth showing:
                 # rendered tool calls and assistant prose, plus any non-JSON
                 # diagnostic. Protocol events we do not render come back as
                 # None and are dropped here.
-                if on_event is not None and display and display.strip():
-                    on_event(display)
+                if on_event is not None and event.display and event.display.strip():
+                    on_event(event.display)
         finally:
             # Reached on Ctrl-C too, so an interrupted run does not leave the
             # local `sbx exec` conduit behind. mirror_out() is below this
             # point, which is what keeps a half-finished iteration from ever
             # reaching -o DIR.
             stream.close()
-        if stream.returncode != 0:
-            tail = _diagnostic_tail(raw_lines)
-            detail = f": {tail}" if tail else ""
-            raise CompileError(f"pi exited {stream.returncode}{detail}", document=doc.display)
+        # Failure first, whatever the tool-call count: a turn that did work
+        # and then reported a terminal error must neither pass as a success
+        # nor be misreported as "no tool calls". Either signal is enough; an
+        # agent can report a failure and still exit 0.
+        if failure is not None or stream.returncode != 0:
+            raise CompileError(_failure_message(agent, stream.returncode, failure, raw_lines), document=doc.display)
         if tool_calls == 0:
-            raise CompileError("pi session made no tool calls -- it did not follow the skill", document=doc.display)
+            raise CompileError(
+                f"{agent.name} session made no tool calls -- it did not follow the skill", document=doc.display
+            )
 
         try:
             workbench.mirror_out(wb.work_okf, output_dir)

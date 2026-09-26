@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 from conftest import ExecvpCalled
 
-from md2okf import __version__, cli, resources, sandbox, workbench
+from md2okf import __version__, agents, cli, resources, sandbox, workbench
+
+PI_SANDBOX = workbench.sandbox_name("pi")
 
 
 def _md(tmp_path: Path, name: str = "doc.md") -> Path:
@@ -94,10 +96,47 @@ def test_dry_run_prints_the_command_lines_that_would_run(tmp_path, capsys, isola
     assert rc == 0
     out = capsys.readouterr().out
     assert "commands:" in out
-    assert "sbx run --detached --name md2okf" in out
-    assert "sbx exec md2okf -- pi --mode json" in out
+    assert "  agent:  pi\n" in out
+    assert f"sbx run --detached --name {PI_SANDBOX} " in out
+    assert f"{resources.kit_dir('pi')} " in out
+    assert f"sbx exec {PI_SANDBOX} -- md2okf-agent pi --mode json 'Load the compile-okf skill" in out
     assert doc.name in out  # the staged basename is embedded in the pi prompt
     assert fake_sbx.calls == []
+
+
+def test_dry_run_shows_the_agents_workbench(tmp_path, capsys, isolated_state, fake_sbx):
+    doc = _md(tmp_path)
+    assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
+    out = capsys.readouterr().out
+    assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'pi'} " in out
+
+
+@pytest.mark.parametrize("flags", [["--dry-run"], [], ["--shell"], ["--agent"]])
+def test_unknown_agent_is_exit_2_before_any_work(flags, tmp_path, capsys, isolated_state, fake_sbx, a_tty, monkeypatch):
+    monkeypatch.setenv("MD2OKF_AGENT", "bogus")
+    args = flags if flags in (["--shell"], ["--agent"]) else [*flags, "-o", str(tmp_path / "out"), str(_md(tmp_path))]
+    assert cli.main(args) == 2
+    err = capsys.readouterr().err
+    assert "MD2OKF_AGENT='bogus'" in err
+    assert "valid: claude, codex, pi" in err
+    assert fake_sbx.calls == []
+    assert not (isolated_state / "xdg-state").exists()
+
+
+def test_explicit_pi_behaves_exactly_like_unset(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    doc = _md(tmp_path)
+    args = ["--dry-run", "-o", str(tmp_path / "out"), str(doc)]
+    assert cli.main(args) == 0
+    unset = capsys.readouterr().out
+    monkeypatch.setenv("MD2OKF_AGENT", "pi")
+    assert cli.main(args) == 0
+    assert capsys.readouterr().out == unset
+
+
+def test_the_epilog_documents_md2okf_agent(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    assert "MD2OKF_AGENT" in capsys.readouterr().out
 
 
 def test_sbx_not_present_is_exit_2(tmp_path, capsys, isolated_state, monkeypatch):
@@ -133,7 +172,7 @@ def _write_a_page() -> None:
     A page, and the bundle-root index.md a compliant OKF wiki carries -- so
     a second run against the same -o DIR is recognised as adoptable.
     """
-    work_okf = workbench.Workbench.default().work_okf
+    work_okf = workbench.Workbench.default("pi").work_okf
     (work_okf / "page.md").write_text("compiled", encoding="utf-8")
     index = work_okf / "index.md"
     if not index.exists():
@@ -145,7 +184,7 @@ def test_first_run_creates_the_sandbox_and_prints_one_tsv_row(tmp_path, capsys, 
     output_dir = tmp_path / "out"
 
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
     fake_sbx.queue_hash("aaaa0000")
 
     rc = cli.main(["-o", str(output_dir), str(doc)])
@@ -170,7 +209,7 @@ def test_second_run_with_unchanged_config_reuses_the_sandbox(tmp_path, isolated_
 
     for _ in range(2):
         fake_sbx.queue_hash("aaaa0000")
-        fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
+        fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
         fake_sbx.queue_hash("aaaa0000")
 
     assert cli.main(["-o", str(output_dir), str(doc)]) == 0
@@ -188,7 +227,7 @@ def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx):
 
     for _ in range(2):
         fake_sbx.queue_hash("aaaa0000")
-        fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
+        fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
         fake_sbx.queue_hash("aaaa0000")
 
     assert cli.main(["-o", str(output_dir), str(doc)]) == 0
@@ -198,19 +237,19 @@ def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx):
 
 
 def test_unowned_existing_sandbox_is_exit_2_and_not_deleted(tmp_path, capsys, isolated_state, fake_sbx):
-    fake_sbx.register(workbench.SANDBOX_NAME)  # exists, but we never created it -- no marker on disk
+    fake_sbx.register(PI_SANDBOX)  # exists, but we never created it -- no marker on disk
     doc = _md(tmp_path)
 
     rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
     assert rc == 2
     assert "sbx rm --force" in capsys.readouterr().err
-    assert sandbox.exists(workbench.SANDBOX_NAME) is True
+    assert sandbox.exists(PI_SANDBOX) is True
 
 
 def test_compile_failure_is_exit_1_and_still_prints_to_stderr(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], returncode=1)
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], returncode=1)
 
     rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
     assert rc == 1
@@ -239,7 +278,7 @@ def test_quiet_suppresses_rows_and_progress_but_not_fatal_errors(tmp_path, capsy
 def test_verbose_shows_tool_calls_and_prose(tmp_path, capsys, isolated_state, fake_sbx):
     doc = _md(tmp_path)
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         ['{"type": "tool_execution_start", "toolName": "Read", "args": {}}'], side_effect=_write_a_page
     )
     fake_sbx.queue_hash("aaaa0000")
@@ -254,7 +293,7 @@ def test_stdin_is_labelled_dash(tmp_path, capsys, isolated_state, fake_sbx, monk
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
 
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], side_effect=_write_a_page)
     fake_sbx.queue_hash("aaaa0000")
 
     rc = cli.main(["-o", str(tmp_path / "out")])
@@ -311,7 +350,7 @@ def test_ctrl_c_exits_1_with_a_message_not_a_traceback(tmp_path, capsys, isolate
     doc = _md(tmp_path)
     output_dir = tmp_path / "out"
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
 
     rc = cli.main(["-o", str(output_dir), str(doc)])
 
@@ -327,7 +366,7 @@ def test_ctrl_c_releases_the_lock(tmp_path, isolated_state, fake_sbx):
     """The lock must not survive an interrupted run, or the next one is stuck."""
     doc = _md(tmp_path)
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
 
     assert cli.main(["-o", str(tmp_path / "out"), str(doc)]) == 1
 
@@ -349,13 +388,54 @@ def _exec_calls(fake_sbx):
 def test_shell_execs_an_interactive_bash_in_the_sandbox(isolated_state, fake_sbx, a_tty):
     with pytest.raises(ExecvpCalled) as excinfo:
         cli.main(["--shell"])
-    assert excinfo.value.argv == ["sbx", "exec", "-it", workbench.SANDBOX_NAME, "--", "bash"]
+    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "bash"]
 
 
 def test_agent_execs_a_bare_interactive_agent_in_the_sandbox(isolated_state, fake_sbx, a_tty):
     with pytest.raises(ExecvpCalled) as excinfo:
         cli.main(["--agent"])
-    assert excinfo.value.argv == ["sbx", "exec", "-it", workbench.SANDBOX_NAME, "--", "pi"]
+    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "md2okf-agent", "pi"]
+
+
+def test_shell_opens_with_a_warning_when_credentials_are_not_ready(isolated_state, fake_sbx, a_tty, capsys):
+    """A diagnostic shell is most needed exactly when the credential is broken."""
+    fake_sbx.openrouter_key = "sk-literal-value"
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--shell"])
+    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "bash"]
+    err = capsys.readouterr().err
+    assert "md2okf: warning: OPENROUTER_API_KEY" in err
+    assert "sbx secret set openrouter" in err
+
+
+def test_agent_refuses_to_open_when_credentials_are_not_ready(isolated_state, fake_sbx, a_tty, capsys):
+    fake_sbx.openrouter_key = "sk-literal-value"
+    assert cli.main(["--agent"]) == 2
+    assert "sbx secret set openrouter" in capsys.readouterr().err
+    assert _exec_calls(fake_sbx) == []
+
+
+def test_compile_refuses_to_start_when_credentials_are_not_ready(tmp_path, isolated_state, fake_sbx, capsys):
+    fake_sbx.openrouter_key = "sk-literal-value"
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "sbx secret set openrouter" in capsys.readouterr().err
+    assert fake_sbx.turn_argvs == []
+
+
+def test_compile_uses_the_agents_own_sbx_minimum(tmp_path, isolated_state, fake_sbx, capsys, monkeypatch):
+    newer = agents.Agent(
+        name="pi",
+        min_sbx_version=(0, 45, 0),
+        compile_args=agents.PI.compile_args,
+        interactive_args=agents.PI.interactive_args,
+        compile_prompt=agents.PI.compile_prompt,
+        check_credentials=agents.PI.check_credentials,
+        protocol=agents.PI.protocol,
+    )
+    monkeypatch.setitem(agents.AGENTS, "pi", newer)
+    fake_sbx.version_string = "0.44.0"
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "at least version 0.45.0" in capsys.readouterr().err
 
 
 def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, a_tty):
@@ -414,7 +494,7 @@ def test_interactive_never_mounts_an_empty_spec(flag, isolated_state, fake_sbx, 
     with pytest.raises(ExecvpCalled):
         cli.main([flag])
 
-    work_spec = isolated_state / "xdg-state" / "md2okf" / "work" / "SPEC.md"
+    work_spec = isolated_state / "xdg-state" / "md2okf" / "pi" / "work" / "SPEC.md"
     assert work_spec.stat().st_size > 0
     assert b"**Version" in work_spec.read_bytes()
 
@@ -498,3 +578,149 @@ def test_interactive_entry_without_a_tty_touches_no_sandbox(capsys, isolated_sta
         assert rc == 2, flag
         assert "needs a terminal" in capsys.readouterr().err, flag
     assert fake_sbx.calls == []
+
+
+# --- a second agent: Claude ------------------------------------------------------
+#
+# The same command with MD2OKF_AGENT=claude: its own sandbox, kit, workbench,
+# argv, sbx minimum and credential check, and its own protocol parsing a
+# stream the Claude spike captured.
+
+CLAUDE_SANDBOX = workbench.sandbox_name("claude")
+CLAUDE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "claude"
+
+
+@pytest.fixture
+def claude(monkeypatch, fake_sbx):
+    """Select Claude, on an sbx new enough for its kit."""
+    monkeypatch.setenv("MD2OKF_AGENT", "claude")
+    fake_sbx.version_string = "0.45.0"
+    return fake_sbx
+
+
+def test_claude_dry_run_resolves_its_own_sandbox_kit_workbench_and_argv(tmp_path, capsys, isolated_state, claude):
+    doc = _md(tmp_path)
+    assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
+    out = capsys.readouterr().out
+    assert "  agent:  claude\n" in out
+    assert f"sbx run --detached --name {CLAUDE_SANDBOX} " in out
+    assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'claude'} " in out
+    assert f"{resources.kit_dir('claude')} " in out
+    assert (
+        f"sbx exec {CLAUDE_SANDBOX} -- md2okf-agent claude -p --output-format stream-json --verbose "
+        "--permission-mode bypassPermissions --strict-mcp-config 'Load the compile-okf skill: "
+        "read ~/.claude/skills/compile-okf/SKILL.md"
+    ) in out
+    assert claude.calls == []
+
+
+def test_claude_refuses_an_sbx_older_than_its_kit_needs(tmp_path, capsys, isolated_state, claude):
+    claude.version_string = "0.44.9"
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "at least version 0.45.0" in capsys.readouterr().err
+
+
+def _write_a_claude_page() -> None:
+    work_okf = workbench.Workbench.default("claude").work_okf
+    (work_okf / "page.md").write_text("compiled", encoding="utf-8")
+
+
+def test_claude_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_state, claude):
+    doc = _md(tmp_path)
+    lines = (CLAUDE_FIXTURES / "success-write.jsonl").read_text(encoding="utf-8").splitlines()
+    claude.queue_hash("aaaa0000")
+    claude.queue_turn(lines, side_effect=_write_a_claude_page)
+    claude.queue_hash("bbbb1111")
+    claude.queue_turn(lines)
+    claude.queue_hash("bbbb1111")
+
+    assert cli.main(["-v", "-o", str(tmp_path / "out"), str(doc)]) == 0
+
+    out, err = capsys.readouterr()
+    assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
+    assert "Write {'file_path': " in err  # -v renders Claude's tool calls like Pi's
+    assert sandbox.exists(CLAUDE_SANDBOX)
+    assert all(argv[:2] == ["md2okf-agent", "claude"] for argv in claude.turn_argvs)
+    assert (tmp_path / "out" / "page.md").is_file()
+
+
+def test_claude_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_state, claude):
+    claude.claude_logged_in = False
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    err = capsys.readouterr().err
+    assert "sbx run claude, then /login" in err
+    assert f"sbx rm --force {CLAUDE_SANDBOX}" in err
+    assert claude.turn_argvs == []
+
+
+def test_claude_agent_session_runs_through_the_wrapper(isolated_state, claude, a_tty):
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--agent"])
+    assert excinfo.value.argv == [
+        "sbx", "exec", "-it", CLAUDE_SANDBOX, "--",
+        "md2okf-agent", "claude", "--permission-mode", "bypassPermissions",
+    ]  # fmt: skip
+
+
+def test_claude_shell_opens_with_a_warning_when_not_logged_in(isolated_state, claude, a_tty, capsys):
+    claude.claude_logged_in = False
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--shell"])
+    assert excinfo.value.argv == ["sbx", "exec", "-it", CLAUDE_SANDBOX, "--", "bash"]
+    assert "md2okf: warning: Claude Code inside" in capsys.readouterr().err
+
+
+def test_agents_keep_separate_sandboxes_and_workbenches(tmp_path, isolated_state, fake_sbx, monkeypatch):
+    """Coexistence: a Claude run neither reuses nor disturbs Pi's sandbox."""
+    fake_sbx.version_string = "0.45.0"
+    for agent in ("pi", "claude"):
+        monkeypatch.setenv("MD2OKF_AGENT", agent)
+        assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
+    assert sandbox._ensure_default_sandbox() == 0  # claude, still selected
+    monkeypatch.setenv("MD2OKF_AGENT", "pi")
+    assert sandbox._ensure_default_sandbox() == 0
+    assert sandbox.exists(CLAUDE_SANDBOX)
+    assert sandbox.exists(workbench.sandbox_name("pi"))
+    for agent in ("pi", "claude"):
+        assert workbench.read_ownership_marker(workbench.Workbench.default(agent)) is not None
+
+
+
+# --- a third agent: Codex --------------------------------------------------------
+
+CODEX_SANDBOX = workbench.sandbox_name("codex")
+CODEX_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "codex"
+
+
+def test_codex_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    monkeypatch.setenv("MD2OKF_AGENT", "codex")
+    fake_sbx.version_string = "0.45.0"
+    lines = ["Reading additional input from stdin..."]
+    lines += (CODEX_FIXTURES / "success-write.jsonl").read_text(encoding="utf-8").splitlines()
+
+    def write_a_page() -> None:
+        (workbench.Workbench.default("codex").work_okf / "page.md").write_text("compiled", encoding="utf-8")
+
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_turn(lines, side_effect=write_a_page)
+    fake_sbx.queue_hash("bbbb1111")
+    fake_sbx.queue_turn(lines)
+    fake_sbx.queue_hash("bbbb1111")
+
+    assert cli.main(["-v", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
+
+    out, err = capsys.readouterr()
+    assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
+    assert "file_change add /Users/user/" in err
+    assert "Reading additional input" not in err
+    assert fake_sbx.turn_argvs[0][:3] == ["md2okf-agent", "codex", "exec"]
+    assert fake_sbx.turn_argvs[0][-1].startswith("$compile-okf Compile ")
+    assert sandbox.exists(CODEX_SANDBOX)
+
+
+def test_codex_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    monkeypatch.setenv("MD2OKF_AGENT", "codex")
+    fake_sbx.version_string = "0.45.0"
+    fake_sbx.codex_logged_in = False
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "sbx secret set openai --oauth" in capsys.readouterr().err

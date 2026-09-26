@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from md2okf import agents, workbench
 from md2okf import compile as compile_mod
-from md2okf import workbench
+from md2okf.protocols import Event
 
-NAME = "md2okf"
+PI = agents.PI
+NAME = workbench.sandbox_name(PI.name)
 
 
 def _wb(tmp_path: Path) -> workbench.Workbench:
@@ -150,10 +153,10 @@ def test_hash_stable_first_pass_is_convergence_not_failure(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("already compiled", encoding="utf-8")
     fake_sbx.queue_hash("aaaa1111")  # before
-    fake_sbx.queue_pi(['{"type": "tool_execution_start", "toolName": "Read", "args": {}}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start", "toolName": "Read", "args": {}}'])
     fake_sbx.queue_hash("aaaa1111")  # after iteration 1: unchanged
 
-    row = compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+    row = compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
     assert row.iterations == 1
     assert row.hash_before == row.hash_after == "aaaa1111"
@@ -164,12 +167,12 @@ def test_loop_runs_until_hash_stabilises(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("bbbb1111")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("bbbb1111")
 
-    row = compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+    row = compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
     assert row.iterations == 2
     assert row.hash_before == "aaaa0000"
     assert row.hash_after == "bbbb1111"
@@ -180,10 +183,10 @@ def test_nonzero_pi_exit_is_a_failure_not_convergence(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'], returncode=1)
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'], returncode=1)
 
     with pytest.raises(compile_mod.CompileError, match="exited 1"):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
 
 def test_zero_tool_calls_is_a_failure(fake_sbx, tmp_path):
@@ -191,21 +194,21 @@ def test_zero_tool_calls_is_a_failure(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "message_end", "message": {"role": "assistant", "content": []}}'])
+    fake_sbx.queue_turn(['{"type": "message_end", "message": {"role": "assistant", "content": []}}'])
 
     with pytest.raises(compile_mod.CompileError, match="no tool calls"):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
 
 def test_wiki_empty_before_and_after_is_a_failure(fake_sbx, tmp_path):
     fake_sbx.register(NAME)
     wb = _wb(tmp_path)  # work_okf stays empty
     fake_sbx.queue_hash("eeee0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("eeee0000")
 
     with pytest.raises(compile_mod.CompileError, match="still empty"):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
 
 def test_iteration_cap_is_a_failure_naming_the_document(fake_sbx, tmp_path):
@@ -214,12 +217,12 @@ def test_iteration_cap_is_a_failure_naming_the_document(fake_sbx, tmp_path):
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
     for i in range(3):
-        fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+        fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
         fake_sbx.queue_hash(f"cccc{i + 1:04d}")  # never repeats -> never converges
 
     doc = _doc(tmp_path)
     with pytest.raises(compile_mod.CompileError) as excinfo:
-        compile_mod.compile_document(NAME, doc, wb, tmp_path / "out", max_iterations=2)
+        compile_mod.compile_document(PI, NAME, doc, wb, tmp_path / "out", max_iterations=2)
     assert excinfo.value.document == doc.display
     # Regression: .document was recorded but never folded into str(exc), so
     # the message a caller actually prints silently dropped the document.
@@ -233,7 +236,7 @@ def test_malformed_hash_is_never_convergence(fake_sbx, tmp_path):
     fake_sbx.queue_hash("not-hex!!")
 
     with pytest.raises(compile_mod.CompileError, match="malformed hash"):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
 
 def test_continuation_prompt_appended_from_iteration_two(fake_sbx, tmp_path):
@@ -241,16 +244,17 @@ def test_continuation_prompt_appended_from_iteration_two(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("bbbb1111")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("bbbb1111")
 
-    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+    compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
-    pi_calls = [c for c in fake_sbx.calls if "--" in c and c[c.index("--") + 1] == "pi"]
-    assert compile_mod.CONTINUATION_PROMPT not in pi_calls[0][-1]
-    assert compile_mod.CONTINUATION_PROMPT in pi_calls[1][-1]
+    first, second = fake_sbx.turn_argvs
+    assert first == ["md2okf-agent", "pi", "--mode", "json", PI.compile_prompt(wb.work_md / "a.md")]
+    assert compile_mod.CONTINUATION_PROMPT not in first[-1]
+    assert second[-1] == f"{first[-1]} {compile_mod.CONTINUATION_PROMPT}"
 
 
 def test_mirrors_out_after_every_iteration(fake_sbx, tmp_path):
@@ -259,10 +263,10 @@ def test_mirrors_out_after_every_iteration(fake_sbx, tmp_path):
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     output_dir = tmp_path / "out"
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("aaaa0000")
 
-    compile_mod.compile_document(NAME, _doc(tmp_path), wb, output_dir)
+    compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, output_dir)
     assert (output_dir / "page.md").read_text(encoding="utf-8") == "seed"
 
 
@@ -277,7 +281,7 @@ def test_mirror_out_failure_is_a_compileerror_not_a_crash(fake_sbx, tmp_path, mo
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
 
     def boom(work_okf, output_dir):
         # Same message shape mirror_out itself raises, so this test also
@@ -290,7 +294,7 @@ def test_mirror_out_failure_is_a_compileerror_not_a_crash(fake_sbx, tmp_path, mo
 
     doc = _doc(tmp_path)
     with pytest.raises(compile_mod.CompileError) as excinfo:
-        compile_mod.compile_document(NAME, doc, wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, doc, wb, tmp_path / "out")
     assert excinfo.value.document == doc.display
     assert str(wb.work_okf) in str(excinfo.value)
 
@@ -306,7 +310,7 @@ def test_a_real_mirror_out_failure_names_the_recovery_path_end_to_end(fake_sbx, 
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
 
     blocker = tmp_path / "blocker"
     blocker.write_text("a file, not a directory", encoding="utf-8")
@@ -314,7 +318,7 @@ def test_a_real_mirror_out_failure_names_the_recovery_path_end_to_end(fake_sbx, 
 
     doc = _doc(tmp_path)
     with pytest.raises(compile_mod.CompileError) as excinfo:
-        compile_mod.compile_document(NAME, doc, wb, output_dir)
+        compile_mod.compile_document(PI, NAME, doc, wb, output_dir)
     assert str(wb.work_okf) in str(excinfo.value)
 
 
@@ -323,7 +327,7 @@ def test_on_progress_and_on_event_callbacks(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         [
             '{"type": "tool_execution_start", "toolName": "Read", "args": {}}',
             '{"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "hi"}]}}',
@@ -334,7 +338,7 @@ def test_on_progress_and_on_event_callbacks(fake_sbx, tmp_path):
     progress: list[str] = []
     verbose_events: list[str] = []
     compile_mod.compile_document(
-        NAME, _doc(tmp_path), wb, tmp_path / "out", on_progress=progress.append, on_event=verbose_events.append
+        PI, NAME, _doc(tmp_path), wb, tmp_path / "out", on_progress=progress.append, on_event=verbose_events.append
     )
     assert any("iteration 1" in line for line in progress)
     assert any("aaaa0000 -> aaaa0000" in line for line in progress)
@@ -344,7 +348,7 @@ def test_on_progress_and_on_event_callbacks(fake_sbx, tmp_path):
 def test_on_event_shows_unrecognized_lines_raw_when_verbose(fake_sbx, tmp_path):
     """Regression (code review finding 2).
 
-    A line events.py cannot translate -- malformed JSON, plain stderr text,
+    A line protocols/pi.py cannot translate -- malformed JSON, plain stderr text,
     a traceback merged in from stderr -- must still reach -v, not vanish
     just because it wasn't a recognised tool call or assistant message.
     """
@@ -352,7 +356,7 @@ def test_on_event_shows_unrecognized_lines_raw_when_verbose(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         [
             "Traceback (most recent call last):",
             "RuntimeError: something broke",
@@ -362,7 +366,7 @@ def test_on_event_shows_unrecognized_lines_raw_when_verbose(fake_sbx, tmp_path):
     fake_sbx.queue_hash("aaaa0000")
 
     verbose_events: list[str] = []
-    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out", on_event=verbose_events.append)
+    compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out", on_event=verbose_events.append)
     assert verbose_events == [
         "Traceback (most recent call last):",
         "RuntimeError: something broke",
@@ -381,7 +385,7 @@ def test_nonzero_pi_exit_includes_diagnostic_output_in_the_error(fake_sbx, tmp_p
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         [
             '{"type": "tool_execution_start"}',
             "Traceback (most recent call last):",
@@ -391,7 +395,7 @@ def test_nonzero_pi_exit_includes_diagnostic_output_in_the_error(fake_sbx, tmp_p
     )
 
     with pytest.raises(compile_mod.CompileError, match="the actual reason this failed"):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
 
 def test_ctrl_c_mid_stream_does_not_mirror_a_partial_iteration(fake_sbx, tmp_path):
@@ -407,10 +411,10 @@ def test_ctrl_c_mid_stream_does_not_mirror_a_partial_iteration(fake_sbx, tmp_pat
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     output_dir = tmp_path / "out"
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}', KeyboardInterrupt()])
 
     with pytest.raises(KeyboardInterrupt):
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, output_dir)
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, output_dir)
 
     assert not output_dir.exists()  # nothing half-written reached -o DIR
     assert fake_sbx.last_popen.terminated is True
@@ -423,10 +427,10 @@ def test_stream_is_closed_on_the_normal_path_too(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(['{"type": "tool_execution_start"}'])
+    fake_sbx.queue_turn(['{"type": "tool_execution_start"}'])
     fake_sbx.queue_hash("aaaa0000")
 
-    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+    compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
     # Exited normally, so it was waited on rather than terminated.
     assert fake_sbx.last_popen.terminated is False
@@ -444,7 +448,7 @@ def test_verbose_does_not_echo_pi_protocol_events(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         [
             '{"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": ""}}',
             '{"type": "message_update", "assistantMessageEvent": {"type": "thinking_delta", "delta": "x"}}',
@@ -455,9 +459,23 @@ def test_verbose_does_not_echo_pi_protocol_events(fake_sbx, tmp_path):
     fake_sbx.queue_hash("aaaa0000")
 
     seen: list[str] = []
-    compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out", on_event=seen.append)
+    compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out", on_event=seen.append)
 
     assert seen == ["Read {}", "plain stderr text worth seeing"]
+
+
+def test_failure_tail_keeps_a_line_cut_short_but_drops_whole_envelopes():
+    """Only whole JSON objects are protocol noise; a truncated one is a symptom worth showing."""
+    lines = [
+        '{"type": "message_update"}',
+        '{"type": "assistant", "message": {"content": [{"type": "te',
+        "[1, 2, 3]",
+        "",
+        "RuntimeError: the actual reason",
+    ]
+    assert compile_mod._diagnostic_tail(lines) == "\n".join(
+        ['{"type": "assistant", "message": {"content": [{"type": "te', "[1, 2, 3]", "RuntimeError: the actual reason"]
+    )
 
 
 def test_failure_tail_excludes_protocol_json(fake_sbx, tmp_path):
@@ -466,7 +484,7 @@ def test_failure_tail_excludes_protocol_json(fake_sbx, tmp_path):
     wb = _wb(tmp_path)
     (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
     fake_sbx.queue_hash("aaaa0000")
-    fake_sbx.queue_pi(
+    fake_sbx.queue_turn(
         [
             '{"type": "tool_execution_start"}',
             '{"type": "message_update", "assistantMessageEvent": {"type": "toolcall_delta", "delta": ""}}',
@@ -476,8 +494,165 @@ def test_failure_tail_excludes_protocol_json(fake_sbx, tmp_path):
     )
 
     with pytest.raises(compile_mod.CompileError) as excinfo:
-        compile_mod.compile_document(NAME, _doc(tmp_path), wb, tmp_path / "out")
+        compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
     message = str(excinfo.value)
     assert "RuntimeError: the actual reason" in message
     assert "message_update" not in message
+
+
+# --- protocol-declared failures ----------------------------------------------
+#
+# Driven by a stub agent rather than Pi, whose parser never reports a failure
+# (see protocols/pi.py): the rule under test is the driver's, and it must hold
+# for every agent whose protocol can state one.
+
+
+TOOL = json.dumps({"tool": "Read"})
+
+
+def _fail(why: str) -> str:
+    return json.dumps({"fail": why})
+
+
+class _StubProtocol:
+    """A made-up NDJSON protocol: {"tool": ...} is a tool call, {"fail": why} a terminal failure."""
+
+    @staticmethod
+    def process(lines):
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                yield Event(line, line, False, None)  # plain text: a diagnostic
+                continue
+            if "tool" in event:
+                yield Event(line, event["tool"], True, None)
+            else:
+                yield Event(line, None, False, event.get("fail"))
+
+
+STUB = agents.Agent(
+    name="stub",
+    min_sbx_version=(0, 43, 0),
+    compile_args=lambda prompt: ["stub-agent", "--headless", prompt],
+    interactive_args=("stub-agent",),
+    compile_prompt=lambda document: f"compile {document}",
+    check_credentials=lambda _name: None,
+    protocol=_StubProtocol(),
+)
+STUB_NAME = workbench.sandbox_name(STUB.name)
+
+
+def _seeded(fake_sbx, tmp_path: Path) -> tuple[workbench.Workbench, Path]:
+    fake_sbx.register(STUB_NAME)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    return wb, tmp_path / "out"
+
+
+def test_the_turn_runs_the_agents_own_argv_and_prompt(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([TOOL])
+    fake_sbx.queue_hash("aaaa0000")
+
+    compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+    assert fake_sbx.turn_argvs == [["stub-agent", "--headless", f"compile {wb.work_md / 'a.md'}"]]
+
+
+def test_exit_zero_with_a_protocol_failure_fails_and_mirrors_nothing(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([TOOL, _fail("the model refused the request")], returncode=0)
+
+    with pytest.raises(compile_mod.CompileError, match="stub reported a failed turn: the model refused") as excinfo:
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+    assert str(tmp_path / "a.md") in str(excinfo.value)
+    assert not out.exists()
+
+
+def test_a_failure_after_tool_calls_is_not_reported_as_no_tool_calls(fake_sbx, tmp_path):
+    """Work done before a terminal failure must not turn it into success -- or into the wrong error."""
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([TOOL, TOOL, _fail("context window exceeded")])
+
+    with pytest.raises(compile_mod.CompileError) as excinfo:
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+    message = str(excinfo.value)
+    assert "context window exceeded" in message
+    assert "no tool calls" not in message
+
+
+def test_a_protocol_failure_with_no_tool_calls_reports_the_failure(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([_fail("invalid model id")])
+
+    with pytest.raises(compile_mod.CompileError, match="invalid model id") as excinfo:
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+    assert "no tool calls" not in str(excinfo.value)
+
+
+def test_nonzero_exit_and_a_protocol_failure_report_both(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([TOOL, _fail("rate limited"), "sbx: connection reset"], returncode=3)
+
+    with pytest.raises(compile_mod.CompileError) as excinfo:
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+    message = str(excinfo.value)
+    assert message.startswith("stub exited 3: rate limited\nsbx: connection reset")
+
+
+def test_nonzero_exit_without_a_protocol_failure_keeps_the_plain_tail(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn([TOOL, "Traceback: the real cause"], returncode=1)
+
+    with pytest.raises(compile_mod.CompileError, match=r"^stub exited 1: Traceback: the real cause"):
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+
+def test_no_tool_calls_names_the_agent(fake_sbx, tmp_path):
+    wb, out = _seeded(fake_sbx, tmp_path)
+    fake_sbx.queue_turn(["just talking"])
+
+    with pytest.raises(compile_mod.CompileError, match="stub session made no tool calls"):
+        compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+
+def test_a_line_the_protocol_hides_stays_out_of_the_failure_message(fake_sbx, tmp_path):
+    """Regression, seen live: Codex's stdin notice ended every Codex error message."""
+
+    class _Hiding:
+        @staticmethod
+        def process(lines):
+            for line in lines:
+                if line == "harmless notice":
+                    yield Event(line, None, False, None)
+                else:
+                    yield Event(line, line, False, None)
+
+    agent = agents.Agent(
+        name="hider",
+        min_sbx_version=(0, 43, 0),
+        compile_args=lambda prompt: ["hider", prompt],
+        interactive_args=("hider",),
+        compile_prompt=lambda document: str(document),
+        check_credentials=lambda _name: None,
+        protocol=_Hiding(),
+    )
+    name = workbench.sandbox_name(agent.name)
+    fake_sbx.register(name)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_turn(["the real cause", "harmless notice"], returncode=1)
+
+    with pytest.raises(compile_mod.CompileError) as excinfo:
+        compile_mod.compile_document(agent, name, _doc(tmp_path), wb, tmp_path / "out")
+
+    assert "the real cause" in str(excinfo.value)
+    assert "harmless notice" not in str(excinfo.value)

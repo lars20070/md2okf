@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
+# The default floor; an agent whose kit needs a newer sbx raises it for itself
+# (agents.Agent.min_sbx_version).
 MIN_VERSION = (0, 43, 0)
 
 # This is the plan's own documented fallback (interface-plan.md, "Risks and
@@ -83,8 +85,10 @@ def logged_in() -> bool:
     return _run(["sbx", "ls"]).returncode == 0
 
 
-def preflight() -> None:
+def preflight(minimum: tuple[int, int, int] = MIN_VERSION) -> None:
     """Check the sbx environment before anything that would shell out to it.
+
+    `minimum` is the resolved agent's own floor (Agent.min_sbx_version).
 
     Every other function in this module assumes `sbx` is on PATH: `_run`
     calls `subprocess.run(["sbx", ...])` directly, which raises a bare
@@ -94,9 +98,8 @@ def preflight() -> None:
     """
     if not present():
         raise SandboxError("'sbx' CLI not found in PATH. Install it with: brew install docker/tap/sbx")
-    if not version_at_least():
-        minimum = ".".join(str(part) for part in MIN_VERSION)
-        raise SandboxError(f"sbx must be at least version {minimum}")
+    if not version_at_least(minimum):
+        raise SandboxError(f"sbx must be at least version {'.'.join(str(part) for part in minimum)}")
     if not logged_in():
         raise SandboxError("not logged in to sbx; run `sbx login`")
 
@@ -205,7 +208,7 @@ class Exec:
         """Best-effort local cleanup, safe to call on an already-finished run.
 
         Stops the local `sbx exec` conduit so an interrupted run does not
-        leave one behind. Deliberately *only* the local side: `pi` runs
+        leave one behind. Deliberately *only* the local side: the agent runs
         inside the VM and killing the conduit does not reap it, and remote
         process reaping is out of scope (see the plan's deferred items).
         """
@@ -246,42 +249,57 @@ def exec_interactive(name: str, argv: list[str]) -> NoReturn:
 
 
 def _ensure_default_sandbox() -> int:
-    """`python -m md2okf.sandbox`: ensure the md2okf sandbox exists (maintainers).
+    """`python -m md2okf.sandbox`: ensure the MD2OKF_AGENT sandbox exists (maintainers).
 
-    Imports workbench lazily: workbench imports this module at its own top
-    level, and by the time this function runs (only from the `__main__`
-    guard below) that import has already completed, so the late import here
-    just retrieves it from sys.modules rather than re-entering it.
+    Resolves the agent exactly as the md2okf command does, so
+    tests/test-sandbox.sh can never create or inspect a different sandbox
+    from the one a compile would use.
+
+    Imports agents and workbench lazily: both import this module at their own
+    top level, and by the time this function runs (only from the `__main__`
+    guard below) those imports have already completed, so the late imports
+    here just retrieve them from sys.modules rather than re-entering them.
     """
-    from md2okf import workbench
+    from md2okf import agents, resources, workbench
 
     try:
-        preflight()
-    except SandboxError as exc:
+        agent = agents.from_env()
+        preflight(agent.min_sbx_version)
+    except (agents.UnknownAgentError, SandboxError) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2
 
-    wb = workbench.Workbench.default()
+    wb = workbench.Workbench.default(agent.name)
     try:
         # Same lock a real compile run takes: this helper touches the same
         # sandbox, so it must not race a concurrent `md2okf` invocation.
         with workbench.lock():
             wb.ensure_roots()
-            state = workbench.ensure_sandbox(wb)
+            state = workbench.ensure_sandbox(wb, agent)
     except workbench.LockHeld:
         print("md2okf.sandbox: another md2okf run is using the sandbox; try again later", file=sys.stderr)
         return 2
     except (
-        workbench.UnsafeLockFile,
-        workbench.UnownedSandboxError,
-        workbench.KeyNotProxyManagedError,
+        # The base rather than a list of subclasses (UnsafeLockFile,
+        # UnownedSandboxError, CredentialNotReadyError): ensure_sandbox also
+        # stages the tooling, and a staging failure arrives as a plain
+        # WorkbenchError -- the same reasoning as cli._ensure_sandbox.
+        workbench.WorkbenchError,
+        resources.ResourcesError,
         SandboxError,
     ) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2
-    print(f"md2okf.sandbox: sandbox {workbench.SANDBOX_NAME!r} {state}")
+    print(f"md2okf.sandbox: sandbox {workbench.sandbox_name(agent.name)!r} {state}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(_ensure_default_sandbox())
+    # Under `python -m` this file runs as __main__, a second copy of
+    # md2okf.sandbox with its own SandboxError class -- not the one workbench
+    # (importing md2okf.sandbox) raises, so a failed `sbx run` escaped every
+    # except clause as a traceback. Run the canonical module's function so
+    # the classes it catches are the classes that are raised.
+    from md2okf import sandbox as _canonical
+
+    raise SystemExit(_canonical._ensure_default_sandbox())
