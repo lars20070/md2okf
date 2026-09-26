@@ -1,13 +1,13 @@
 # md2okf — developer task runner.
 #
-# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/md2okf/, which
+# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/pi/, which
 # owns the only copy of the agent config (see AGENTS.md).
 #
 # Tool overrides (defaults suit local dev; CI overrides only MARKDOWNLINT):
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (kits/md2okf/spec.yaml).
+#                 project; the pin matches the sandbox (kits/pi/spec.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
@@ -88,7 +88,7 @@ lint:
 # generated output and gitignored — this is a host-side developer command,
 # not part of the source-tree lint or CI.
 check-okf:
-	kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
+	kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
 # Validate the sandbox kit spec against the current Sandbox Kit schema.
 validate:
@@ -174,10 +174,16 @@ dist:
 	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --dry-run -o wiki doc/
 	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
 
-# Check that the sandbox delivers the toolchain, agent config and proxy-managed
-# key that kits/md2okf/spec.yaml promises.
+# Check that each agent's sandbox delivers the toolchain, agent config and
+# credential that kits/<agent>/spec.yaml promises. AGENTS lists the registered
+# agents (md2okf.agents.AGENTS); `make test-sandbox AGENT=pi` checks just one.
+# The agent is always passed explicitly: test-sandbox.sh has no default, so
+# nothing silently falls back to Pi.
+AGENTS ?= pi
 test-sandbox:
-	./tests/test-sandbox.sh
+	@for agent in $(or $(AGENT),$(AGENTS)); do \
+		./tests/test-sandbox.sh "$$agent" || exit 1; \
+	done
 
 # Fetch the website into md/ as one file.
 scrape:

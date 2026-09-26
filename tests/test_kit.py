@@ -2,7 +2,7 @@
 
 Ported from the retired tests/test-sandbox-mounts.sh. These are assertions
 about prose, not about the driver: `make validate` checks spec.yaml against
-the Sandbox Kit schema, and tests/test-sandbox-guest.sh checks what a running
+the Sandbox Kit schema, and tests/test-sandbox-guest-pi.sh checks what a running
 sandbox delivers, but neither reads what the agent is told to do.
 """
 
@@ -12,7 +12,7 @@ import pytest
 
 from md2okf import resources
 
-_AGENT_DIR = resources.kit_dir() / "files" / "home" / ".pi" / "agent"
+_AGENT_DIR = resources.kit_dir("pi") / "files" / "home" / ".pi" / "agent"
 _WIKI_SKILLS = ("compile-okf", "inspect-okf", "size-okf", "merkle-okf")
 # Finder metadata a macOS host scatters through the tree. Gitignored, so CI
 # never sees it, and never part of the kit. Skipped by name rather than

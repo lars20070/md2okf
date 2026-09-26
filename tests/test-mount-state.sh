@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HELPER="${ROOT}/kits/md2okf/files/home/.local/lib/md2okf/mount-state.sh"
+HELPER="${ROOT}/kits/pi/files/home/.local/lib/md2okf/mount-state.sh"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/md2okf-state-test.XXXXXX")"
 TESTS=0
 
@@ -160,7 +160,7 @@ pass "a copy failure is fatal"
 
 # Extract and execute the real entrypoint block. Pi must not launch after a
 # relocation failure.
-SPEC="${ROOT}/kits/md2okf/spec.yaml"
+SPEC="${ROOT}/kits/pi/spec.yaml"
 ENTRYPOINT="$(awk '
 	$0 == "    - |" { block = 1; next }
 	block && /^    - / { exit }

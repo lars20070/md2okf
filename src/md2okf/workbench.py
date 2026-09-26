@@ -1,6 +1,6 @@
 """The workbench: a fixed staging area for one sandbox to serve any run.
 
-It reproduces the sibling layout `kits/md2okf`'s agent config assumes for
+It reproduces the sibling layout `kits/pi`'s agent config assumes for
 whatever -o/inputs a run is given. See .claude/plans/interface-plan.md,
 "The workbench".
 """
@@ -16,11 +16,22 @@ import stat
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from md2okf import resources, sandbox
 
+if TYPE_CHECKING:
+    from md2okf.agents import Agent
+
+# One lock for every agent: their sandboxes and workbenches coexist, but runs
+# are serialised -- two agents mirroring into one -o DIR would need output
+# locking this does not attempt.
 LOCK_PATH_TEMPLATE = "/tmp/md2okf-{uid}.lock"  # noqa: S108 -- deliberately outside XDG_STATE_HOME
-SANDBOX_NAME = "md2okf"
+
+
+def sandbox_name(agent: str) -> str:
+    """The sandbox that serves `agent`: one per agent, so all of them can coexist."""
+    return f"md2okf-{agent}"
 
 
 class WorkbenchError(Exception):
@@ -50,25 +61,18 @@ class UnownedSandboxError(WorkbenchError):
         self.name = name
 
 
-class KeyNotProxyManagedError(WorkbenchError):
-    """OPENROUTER_API_KEY inside a freshly created sandbox is not proxy-managed."""
+class CredentialNotReadyError(WorkbenchError):
+    """The agent's credential inside sandbox `name` is not ready; `remedy` says how to fix it.
 
-    def __init__(self, name: str) -> None:
-        """Build the message naming the two `sbx secret` remediation commands.
+    The agent decides both the check and the remedy (Agent.check_credentials):
+    for Pi, a proxy-managed OPENROUTER_API_KEY and the two `sbx secret` steps.
+    """
 
-        Regression: this used to name `sbx secret set github ...` -- the
-        wrong provider entirely, copied from an unrelated GitHub-auth
-        pattern. The actual two-step OpenRouter setup is README.md's
-        "Set up the OpenRouter key" section.
-        """
-        super().__init__(
-            f"OPENROUTER_API_KEY inside {name!r} is not proxy-managed.\n"
-            "  Set it via sbx secret (see README.md, \"Set up the OpenRouter key\"):\n"
-            '  echo "$OPENROUTER_API_KEY" | sbx secret set openrouter\n'
-            f"  sbx secret set-custom --sandbox {name} --host openrouter.ai "
-            '--env OPENROUTER_API_KEY --value "$OPENROUTER_API_KEY"'
-        )
+    def __init__(self, name: str, remedy: str) -> None:
+        """The message is the agent's remedy, verbatim."""
+        super().__init__(remedy)
         self.name = name
+        self.remedy = remedy
 
 
 class MirrorError(WorkbenchError):
@@ -142,14 +146,18 @@ def lock(*, survive_exec: bool = False):
 
 @dataclass(frozen=True)
 class Workbench:
-    """The fixed staging layout for one host, rooted at state_home()/md2okf."""
+    """The fixed staging layout for one agent on one host, at state_home()/md2okf/<agent>."""
 
     root: Path
 
     @classmethod
-    def default(cls) -> Workbench:
-        """The workbench rooted at the current XDG_STATE_HOME."""
-        return cls(root=state_home() / "md2okf")
+    def default(cls, agent: str) -> Workbench:
+        """`agent`'s workbench under the current XDG_STATE_HOME.
+
+        Nested under one md2okf/ folder, one child per agent, so the agents'
+        workbenches coexist without littering XDG_STATE_HOME.
+        """
+        return cls(root=state_home() / "md2okf" / agent)
 
     @property
     def work(self) -> Path:
@@ -178,7 +186,11 @@ class Workbench:
 
     @property
     def sessions(self) -> Path:
-        """Read-write mount: Pi's persistent transcripts. The only mounted state path."""
+        """Read-write mount: the agent's persistent transcripts. The only mounted state path.
+
+        Named `sessions` for every agent. Each kit binds its agent's own trace
+        directory, whatever that is called, onto this one host mount.
+        """
         return self.root / "sessions"
 
     @property
@@ -435,18 +447,31 @@ def _parse_simple_frontmatter(text: str) -> dict[str, str] | None:
     return None
 
 
+def _is_hash_noise(relative: Path) -> bool:
+    """Whether a kit path is host clutter rather than kit content.
+
+    Only named noise: Finder's .DS_Store, the ._name AppleDouble sidecars it
+    writes on non-native disks, and __pycache__ bytecode left by running the
+    kit's own frontmatter-guard.py locally. Deliberately *not* every dotted
+    name: the agent's whole runtime config lives under files/home/.pi and
+    files/home/.local, and skipping those once left only README.md and
+    spec.yaml in the hash -- so an edited skill never triggered a rebuild.
+    """
+    if any(part == "__pycache__" for part in relative.parts):
+        return True
+    return relative.name == ".DS_Store" or relative.name.startswith("._")
+
+
 def _hash_tree(root: Path) -> str:
     """Hash every regular file under root, keyed by its relative path.
 
-    Skips dotfiles/dotdirs and __pycache__ at any depth -- editor droppings
-    (.DS_Store) or bytecode left by running kits/md2okf's own
-    frontmatter-guard.py locally must not move the fingerprint and force an
-    unnecessary sandbox rebuild.
+    Skips only host clutter (see _is_hash_noise), which must not move the
+    fingerprint and force an unnecessary sandbox rebuild.
     """
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root)
-        if any(part.startswith(".") or part == "__pycache__" for part in relative.parts):
+        if _is_hash_noise(relative):
             continue
         if path.is_file() and not path.is_symlink():
             digest.update(str(relative).encode("utf-8"))
@@ -540,7 +565,7 @@ def stage_tooling(wb: Workbench) -> None:
     A sandbox whose work/scripts is empty still starts, and its mounts are
     still correct — but every inspectmd/inspectokf/sizeokf/merkleokf shim in
     it fails, because each one is `uv tool run --from
-    $(dirname $WORKDIR)/scripts/<cli>` (kits/md2okf/spec.yaml). That makes
+    $(dirname $WORKDIR)/scripts/<cli>` (kits/pi/spec.yaml). That makes
     this part of "the sandbox is usable", which is why ensure_sandbox() does
     it for every caller rather than leaving each one to remember.
 
@@ -568,18 +593,24 @@ def stage_tooling(wb: Workbench) -> None:
         raise WorkbenchError(f"staging the sandbox tooling failed: {exc}") from exc
 
 
-def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:
-    """Reuse or (re)create the sandbox named SANDBOX_NAME. Returns "reuse" or "created".
+def ensure_sandbox(wb: Workbench, agent: Agent, *, fresh: bool = False) -> str:
+    """Reuse or (re)create `agent`'s sandbox. Returns "reuse" or "created".
 
     Raises UnownedSandboxError, sandbox.SandboxError, or
-    KeyNotProxyManagedError on failure. The ownership marker is written as
-    soon as create() itself succeeds -- even if the key check that follows
-    it fails -- so a sandbox we really did create is always recognised as
-    ours on the next run, rather than forcing a manual `sbx rm --force`
-    just because a secret was not yet configured.
+    CredentialNotReadyError on failure. The ownership marker is written as
+    soon as create() itself succeeds -- even if the credential check that
+    follows it fails -- so a sandbox we really did create is always
+    recognised as ours on the next run, rather than forcing a manual
+    `sbx rm --force` just because a secret was not yet configured.
+
+    The credential check runs after a reuse too, not only after a create.
+    It used to run only after a create, so a sandbox that failed it was
+    reused while still broken, with nothing to say why. A caller that can
+    use a sandbox without the credential (`--shell`) catches
+    CredentialNotReadyError: by the time it is raised the sandbox is ready.
     """
-    name = SANDBOX_NAME
-    kit_dir = resources.kit_dir()
+    name = sandbox_name(agent.name)
+    kit_dir = resources.kit_dir(agent.name)
     fingerprint_value = fingerprint(kit_dir, sandbox.version(), wb.mounts())
 
     # Before the sandbox exists, so it never observes an empty scripts mount.
@@ -588,12 +619,13 @@ def ensure_sandbox(wb: Workbench, *, fresh: bool = False) -> str:
     stage_tooling(wb)
 
     state = resolve_sandbox_state(wb, name, fingerprint_value, fresh=fresh)
-    if state == "reuse":
-        return "reuse"
+    if state == "create":
+        _clear_ownership_marker(wb)
+        token = sandbox.create(name, kit_dir, wb.mounts(), {"MD2OKF_STATE_DIR": str(wb.root)})
+        write_ownership_marker(wb, fingerprint_value, token)
+        state = "created"
 
-    _clear_ownership_marker(wb)
-    token = sandbox.create(name, kit_dir, wb.mounts(), {"MD2OKF_STATE_DIR": str(wb.root)})
-    write_ownership_marker(wb, fingerprint_value, token)
-    if not sandbox.key_is_proxy_managed(name):
-        raise KeyNotProxyManagedError(name)
-    return "created"
+    remedy = agent.check_credentials(name)
+    if remedy is not None:
+        raise CredentialNotReadyError(name, remedy)
+    return state

@@ -3,6 +3,11 @@
 Replaces the jq filter in the old shell driver
 (the retired `scripts/compile-okf.sh`): the same three cases, the same 120-character
 cut on tool calls.
+
+`failure` is always None here. No captured `pi --mode json` output has yet
+shown an event that means "this turn failed" on its own, so Pi's failures are
+still decided by its exit code alone. Derive one from real output before
+adding it, as with every other protocol in this package.
 """
 
 from __future__ import annotations
@@ -10,7 +15,9 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Iterator
 
-DISPLAY_WIDTH = 120
+from md2okf.protocols import DISPLAY_WIDTH, Event
+
+__all__ = ["DISPLAY_WIDTH", "is_tool_call", "process", "translate"]
 
 
 def _load(line: str) -> dict | None:
@@ -64,8 +71,8 @@ def is_tool_call(line: str) -> bool:
     return event is not None and event.get("type") == "tool_execution_start"
 
 
-def process(lines: Iterable[str]) -> Iterator[tuple[str, str | None, bool]]:
-    """Yield (raw line, display-or-None, is_tool_call) for each line, in order.
+def process(lines: Iterable[str]) -> Iterator[Event]:
+    """Yield one Event per line, in order; `failure` is always None (see above).
 
     `display` is what a human should actually see, and the distinction it
     draws matters in both directions:
@@ -81,6 +88,6 @@ def process(lines: Iterable[str]) -> Iterator[tuple[str, str | None, bool]]:
     for line in lines:
         event = _load(line)
         if event is None:
-            yield line, line, False  # not JSON: a diagnostic, worth showing
+            yield Event(line, line, False, None)  # not JSON: a diagnostic, worth showing
             continue
-        yield line, _translate_event(event), event.get("type") == "tool_execution_start"
+        yield Event(line, _translate_event(event), event.get("type") == "tool_execution_start", None)

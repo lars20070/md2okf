@@ -1,10 +1,11 @@
-"""Tests for md2okf.events."""
+"""Tests for md2okf.protocols.pi, Pi's `--mode json` parser."""
 
 from __future__ import annotations
 
 import json
 
-from md2okf import events
+from md2okf.protocols import Event
+from md2okf.protocols import pi as events
 
 
 def test_translate_tool_execution_start():
@@ -59,7 +60,7 @@ def test_is_tool_call():
     assert events.is_tool_call("garbage") is False
 
 
-def test_process_yields_triples_in_order():
+def test_process_yields_events_in_order():
     message_end = {"type": "message_end", "message": {"role": "assistant", "content": [{"type": "text", "text": "hi"}]}}
     tool_line = json.dumps({"type": "tool_execution_start", "toolName": "Read", "args": {}})
     message_line = json.dumps(message_end)
@@ -68,9 +69,9 @@ def test_process_yields_triples_in_order():
     results = list(events.process(lines))
 
     assert results == [
-        (tool_line, "Read {}", True),
-        ("not json", "not json", False),  # non-JSON is a diagnostic: shown verbatim
-        (message_line, "hi", False),
+        Event(tool_line, "Read {}", True, None),
+        Event("not json", "not json", False, None),  # non-JSON is a diagnostic: shown verbatim
+        Event(message_line, "hi", False, None),
     ]
 
 
@@ -87,6 +88,16 @@ def test_process_drops_protocol_events_but_keeps_non_json_diagnostics():
     )
     traceback_line = "RuntimeError: the actual reason this failed"
 
-    displays = [display for _raw, display, _tool in events.process([delta, traceback_line])]
+    displays = [event.display for event in events.process([delta, traceback_line])]
 
     assert displays == [None, traceback_line]
+
+
+def test_process_never_reports_a_failure_until_one_is_captured():
+    """Pi's failures are decided by its exit code; see the module docstring."""
+    lines = [
+        json.dumps({"type": "tool_execution_start", "toolName": "Read", "args": {}}),
+        json.dumps({"type": "agent_end"}),
+        "Error: something went wrong",
+    ]
+    assert [event.failure for event in events.process(lines)] == [None, None, None]

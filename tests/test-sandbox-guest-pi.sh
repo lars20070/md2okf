@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Runs INSIDE the md2okf sandbox, piped into `sbx exec ... sh -l -s` by
+# Runs INSIDE the md2okf-pi sandbox, piped into `sbx exec ... sh -l -s` by
 # tests/test-sandbox.sh (tests/ is not mounted, so this file cannot be named as
 # a path inside the VM). Run on the host it would happily report on your
 # laptop's toolchain instead, which proves nothing.
@@ -58,7 +58,7 @@ check_exec() {
 	fi
 }
 
-# The tool list must match BOTH lists in kits/md2okf/spec.yaml: the
+# The tool list must match BOTH lists in kits/pi/spec.yaml: the
 # setup.install / setup.files steps AND the agentInstructions "Installed tools"
 # prose. That prose is the promise being tested here, so a tool installed but
 # not promised — or promised but not installed — is itself the bug.
@@ -71,7 +71,7 @@ case "$(pwd -P)" in
 	;;
 esac
 
-# apt (kits/md2okf/spec.yaml). Ubuntu's `fd-find` package provides `fdfind`;
+# apt (kits/pi/spec.yaml). Ubuntu's `fd-find` package provides `fdfind`;
 # `rg` is the command provided by the `ripgrep` package.
 check curl
 check fdfind
@@ -81,29 +81,29 @@ check rg
 check shellcheck
 check tree
 
-# npm through the retry wrapper (kits/md2okf/spec.yaml).
+# npm through the retry wrapper (kits/pi/spec.yaml).
 check pi
 
-# npm, Markdown and spelling linters (kits/md2okf/spec.yaml).
+# npm, Markdown and spelling linters (kits/pi/spec.yaml).
 check markdownlint-cli2
 check cspell
 
-# uv (kits/md2okf/spec.yaml).
+# uv (kits/pi/spec.yaml).
 check ruff
 check yamllint
 
-# setup.files shims (kits/md2okf/spec.yaml): workspace-backed CLIs on PATH.
+# setup.files shims (kits/pi/spec.yaml): workspace-backed CLIs on PATH.
 check inspectmd
 check inspectokf
 check sizeokf
 check merkleokf
 
-# pinned release binaries (kits/md2okf/spec.yaml): checksummed download, no
+# pinned release binaries (kits/pi/spec.yaml): checksummed download, no
 # package manager.
 check mq
 check okfctl
 
-# Config delivery: kits/md2okf/files/home/.pi/agent/ is copied at kit build
+# Config delivery: kits/pi/files/home/.pi/agent/ is copied at kit build
 # time, not mounted, so a layout change can leave Pi with no instructions and
 # no skill.
 check_file "${HOME}/.pi/agent/AGENTS.md"
@@ -170,7 +170,7 @@ fi
 # whatever the guest does — but that survives only while nothing writable
 # *contains* it. A plain `mount --bind` does not replicate nested submounts, so
 # binding a writable parent elsewhere would expose the underlying writable view
-# of everything below it. sudo is passwordless here (kits/md2okf/spec.yaml), so
+# of everything below it. sudo is passwordless here (kits/pi/spec.yaml), so
 # these checks try the escape rather than assuming it is impossible.
 
 wiki_root="$(pwd -P)"
@@ -311,7 +311,7 @@ else
 	echo "ok mount-escape checks skipped (no password-free sudo)"
 fi
 
-# Context7 native Pi package (kits/md2okf/spec.yaml setup.install +
+# Context7 native Pi package (kits/pi/spec.yaml setup.install +
 # settings.json packages). Presence only — no live Context7 API call.
 if timeout 20 pi list 2>/dev/null | grep -q context7-pi; then
 	echo "ok context7-pi (pi list)"
@@ -339,7 +339,7 @@ else
 	failures=$((failures + 1))
 fi
 
-# Credentials (kits/md2okf/spec.yaml). Automates the manual check in the README.
+# Credentials (kits/pi/spec.yaml). Automates the manual check in the README.
 # Never print the value — case-match and report only a verdict.
 case "${OPENROUTER_API_KEY-}" in
 "")

@@ -1,16 +1,18 @@
 """The md2okf command.
 
-Compiles Markdown into an OKF wiki with the Pi coding agent, via a sandboxed
-sbx runtime. See .claude/plans/interface-plan.md.
+Compiles Markdown into an OKF wiki with a coding agent (Pi by default, chosen
+by MD2OKF_AGENT), via a sandboxed sbx runtime. See
+.claude/plans/interface-plan.md and .claude/plans/generalise-agent-framework.md.
 """
 
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 from pathlib import Path
 
-from md2okf import __version__, resources, sandbox, workbench
+from md2okf import __version__, agents, resources, sandbox, workbench
 from md2okf import compile as compile_mod
 
 # One string, two call sites (the compile path and the interactive one), so the
@@ -35,14 +37,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="md2okf",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Compile Markdown into an OKF wiki with the Pi coding agent.",
+        description="Compile Markdown into an OKF wiki with a coding agent (Pi by default).",
         # Held to 79 columns so it renders in a standard terminal; the epilog is
-        # printed verbatim. These are the only three variables a user of the
+        # printed verbatim. These are the only four variables a user of the
         # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
         epilog="""\
 Environment:
-  OPENROUTER_API_KEY  required, but read from `sbx secret`, never from this
-                      environment
+  MD2OKF_AGENT        agent framework to run: pi. Each agent has its own
+                      sandbox (md2okf-<agent>) and workbench. (default: pi)
+  OPENROUTER_API_KEY  required for pi, but read from `sbx secret`, never from
+                      this environment
   XDG_STATE_HOME      session state and the run workbench. Absolute paths
                       only; a relative value counts as unset.
                       (default: ~/.local/state)
@@ -75,13 +79,13 @@ Environment:
     verbosity.add_argument(
         "-q", "--quiet", action="store_true", help="suppress progress and TSV rows (fatal errors still print)"
     )
-    verbosity.add_argument("-v", "--verbose", action="store_true", help="also show Pi's tool calls and prose")
+    verbosity.add_argument("-v", "--verbose", action="store_true", help="also show the agent's tool calls and prose")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
 
 def _resolve_inputs(
-    args: argparse.Namespace,
+    args: argparse.Namespace, agent: agents.Agent
 ) -> tuple[list[compile_mod.Document], Path, Path, workbench.Workbench] | int:
     """Everything decided before any work starts. Returns exit code 2 on failure."""
     try:
@@ -99,7 +103,7 @@ def _resolve_inputs(
                 f"-o {output_dir} is not empty and is not a recognised OKF bundle root; refusing to adopt it"
             )
 
-        wb = workbench.Workbench.default()
+        wb = workbench.Workbench.default(agent.name)
         overlap_paths = [Path(raw) for raw in args.paths if raw != "-"]
         overlap_paths += [spec_path, output_dir, wb.root]
         workbench.check_no_overlap(overlap_paths)
@@ -110,9 +114,14 @@ def _resolve_inputs(
 
 
 def _print_dry_run(
-    documents: list[compile_mod.Document], spec_path: Path, output_dir: Path, wb: workbench.Workbench
+    agent: agents.Agent,
+    documents: list[compile_mod.Document],
+    spec_path: Path,
+    output_dir: Path,
+    wb: workbench.Workbench,
 ) -> None:
     print("md2okf --dry-run: resolving only -- no sandbox will be created, nothing paid will run.")
+    print(f"  agent:  {agent.name}")
     print(f"  spec:   {spec_path}")
     print(f"  output: {output_dir}")
     print("  documents:")
@@ -122,12 +131,12 @@ def _print_dry_run(
     for mount in wb.mounts():
         print(f"    {mount.as_arg()}")
     print("  commands:")
-    print(f"    {_format_sbx_run(wb)}")
+    print(f"    {_format_sbx_run(agent, wb)}")
     for doc in documents:
-        print(f"    {_format_sbx_exec_pi(wb, doc)}")
+        print(f"    {_format_sbx_exec_agent(agent, wb, doc)}")
 
 
-def _format_sbx_run(wb: workbench.Workbench) -> str:
+def _format_sbx_run(agent: agents.Agent, wb: workbench.Workbench) -> str:
     """The `sbx run` line that would create the sandbox, if one is needed.
 
     Whether it actually runs depends on sandbox reuse -- a live decision
@@ -136,29 +145,40 @@ def _format_sbx_run(wb: workbench.Workbench) -> str:
     """
     mount_args = " ".join(mount.as_arg() for mount in wb.mounts())
     return (
-        f"sbx run --detached --name {workbench.SANDBOX_NAME} "
-        f"-e MD2OKF_STATE_DIR={wb.root} {resources.kit_dir()} {mount_args}"
+        f"sbx run --detached --name {workbench.sandbox_name(agent.name)} "
+        f"-e MD2OKF_STATE_DIR={wb.root} {resources.kit_dir(agent.name)} {mount_args}"
     )
 
 
-def _format_sbx_exec_pi(wb: workbench.Workbench, doc: compile_mod.Document) -> str:
-    """The first-iteration `sbx exec ... pi` line for one document.
+def _format_sbx_exec_agent(agent: agents.Agent, wb: workbench.Workbench, doc: compile_mod.Document) -> str:
+    """The first-iteration `sbx exec ... <agent>` line for one document.
 
     Later Ralph loop iterations append the continuation prompt; --dry-run
     shows only the first, since how many would actually run is exactly
     what compiling determines.
     """
-    document_path = wb.work_md / doc.basename
-    prompt = compile_mod.COMPILE_PROMPT.format(document=document_path)
-    return f"sbx exec {workbench.SANDBOX_NAME} -- pi --mode json {prompt!r}"
+    prompt = agent.compile_prompt(wb.work_md / doc.basename)
+    return f"sbx exec {workbench.sandbox_name(agent.name)} -- {shlex.join(agent.compile_args(prompt))}"
 
 
-def _ensure_sandbox(wb: workbench.Workbench, args: argparse.Namespace) -> int | None:
-    """Reuse or (re)create the sandbox. Returns an exit code on failure, else None."""
+def _ensure_sandbox(
+    wb: workbench.Workbench, agent: agents.Agent, args: argparse.Namespace, *, credentials_optional: bool = False
+) -> int | None:
+    """Reuse or (re)create the sandbox. Returns an exit code on failure, else None.
+
+    With `credentials_optional` (only --shell), a credential that is not ready
+    is a warning rather than a refusal: the sandbox itself is ready by then,
+    and a diagnostic shell is most needed exactly when credentials are broken.
+    """
     try:
-        workbench.ensure_sandbox(wb, fresh=args.fresh)
+        workbench.ensure_sandbox(wb, agent, fresh=args.fresh)
+    except workbench.CredentialNotReadyError as exc:
+        if not credentials_optional:
+            print(f"md2okf: {exc}", file=sys.stderr)
+            return 2
+        print(f"md2okf: warning: {exc}", file=sys.stderr)
     except (
-        # The base, not just UnownedSandboxError and KeyNotProxyManagedError:
+        # The base, not just UnownedSandboxError and CredentialNotReadyError:
         # ensure_sandbox also stages the tooling, and a staging failure there
         # arrives as a plain WorkbenchError. Catching only the two subclasses
         # let that one through as a traceback.
@@ -190,7 +210,7 @@ def _reject_compile_only_options(args: argparse.Namespace, parser: argparse.Argu
     return None
 
 
-def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:  # noqa: RET503
+def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser, agent: agents.Agent) -> int:  # noqa: RET503
     """Make the sandbox current, then hand this terminal over to it.
 
     Returns an exit code only on refusal: on success exec_interactive replaces
@@ -220,12 +240,12 @@ def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         return 2
 
     try:
-        sandbox.preflight()
+        sandbox.preflight(agent.min_sbx_version)
     except sandbox.SandboxError as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
 
-    wb = workbench.Workbench.default()
+    wb = workbench.Workbench.default(agent.name)
     try:
         # Held through setup and the whole interactive session. Python creates
         # the descriptor close-on-exec, so survive_exec makes this one
@@ -234,10 +254,11 @@ def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         # context normally and release it here.
         with workbench.lock(survive_exec=True):
             wb.ensure_roots()
-            failure = _ensure_sandbox(wb, args)
+            failure = _ensure_sandbox(wb, agent, args, credentials_optional=args.shell)
             if failure is not None:
                 return failure
-            sandbox.exec_interactive(workbench.SANDBOX_NAME, ["bash"] if args.shell else ["pi"])
+            argv = ["bash"] if args.shell else list(agent.interactive_args)
+            sandbox.exec_interactive(workbench.sandbox_name(agent.name), argv)
     except workbench.LockHeld:
         print(LOCK_HELD_MESSAGE, file=sys.stderr)
         return 2
@@ -248,6 +269,7 @@ def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
 def _run(
     args: argparse.Namespace,
+    agent: agents.Agent,
     documents: list[compile_mod.Document],
     spec_path: Path,
     output_dir: Path,
@@ -255,7 +277,7 @@ def _run(
 ) -> int:
     wb.ensure_roots()
 
-    failure = _ensure_sandbox(wb, args)
+    failure = _ensure_sandbox(wb, agent, args)
     if failure is not None:
         return failure
 
@@ -288,7 +310,14 @@ def _run(
     for doc in documents:
         try:
             row = compile_mod.compile_document(
-                workbench.SANDBOX_NAME, doc, wb, output_dir, args.n, on_progress=on_progress, on_event=on_event
+                agent,
+                workbench.sandbox_name(agent.name),
+                doc,
+                wb,
+                output_dir,
+                args.n,
+                on_progress=on_progress,
+                on_event=on_event,
             )
         except compile_mod.CompileError as exc:
             print(f"md2okf: {exc}", file=sys.stderr)
@@ -303,33 +332,41 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # Before either path, so the interactive and the compile path both get one
+    # validated agent, and an unknown one is refused before any work starts.
+    try:
+        agent = agents.from_env()
+    except agents.UnknownAgentError as exc:
+        print(f"md2okf: {exc}", file=sys.stderr)
+        return 2
+
     # Before _resolve_inputs, which reads stdin when no paths are given --
     # `md2okf --shell` would otherwise block waiting for a document.
     if args.shell or args.agent:
-        return _enter_sandbox(args, parser)
+        return _enter_sandbox(args, parser, agent)
 
-    resolved = _resolve_inputs(args)
+    resolved = _resolve_inputs(args, agent)
     if isinstance(resolved, int):
         return resolved
     documents, spec_path, output_dir, wb = resolved
 
     if args.dry_run:
         try:
-            _print_dry_run(documents, spec_path, output_dir, wb)
+            _print_dry_run(agent, documents, spec_path, output_dir, wb)
         except resources.ResourcesError as exc:
             print(f"md2okf: {exc}", file=sys.stderr)
             return 2
         return 0
 
     try:
-        sandbox.preflight()
+        sandbox.preflight(agent.min_sbx_version)
     except sandbox.SandboxError as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
 
     try:
         with workbench.lock():
-            return _run(args, documents, spec_path, output_dir, wb)
+            return _run(args, agent, documents, spec_path, output_dir, wb)
     except workbench.LockHeld:
         print(LOCK_HELD_MESSAGE, file=sys.stderr)
         return 2

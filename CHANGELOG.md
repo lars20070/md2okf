@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`MD2OKF_AGENT` selects the agent framework.** Today `pi` is the only value
+  and the default (unset or empty means `pi`); anything else is refused with
+  exit 2 before any work starts. This is the groundwork for running Claude
+  Code, Codex and Cursor through the same compile pipeline: everything that
+  differs between agents — command lines, first-turn prompt, credential check,
+  minimum sbx version, event-stream parser — now belongs to the agent, not to
+  the driver. `--dry-run` prints the resolved agent.
+
+### Changed
+
+- **One sandbox and one workbench per agent.** The sandbox is now called
+  `md2okf-pi` rather than `md2okf`, and the workbench moved from
+  `$XDG_STATE_HOME/md2okf/` to `$XDG_STATE_HOME/md2okf/pi/`, so agents can
+  coexist side by side. They still never compile at the same time: one lock
+  serialises every run.
+- **The kit moved from `kits/md2okf/` to `kits/pi/`** (and inside the wheel from
+  `md2okf/kit/` to `md2okf/kits/pi/`); its `name:` is now `pi`.
+- **The credential check also runs when a sandbox is reused**, not only when
+  one is created. Before, a sandbox whose key stopped being proxy-managed was
+  reused silently. `md2okf --shell` now opens even when the check fails, with
+  the remedy printed as a warning; a compile and `--agent` still refuse.
+- **A failure the agent reports in its own event stream fails the turn** even
+  when the process exits 0, and is named in the error. Pi's parser reports none
+  yet, so Pi runs behave as before; the rule is in place for the agents to come.
+- **`make test-sandbox` checks every registered agent**, or one with
+  `AGENT=pi`; `tests/test-sandbox.sh` now requires the agent as its argument,
+  and the guest checks live in `tests/test-sandbox-guest-pi.sh`.
+
+### Fixed
+
+- **Editing the kit's agent config now rebuilds the sandbox.** The kit
+  fingerprint skipped every path containing a dot-directory, which left only
+  `README.md` and `spec.yaml` in the hash: edits to `AGENTS.md`, the skills,
+  `settings.json` or `mount-state.sh` never triggered a rebuild, and a stale
+  sandbox was reused. Only host clutter (`.DS_Store`, `._*` AppleDouble files,
+  `__pycache__`) is skipped now. Expect one rebuild on upgrade.
+- **The sdist no longer strips kit directories named `.claude` or `.cursor`.**
+  The exclusion meant for the repository's own tool directories was
+  unanchored, so it matched at any depth. It is now anchored to the root.
+
+### Upgrading
+
+The old `md2okf` sandbox and workbench are not reused. Remove the sandbox with
+`sbx rm --force md2okf`. In `$XDG_STATE_HOME/md2okf/` (by default
+`~/.local/state/md2okf/`), everything except the new `pi/` folder is left over
+and can be deleted: `work/`, `sandbox-fingerprint`, `sandbox-identity`, and
+`sessions/` — which holds your old Pi transcripts, so move it to
+`pi/sessions/` first if you want to keep them. If you set the OpenRouter key
+with `sbx secret set-custom --sandbox md2okf …`, run it again with
+`--sandbox md2okf-pi`.
+
 ## [0.2.1] - 2026-09-21
 
 ### Added

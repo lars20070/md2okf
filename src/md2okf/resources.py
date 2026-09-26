@@ -1,4 +1,4 @@
-"""Locate the kit, the OKF spec, and the helper CLI sources this package ships.
+"""Locate the sandbox kits, the OKF spec, and the helper CLI sources this package ships.
 
 Prefers the installed package's own bundled copies (importlib.resources);
 falls back to the checkout's layout so `uv run md2okf` works with no build
@@ -15,21 +15,21 @@ _CHECKOUT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ResourcesError(Exception):
-    """md2okf cannot locate its own kit, spec, or helper CLI sources."""
+    """md2okf cannot locate its own kits, spec, or helper CLI sources."""
 
 
 def _installed_root() -> Path | None:
-    """The installed package's own directory, if it carries a bundled kit.
+    """The installed package's own directory, if it carries the bundled kits.
 
     A checkout (this package imported via `pythonpath`, with no wheel build)
-    has no ``kit/`` sibling next to ``resources.py``, so this returns None and
+    has no ``kits/`` sibling next to ``resources.py``, so this returns None and
     every lookup below falls back to the checkout's own layout.
     """
     try:
         candidate = Path(str(files("md2okf")))
     except (ModuleNotFoundError, TypeError):
         return None
-    if (candidate / "kit").is_dir():
+    if (candidate / "kits").is_dir():
         return candidate
     return None
 
@@ -37,7 +37,7 @@ def _installed_root() -> Path | None:
 def _checkout_path(relative: str, what: str) -> Path:
     """The checkout fallback location for `relative`, verified to exist.
 
-    A released wheel carries the kit, the spec and the CLI sources, so
+    A released wheel carries the kits, the spec and the CLI sources, so
     _installed_root finds them and this path is never taken. It is reached
     from a checkout (`uv run md2okf`), and by an install built without those
     assets -- where __file__ resolves under site-packages and a silent
@@ -49,17 +49,19 @@ def _checkout_path(relative: str, what: str) -> Path:
     if not candidate.exists():
         raise ResourcesError(
             f"cannot locate {what} ({candidate}). This looks like an installed "
-            "md2okf built without its bundled kit, and not a development "
+            "md2okf built without its bundled kits, and not a development "
             "checkout either. Run from a checkout with `uv run md2okf`, or "
-            "install a release whose wheel carries the kit."
+            "install a release whose wheel carries the kits."
         )
     return candidate
 
 
-def kit_dir() -> Path:
-    """The md2okf sandbox kit: the installed ``md2okf/kit``, else ``kits/md2okf``."""
+def kit_dir(agent: str) -> Path:
+    """One agent's sandbox kit: the installed ``md2okf/kits/<agent>``, else ``kits/<agent>``."""
     root = _installed_root()
-    return root / "kit" if root is not None else _checkout_path("kits/md2okf", "the sandbox kit")
+    if root is not None:
+        return root / "kits" / agent
+    return _checkout_path(f"kits/{agent}", f"the {agent} sandbox kit")
 
 
 def spec_md() -> Path:

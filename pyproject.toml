@@ -42,8 +42,9 @@ path = "VERSION"
 pattern = "(?P<version>.+)"
 
 # The wheel carries the driver plus the three assets resources.py expects
-# beside it -- kit/, SPEC.md and clis/ -- so an installed md2okf works with no
-# checkout.
+# beside it -- kits/<agent>/, SPEC.md and clis/ -- so an installed md2okf works
+# with no checkout. One kits/ line per registered agent (agents.AGENTS), added
+# when that agent ships, never before.
 #
 # Each helper CLI names its pyproject.toml and src/ rather than its project
 # directory, because a force-included *directory* is recursed without regard
@@ -59,7 +60,7 @@ pattern = "(?P<version>.+)"
 packages = ["src/md2okf"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"kits/md2okf" = "md2okf/kit"
+"kits/pi" = "md2okf/kits/pi"
 "SPEC.md" = "md2okf/SPEC.md"
 "scripts/inspectmd/pyproject.toml" = "md2okf/clis/inspectmd/pyproject.toml"
 "scripts/inspectmd/src" = "md2okf/clis/inspectmd/src"
@@ -79,7 +80,11 @@ packages = ["src/md2okf"]
 # their own, and republishing those under this project's name is not something
 # a source distribution should do silently.
 [tool.hatch.build.targets.sdist]
-exclude = [".claude", ".cursor"]
+# Anchored with a leading slash: a bare ".claude" is a gitignore-style pattern
+# that matches at any depth, and would also strip a kit's own
+# files/home/.claude/ (or .cursor/) agent config out of the sdist -- and so out
+# of the wheel `uv build` makes from it.
+exclude = ["/.claude", "/.cursor"]
 
 [dependency-groups]
 test = ["pytest>=8.4"]
@@ -96,7 +101,7 @@ pythonpath = ["src"]
 target-version = "py312"
 line-length = 120
 # This is the repository root, so the tree walk would otherwise reach md/,
-# okf/ (gitignored, usually absent), kits/md2okf/files/.../frontmatter-guard.py
+# okf/ (gitignored, usually absent), kits/pi/files/.../frontmatter-guard.py
 # (no project of its own), and the skill-tool vendor scripts under .claude/ and
 # .cursor/ -- none of these were linted before this project existed, and none
 # belong to it. web2md/, pdf2md/

@@ -1,4 +1,4 @@
-# kits/md2okf
+# kits/pi
 
 The Docker Sandbox kit that runs Pi. `spec.yaml` declares the image, the network
 allowlist, the credentials and the pinned installs — Pi itself, the linters, and
@@ -33,7 +33,7 @@ takes the run down with it. Leave the array out and the catalogue values apply:
 Check after any change:
 
 ```bash
-sbx exec md2okf -- pi --list-models deepseek
+sbx exec md2okf-pi -- pi --list-models deepseek
 ```
 
 To change a single field of a catalogue model, use `modelOverrides`, not a
@@ -63,7 +63,7 @@ Switching to it takes four steps.
    copies the config in.
 
 ```bash
-sbx secret set-custom --sandbox md2okf --host <your-gateway-host> \
+sbx secret set-custom --sandbox md2okf-pi --host <your-gateway-host> \
   --env LITELLM_API_KEY --value "$LITELLM_API_KEY"
 ```
 
@@ -105,7 +105,7 @@ takes as `reasoning_effort`. If yours rejects a level, change the map, or set
 First, that the provider is there at all:
 
 ```bash
-sbx exec md2okf -- pi --list-models litellm
+sbx exec md2okf-pi -- pi --list-models litellm
 ```
 
 The filter matches the provider name, so this lists your models and nothing
@@ -120,7 +120,7 @@ may still be out of reach, because lifting sbx's own policy does not give the
 microVM a route to it. Ask from inside, not from your shell:
 
 ```bash
-sbx exec md2okf -- curl -sS -o /dev/null -w '%{http_code}\n' \
+sbx exec md2okf-pi -- curl -sS -o /dev/null -w '%{http_code}\n' \
   https://<your-gateway-host>/v1/models
 ```
 

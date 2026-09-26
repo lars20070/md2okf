@@ -53,8 +53,8 @@ class _FakeStdout:
     def __iter__(self):
         for line in self._lines:
             # An exception in the queued lines is raised *during* iteration,
-            # which is how a mid-stream KeyboardInterrupt (Ctrl-C while pi is
-            # still talking) is reproduced.
+            # which is how a mid-stream KeyboardInterrupt (Ctrl-C while the
+            # agent is still talking) is reproduced.
             if isinstance(line, BaseException):
                 raise line
             yield f"{line}\n"
@@ -64,7 +64,7 @@ class _FakeStdout:
 
 
 class FakePopen:
-    """Stands in for subprocess.Popen for one streamed `sbx exec ... pi` call."""
+    """Stands in for subprocess.Popen for one streamed `sbx exec ... <agent>` turn."""
 
     def __init__(self, lines: list, returncode: int) -> None:
         """Pre-load the lines a real Popen.stdout would yield, and the exit code."""
@@ -101,21 +101,25 @@ class FakeSbx:
     openrouter_key: str = "proxy-managed"
     probe_ok: bool = True
     last_popen: FakePopen | None = None
-    _pi_queue: list[tuple[list, int, object]] = field(default_factory=list)
+    turn_argvs: list[list[str]] = field(default_factory=list)
+    _turn_queue: list[tuple[list, int, object]] = field(default_factory=list)
     _merkle_queue: list[tuple[str, int]] = field(default_factory=list)
 
     def register(self, name: str) -> None:
         """Register a sandbox that exists but was never created through us."""
         self.sandboxes[name] = _Box()
 
-    def queue_pi(self, lines: list, returncode: int = 0, side_effect=None) -> None:
-        """Queue one `pi --mode json` session's worth of raw stdout lines.
+    def queue_turn(self, lines: list, returncode: int = 0, side_effect=None) -> None:
+        """Queue one agent turn's worth of raw output lines, and its exit code.
 
-        `side_effect`, if given, runs with no arguments as this session
-        "starts" -- e.g. writing a page into work/okf, standing in for what a
-        real Pi run would leave on disk.
+        Any agent's turn, not only Pi's: the lines are whatever protocol the
+        test's agent parses, and the exit code is scripted independently of
+        them, so "exit 0 but the protocol reports a failure" is expressible.
+        `side_effect`, if given, runs with no arguments as this turn "starts"
+        -- e.g. writing a page into work/okf, standing in for what a real run
+        would leave on disk.
         """
-        self._pi_queue.append((lines, returncode, side_effect))
+        self._turn_queue.append((lines, returncode, side_effect))
 
     def queue_hash(self, digest: str, returncode: int = 0) -> None:
         """Queue one `merkleokf --nolog -L 0` response's root digest."""
@@ -184,23 +188,39 @@ class FakeSbx:
         raise AssertionError(f"FakeSbx.run(exec): unhandled tail {tail!r}")
 
     def popen(self, argv: list[str], **_kwargs: object) -> FakePopen:
-        """Stand in for subprocess.Popen (streamed `sbx exec ... pi` only)."""
+        """Stand in for subprocess.Popen: one streamed agent turn.
+
+        Streaming is only ever used for an agent turn (sandbox.exec_stream),
+        so whatever argv arrives is recorded as one, whichever agent built it;
+        tests assert the exact argv through `turn_argvs`.
+        """
         self.calls.append(list(argv))
-        tail = argv[argv.index("--") + 1 :]
-        if tail[0] == "pi":
-            if not self._pi_queue:
-                raise AssertionError("no queued pi response")
-            lines, rc, side_effect = self._pi_queue.pop(0)
-            if side_effect is not None:
-                side_effect()
-            self.last_popen = FakePopen(lines, rc)
-            return self.last_popen
-        raise AssertionError(f"FakeSbx.popen: unhandled tail {tail!r}")
+        if argv[:2] != ["sbx", "exec"]:
+            raise AssertionError(f"FakeSbx.popen: unhandled argv {argv!r}")
+        self.turn_argvs.append(argv[argv.index("--") + 1 :])
+        if not self._turn_queue:
+            raise AssertionError("no queued agent turn")
+        lines, rc, side_effect = self._turn_queue.pop(0)
+        if side_effect is not None:
+            side_effect()
+        self.last_popen = FakePopen(lines, rc)
+        return self.last_popen
 
     def execvp(self, file: str, argv: list[str]) -> NoReturn:
         """Stand in for os.execvp (interactive `sbx exec -it`), which never returns."""
         self.calls.append(list(argv))
         raise ExecvpCalled(list(argv))
+
+
+@pytest.fixture(autouse=True)
+def _no_agent_from_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test with MD2OKF_AGENT unset.
+
+    The CLI and `python -m md2okf.sandbox` both read it, so a developer who
+    exported it for a live run would otherwise get a different suite from CI.
+    A test that wants a value sets it itself.
+    """
+    monkeypatch.delenv("MD2OKF_AGENT", raising=False)
 
 
 @pytest.fixture
