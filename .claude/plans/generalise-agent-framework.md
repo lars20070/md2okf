@@ -462,7 +462,7 @@ permissions:
     allow:
       # kits/pi's OKF-toolchain hosts, minus openrouter.ai, pi.dev and
       # context7.com: npm, PyPI, Ubuntu archives, download.docker.com,
-      # github.com + release CDNs, mqlang.org/book/. Vendor API hosts come
+      # github.com + release CDNs, mqlang.org. Vendor API hosts come
       # from the extends: parent's preset — confirm against the live sandbox
       # in the spike rather than assuming.
 setup:

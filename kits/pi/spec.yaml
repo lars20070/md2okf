@@ -94,8 +94,9 @@ permissions:
       - "github.com:443"
       - "objects.githubusercontent.com:443"
       - "release-assets.githubusercontent.com:443"
-      # mq docs and language reference, for the agent to consult at runtime.
-      - "mqlang.org/book/"
+      # mq docs and language reference (mqlang.org/book/), for the agent to
+      # consult at runtime. Host only: kit rules match hosts, not URL paths.
+      - "mqlang.org:443"
       # Context7 docs API (native @upstash/context7-pi extension).
       - "context7.com:443"
 
