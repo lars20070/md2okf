@@ -1,0 +1,477 @@
+---
+schemaVersion: "2"
+kind: sandbox
+# Not `claude`: that is the built-in parent this kit extends.
+name: md2okf-claude
+displayName: Claude Code kit
+description: >
+  Runs Claude Code in a Docker Sandbox microVM for md2okf, on the built-in
+  claude parent kit, logged in through the host's anthropic secret.
+
+# The parent brings the image (docker/sandbox-templates:claude-code-docker),
+# Claude Code itself, the Anthropic network hosts, and the credential: sbx
+# injects the host's `anthropic` secret (OAuth or API key) when the sandbox is
+# created, so no credentials block here. See the Claude spike findings in
+# .claude/plans/generalise-agent-framework.md for what was measured.
+extends: claude
+
+sandbox:
+  # Replaces the parent's own entrypoint only to relocate the transcripts
+  # first, the same as kits/pi. md2okf itself never goes through here -- every
+  # process it starts is a plain `sbx exec` through md2okf-agent (see files
+  # below) -- but a session started with `sbx run` must not write traces to
+  # the VM's disposable disk either.
+  entrypoint:
+    - sh
+    - -c
+    - |
+      set -eu
+      mount_state_status=0
+      sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+        "$HOME/.claude/projects" sessions || mount_state_status=$?
+      if [ "${mount_state_status}" -ne 0 ]; then
+        echo "md2okf: could not relocate Claude Code transcripts onto state; refusing to start claude" >&2
+        exit "${mount_state_status}"
+      fi
+      exec claude "$@"
+    - md2okf-entrypoint
+
+# sbx writes this into the workspace's parent directory as CLAUDE.md, after the
+# parent kit's own generic sandbox notes, and Claude Code loads it from there
+# (measured by the spike). It carries the whole OKF authoring contract: the
+# skills below say they do not repeat it. Ported from kits/pi's spec
+# agentInstructions and files/home/.pi/agent/AGENTS.md; tests/test_kits.py
+# holds the two to the same contract.
+agentInstructions:
+  filename: CLAUDE.md
+  content: |
+    # OKF Wiki Maintainer
+
+    ## Core identity
+
+    You are an autonomous wiki maintainer for an OKF (Open Knowledge Foundation)
+    knowledge base. That wiki **is** your workspace: you start in its root, and it
+    is the only place you write. Each run hands you one task — compiling a source
+    document, consolidating existing pages, and so on — which you carry out against
+    the wiki, idempotently.
+
+    ## The md2okf sandbox
+
+    You are Claude Code running inside a Docker Sandbox microVM, driven by md2okf.
+    Your workspace is the OKF wiki itself, mounted read-write, and edits apply
+    directly to the host working tree. Four more host paths are mounted:
+
+    - `../md/` — read-only source documents
+    - `../scripts/` — read-only, the projects behind the CLIs listed below
+    - `../SPEC.md` — read-only, the OKF specification
+    - `$MD2OKF_STATE_DIR/sessions` — writable persistent state for your transcripts
+
+    Nothing else from the user's project is mounted, so no other file of theirs
+    is visible or reachable — not the repository, not its history, not its
+    configuration. Claude Code writes its transcripts to its native
+    `~/.claude/projects` path, which is bind-mounted onto
+    `$MD2OKF_STATE_DIR/sessions`. A write anywhere outside the wiki and state
+    directory either fails or lands in the VM's own filesystem and is lost when the
+    sandbox is removed.
+
+    This file also carries the sandbox's own generic notes, written for any project.
+    Where they disagree with these md2okf instructions, these win; `../SPEC.md`
+    outranks both.
+
+    `sudo` is passwordless. If a host is blocked by policy, stop and ask the user to
+    allow it with `sbx policy allow network "<host>"`; do not work around the block.
+
+    ## Installed tools
+
+    These commands are on PATH. Use them; do not reinstall them.
+
+    - `curl`, `fdfind` (fd; Ubuntu package `fd-find`), `jq`, `python3`,
+      `rg` (ripgrep), `shellcheck`, `tree`
+    - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring
+      verbs (the curate-okf skill covers it)
+    - `markdownlint-cli2`, `cspell` — Markdown and spelling
+    - `ruff`, `yamllint` — Python and YAML
+    - `inspectmd` — Markdown heading map (line ranges and word counts)
+    - `inspectokf` — wiki directory tree (via `tree`)
+    - `sizeokf` — Markdown content word counts, excluding frontmatter
+    - `merkleokf` — wiki Merkle hash tree, for change detection
+    - `mq` — jq-like query/filter tool for Markdown (<https://mqlang.org>)
+
+    ## Your task arrives as a skill
+
+    The procedure for each task lives in a skill under `~/.claude/skills/`, one
+    directory per task, each with a `SKILL.md`.
+
+    - When a run names a skill, **read its `SKILL.md` first** and follow it. The
+      skill tells you the procedure; this file tells you the conventions that
+      procedure has to respect.
+    - Available skills:
+      - `compile-okf` — compile a Markdown source document from `../md/` into the
+        wiki.
+      - `inspect-md` — map a long source under `../md/` before reading it in ranges.
+      - `inspect-okf` — survey what the wiki already contains, before writing.
+      - `size-okf` — measure how much prose a page or category holds.
+      - `merkle-okf` — confirm which pages a run actually changed.
+      - `curate-okf` — check the wiki with `okfctl`, and maintain nodes and indexes.
+    - Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`,
+      `curate-okf`) are read **when the work calls for them**, not only when a run
+      names one.
+
+    ## The OKF specification is the source of truth
+
+    OKF is versioned and evolves. Never take a version number from memory or from
+    these instructions.
+
+    - The authoritative spec is `../SPEC.md`, mounted read-only **one level above
+      your workspace**. It is put there when this environment is built, so **never
+      fetch it yourself** — no `curl`, no network access needed.
+    - **At the start of every run, read `../SPEC.md`** before writing anything:
+
+      ```bash
+      cat ../SPEC.md
+      ```
+
+    - Follow the revision you read: take the version number from its "Versioning"
+      section and the conventions from the rest of it. Where the spec and the
+      conventions below disagree, **the spec wins**.
+    - If `../SPEC.md` is missing or unreadable, do not guess a version. Leave the
+      `okf_version` already declared in `index.md` unchanged, follow the
+      conventions below, and state in your final message that you worked without
+      the spec.
+
+    ## Workspace boundaries
+
+    - `../md/` is **read-only** source material. Never modify anything under
+      `../md/`.
+    - `../SPEC.md` is **read-only** reference material.
+    - Your workspace — the wiki root you start in — is your **only** writable
+      output. Create and update wiki pages there. Paths in this file are relative
+      to it, so the root index is `index.md`, not `okf/index.md`.
+    - Never create an `okf/` directory inside your workspace. You are already in
+      `okf/`; a child `okf/` would create an invalid nested wiki.
+
+    ## OKF wiki conventions
+
+    ### Structure
+
+    - The wiki root is your workspace.
+    - `index.md` at the wiki root is the root index. It is the only index that
+      carries YAML frontmatter, and that frontmatter declares the version of the
+      spec you read at the start of the run:
+
+      ```yaml
+      ---
+      okf_version: "<version declared by SPEC.md>"
+      ---
+      ```
+
+      If `index.md` already declares an older version, update it to the one in
+      `../SPEC.md`.
+
+    - `log.md` is the bundle's update log. The spec recommends it and the run's gate
+      requires it, so keep it present and current — see "Update log" below.
+    - Content is organised into directories by topic. Every directory (including the
+      root) contains an `index.md` listing the pages and subdirectories directly
+      beneath it.
+    - **`index.md` files are generated, not written.** Run `okfctl index build` (see
+      the `curate-okf` skill) after adding, moving or removing a page, and never
+      hand-edit one. The gate checks that every index is exactly what a rebuild would
+      produce, so a hand-written entry fails the run — including an entry for a page
+      that does not exist yet, which a rebuild can never emit.
+    - Write cross-links **in page prose** as **bundle-absolute** paths — rooted at the
+      wiki root, e.g. `/glossary/verb.md`, not `glossary/verb.md` — and only ever
+      link to a page that **exists on disk right now**. Index links are the tool's
+      business, not yours; it writes them relative, and that is correct.
+
+    ### Content pages
+
+    Every content page carries YAML frontmatter:
+
+    ```yaml
+    ---
+    type: Chapter # one of: Chapter | GlossaryTerm | Section
+    title: "Some Title"
+    description: "A concise summary, at most ~200 characters."
+    tags:
+      - example-tag
+      - another-tag
+    generated: { by: claude/<model-id>, at: "2026-09-18T06:28:39Z" }
+    ---
+    ```
+
+    - `type` — one of `Chapter`, `GlossaryTerm`, or `Section`.
+    - `title` — human-readable page title, **double-quoted**.
+    - `description` — a concise summary, **at most ~200 characters**, **double-quoted**.
+    - `tags` — a YAML list of kebab-case tags.
+    - `generated` — who wrote the page and when (spec §5.2). `by` is an actor in the
+      §7 form `<producer>/<version>`: you are Claude Code, so it is `claude/` followed
+      by the ID of the model you are running, e.g. `claude/claude-sonnet-5`. `at` is an
+      ISO 8601 datetime with an
+      explicit UTC offset — **double-quote it**, because an unquoted one is parsed as
+      a date by some tools and silently loses its time of day. Refresh `at` on a page
+      whose content you actually changed, and leave it alone on a page you did not.
+
+    **Always double-quote `title` and `description`**, whatever they contain, and
+    escape any double quote inside the value as `\"`. Headings in source documents
+    routinely carry a colon — `1. Old and short: words` — and an unquoted colon
+    followed by a space is a YAML mapping, so the frontmatter stops parsing and the
+    whole page is invalid. Quote the value; do **not** reword the title to avoid the
+    colon, because the wording belongs to the source.
+
+    ### Update log
+
+    The bundle root carries `log.md`, a chronological record of what each run
+    changed. `index.md` and `log.md` are reserved filenames — they are not concept
+    pages, so `log.md` carries **no** YAML frontmatter and is never listed as a
+    content entry in an index.
+
+    - Format: a top-level heading, then one `##` heading per date with the entries
+      beneath it. Date headings use `YYYY-MM-DD`, and dates are ordered
+      **newest first**.
+
+      ```markdown
+      # Update Log
+
+      ## 2026-05-22
+      * **Update**: Expanded [What's in a Name](/part-2/8-whats-in-a-name.md) with the
+        naming conventions section.
+      * **Creation**: Added [Glossary](/glossary.md).
+
+      ## 2026-05-15
+      * **Initialization**: Created the wiki root and part directories.
+      ```
+
+    - Take the date from the environment, never from memory:
+
+      ```bash
+      date +%F
+      ```
+
+    - **Every run appends to the log.** After writing your pages and rebuilding the
+      indexes, add an entry for each page you created or updated under today's date
+      heading, creating that heading (at the top of the list) if it does not exist
+      yet. Do not rewrite or reorder entries from earlier dates.
+    - Entries are short prose. The leading bold word (`**Creation**`, `**Update**`,
+      `**Deprecation**`) is a convention, not a requirement. Links inside entries
+      follow the same rules as everywhere else: bundle-absolute and pointing only at
+      pages that exist on disk.
+    - If `log.md` does not exist yet, create it in this run.
+
+    ### Slugs and file names
+
+    - Use **kebab-case** for all slugs, file names, and directory names
+      (e.g. `capital-letters.md`, `numbers-and-dates/`).
+
+    ### Idempotency
+
+    - Updates are **idempotent**. If a page for a topic already exists, update it in
+      place — never create a duplicate.
+    - After adding, moving or removing a page, **run `okfctl index build`** so every
+      `index.md` matches what is on disk. Never hand-edit one: the gate compares each
+      index against what a rebuild would produce, so a hand-written entry fails the
+      run. The gate only reports that mismatch — it never writes an index for you, so
+      rebuilding is always your step.
+
+# Outbound egress allowlist. The parent kit already allows the Anthropic
+# hosts; these are the OKF toolchain's, the same as kits/pi's minus
+# openrouter.ai, pi.dev and context7.com (no OpenRouter, no Pi, no MCP here).
+# Listed even where a host may already be reachable through a global
+# `sbx policy` rule, so the kit never depends on the user's own rules.
+permissions:
+  network:
+    allow:
+      # npm: markdownlint-cli2, cspell.
+      - "registry.npmjs.org:443"
+      # uv tool install: ruff, yamllint (index + wheels).
+      - "pypi.org:443"
+      - "files.pythonhosted.org:443"
+      # apt-get update refreshes every template source: Ubuntu amd64
+      # (archive/security), arm64 (ports), and Docker's apt repo.
+      - "archive.ubuntu.com:80"
+      - "security.ubuntu.com:80"
+      - "ports.ubuntu.com:80"
+      - "download.docker.com:443"
+      # mq and okfctl release binaries: github.com redirects to a GitHub CDN
+      # host.
+      - "github.com:443"
+      - "objects.githubusercontent.com:443"
+      - "release-assets.githubusercontent.com:443"
+      # mq docs and language reference, for the agent to consult at runtime.
+      - "mqlang.org/book/"
+
+# Runs once at sandbox create, in order, via `sh -c`, merged with the parent
+# kit's own setup. `user` defaults to root ("0"); "1000" is the agent.
+setup:
+  install:
+    # Distro CLI tools the agent shells out to.
+    - command: |
+        set -eu
+        apt-get update
+        apt-get install -y \
+          curl \
+          fd-find \
+          jq \
+          python3 \
+          ripgrep \
+          shellcheck \
+          tree
+      description: Install distro CLI tools
+
+    - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
+      user: "1000"
+      description: Install Markdown and spelling linters
+
+    - command: |
+        set -eu
+        uv tool install ruff@0.16.2
+        uv tool install yamllint@1.38.0
+      user: "1000"
+      description: Install Python linters
+
+    # No apt/uv/npm package; fetched as a pinned, checksummed release binary.
+    - command: |
+        set -eu
+        MQ_VERSION=0.8.2
+
+        case "$(uname -m)" in
+          x86_64) MQ_TARGET=x86_64-unknown-linux-gnu ;;
+          aarch64) MQ_TARGET=aarch64-unknown-linux-gnu ;;
+          *)
+            echo "mq: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        base="https://github.com/harehare/mq/releases/download/v${MQ_VERSION}"
+        curl -fsSL -o "$tmp/mq" "${base}/mq-${MQ_TARGET}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="mq-${MQ_TARGET}/mq-${MQ_TARGET}" '$2 == f { print $1 }' \
+          "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/mq" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "mq: checksum mismatch for ${MQ_TARGET}" >&2
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/mq" "$HOME/.local/bin/mq"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install mq (Markdown query tool)
+
+    # Same story as mq, one release archive rather than a bare binary. The
+    # checksums.txt second column is a plain filename here, so the awk match is
+    # on the archive name. Only okfctl is extracted: the archive also carries
+    # okfctl-search, whose semantic index needs a model download from a host
+    # that is not allowlisted.
+    - command: |
+        set -eu
+        OKFCTL_VERSION=0.4.0
+
+        case "$(uname -m)" in
+          x86_64) OKFCTL_ARCH=amd64 ;;
+          aarch64) OKFCTL_ARCH=arm64 ;;
+          *)
+            echo "okfctl: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        archive="okfctl_${OKFCTL_VERSION}_linux_${OKFCTL_ARCH}.tar.gz"
+        base="https://github.com/cwest/okfctl/releases/download/v${OKFCTL_VERSION}"
+        curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "okfctl: checksum mismatch for ${archive}" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$archive" -C "$tmp" okfctl
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/okfctl" "$HOME/.local/bin/okfctl"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install okfctl (OKF bundle tool)
+
+    # Static files/home/ copies do not reliably preserve the git 100755 bit;
+    # set it explicitly so the compile-okf skill can invoke the wrapper.
+    - command: |
+        set -eu
+        scripts=/home/agent/.claude/skills/compile-okf/scripts
+        chmod 0755 "$scripts/check-okf.sh"
+      description: Make the compile-okf check script executable
+
+  # Bind mounts do not survive a sandbox stop. The startup hook covers normal
+  # starts and sbx exec; the entrypoint above is a second required call site for
+  # starts where the hook is not replayed, and md2okf-agent.sh (see files below)
+  # a third, for every process the driver starts. The helper is idempotent.
+  startup:
+    - command:
+        - sh
+        - -c
+        - |
+          set -eu
+          HOME="${HOME:-/home/agent}"
+          export HOME
+          sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+            "$HOME/.claude/projects" sessions
+      user: "agent"
+      description: Bind-mount Claude Code transcripts onto persistent state
+
+  # Workspace is not mounted during setup.install, so the CLIs are shims that
+  # resolve from ${WORKDIR} — the workspace path — rather than from a copy
+  # (always tracks the tree). ${WORKDIR} is the wiki, and the projects sit in
+  # the scripts/ mount beside it, hence the dirname.
+  files:
+    # The driver runs every compile turn and `md2okf --agent` through this, so
+    # each Claude Code process first checks the transcript bind itself: `sbx
+    # exec` bypasses the entrypoint above. The shared script (identical in
+    # every kit) does the work; this shim only names Claude Code's own trace
+    # directory.
+    - path: /home/agent/.local/bin/md2okf-agent
+      mode: "0755"
+      description: Per-process wrapper the driver starts Claude Code through
+      content: |
+        #!/bin/sh
+        set -eu
+        home="${HOME:-/home/agent}"
+        exec sh "${home}/.local/lib/md2okf/md2okf-agent.sh" \
+          "${home}/.claude/projects" "$@"
+
+    - path: /home/agent/.local/bin/inspectmd
+      mode: "0755"
+      description: Workspace-backed inspectmd CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectmd" inspectmd "$@"
+
+    - path: /home/agent/.local/bin/inspectokf
+      mode: "0755"
+      description: Workspace-backed inspectokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectokf" inspectokf "$@"
+
+    - path: /home/agent/.local/bin/sizeokf
+      mode: "0755"
+      description: Workspace-backed sizeokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/sizeokf" sizeokf "$@"
+
+    - path: /home/agent/.local/bin/merkleokf
+      mode: "0755"
+      description: Workspace-backed merkleokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/merkleokf" merkleokf "$@"

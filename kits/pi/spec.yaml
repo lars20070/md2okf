@@ -260,7 +260,8 @@ setup:
 
   # Bind mounts do not survive a sandbox stop. The startup hook covers normal
   # starts and sbx exec; the entrypoint above is a second required call site for
-  # starts where the hook is not replayed. The helper is idempotent.
+  # starts where the hook is not replayed, and md2okf-agent.sh (see files below)
+  # a third, for every process the driver starts. The helper is idempotent.
   startup:
     - command:
         - sh
@@ -279,6 +280,20 @@ setup:
   # (always tracks the tree). ${WORKDIR} is the wiki, and the projects sit in
   # the scripts/ mount beside it, hence the dirname.
   files:
+    # The driver runs every compile turn and `md2okf --agent` through this, so
+    # each Pi process first checks the sessions bind itself: `sbx exec`
+    # bypasses the entrypoint above. The shared script (identical in every
+    # kit) does the work; this shim only names Pi's own trace directory.
+    - path: /home/agent/.local/bin/md2okf-agent
+      mode: "0755"
+      description: Per-process wrapper the driver starts Pi through
+      content: |
+        #!/bin/sh
+        set -eu
+        home="${HOME:-/home/agent}"
+        exec sh "${home}/.local/lib/md2okf/md2okf-agent.sh" \
+          "${home}/.pi/agent/sessions" "$@"
+
     - path: /home/agent/.local/bin/inspectmd
       mode: "0755"
       description: Workspace-backed inspectmd CLI

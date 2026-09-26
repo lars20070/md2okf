@@ -151,7 +151,7 @@ jobs:
       - name: Build and smoke-test the distribution
         run: make dist
 
-  # Validate kits/pi/spec.yaml against the current Sandbox Kit schema.
+  # Validate every kits/*/spec.yaml against the current Sandbox Kit schema.
   # Static check — no Docker or login; only the CLI download needs the network.
   validate-kit:
     runs-on: ubuntu-latest

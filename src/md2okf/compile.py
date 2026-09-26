@@ -8,6 +8,7 @@ rule is what it is).
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from collections.abc import Callable, Iterable
@@ -42,8 +43,16 @@ _HASH_RE = re.compile(r"^[0-9a-f]+$")
 _DIAGNOSTIC_TAIL_LINES = 20
 
 
+def _is_protocol_envelope(line: str) -> bool:
+    """Whether `line` is a whole JSON object -- an event of the agent's protocol."""
+    try:
+        return isinstance(json.loads(line), dict)
+    except ValueError:
+        return False
+
+
 def _diagnostic_tail(raw_lines: list[str]) -> str:
-    """The last few non-JSON lines, for folding into a failure message.
+    """The last few lines that are not protocol events, for folding into a failure message.
 
     The agent's own protocol events are JSON objects and mostly say nothing
     useful about why a run died; what does is whatever arrived on stderr in
@@ -51,8 +60,12 @@ def _diagnostic_tail(raw_lines: list[str]) -> str:
     Keeping only those makes the message the cause rather than a wall of
     envelopes. A protocol event that *does* state the cause reaches the
     message separately, as Event.failure.
+
+    "Not a protocol event" means "does not parse as a JSON object", not "does
+    not start with {": a line cut short mid-object is a symptom worth seeing,
+    and every agent's envelopes are whole JSON objects, whatever their shape.
     """
-    meaningful = [line for line in raw_lines if line.strip() and not line.lstrip().startswith("{")]
+    meaningful = [line for line in raw_lines if line.strip() and not _is_protocol_envelope(line)]
     return "\n".join(meaningful[-_DIAGNOSTIC_TAIL_LINES:])
 
 
@@ -236,7 +249,12 @@ def compile_document(
         raw_lines: list[str] = []
         try:
             for event in agent.protocol.process(stream):
-                raw_lines.append(event.raw)
+                # Only what the protocol chose to show can explain a failure:
+                # a line it hides is either an envelope or noise it knows
+                # about (Codex's stdin notice), and keeping just these also
+                # spares holding a whole session's token-by-token envelopes.
+                if event.display is not None:
+                    raw_lines.append(event.raw)
                 if event.is_tool_call:
                     tool_calls += 1
                 if event.failure is not None:

@@ -14,6 +14,7 @@ nothing reaches a faked subprocess because preflight() bails first.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass, field
 from typing import NoReturn
@@ -99,6 +100,8 @@ class FakeSbx:
     run_fail_names: set[str] = field(default_factory=set)
     token_write_fail_names: set[str] = field(default_factory=set)
     openrouter_key: str = "proxy-managed"
+    claude_logged_in: bool = True
+    codex_logged_in: bool = True
     probe_ok: bool = True
     last_popen: FakePopen | None = None
     turn_argvs: list[list[str]] = field(default_factory=list)
@@ -179,6 +182,15 @@ class FakeSbx:
             return done(0) if self.probe_ok else done(1)
         if tail[:2] == ["sh", "-lc"]:
             return done(0, f"{self.openrouter_key}\n")
+        if tail == ["codex", "login", "status"]:
+            # The Codex spike's capture: the verdict goes to stderr, stdout stays empty.
+            if self.codex_logged_in:
+                return done(0, "", "Logged in using an API key - ***\n")
+            return done(1, "", "Not logged in\n")
+        if tail == ["claude", "auth", "status"]:
+            # The shape the Claude spike captured; exit 1 when logged out.
+            status = {"loggedIn": self.claude_logged_in, "authMethod": "claude.ai" if self.claude_logged_in else None}
+            return done(0 if self.claude_logged_in else 1, json.dumps(status, indent=2) + "\n")
         if tail[0] == "merkleokf":
             if not self._merkle_queue:
                 raise AssertionError("no queued merkleokf response")

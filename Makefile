@@ -179,7 +179,7 @@ dist:
 # agents (md2okf.agents.AGENTS); `make test-sandbox AGENT=pi` checks just one.
 # The agent is always passed explicitly: test-sandbox.sh has no default, so
 # nothing silently falls back to Pi.
-AGENTS ?= pi
+AGENTS ?= pi claude codex
 test-sandbox:
 	@for agent in $(or $(AGENT),$(AGENTS)); do \
 		./tests/test-sandbox.sh "$$agent" || exit 1; \

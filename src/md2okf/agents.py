@@ -9,6 +9,7 @@ registered agents are accepted, and each registers only once its kit ships.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from pathlib import Path
 
 from md2okf import sandbox
 from md2okf.protocols import EventProtocol
+from md2okf.protocols import claude as claude_protocol
+from md2okf.protocols import codex as codex_protocol
 from md2okf.protocols import pi as pi_protocol
 
 ENV_VAR = "MD2OKF_AGENT"
@@ -83,21 +86,165 @@ def _pi_check_credentials(name: str) -> str | None:
         '  Set it via sbx secret (see README.md, "Set up the OpenRouter key"):\n'
         '  echo "$OPENROUTER_API_KEY" | sbx secret set openrouter\n'
         f"  sbx secret set-custom --sandbox {name} --host openrouter.ai "
-        '--env OPENROUTER_API_KEY --value "$OPENROUTER_API_KEY"'
+        '--env OPENROUTER_API_KEY --value "$OPENROUTER_API_KEY"\n'
+        f"{_rebuild_hint(name)}"
     )
 
+
+def _rebuild_hint(name: str) -> str:
+    """The last line of every remedy: sbx injects credentials only when a sandbox is created.
+
+    Measured by the Claude spike, and what `sbx secret set-custom` itself warns
+    about: a secret set afterwards does not reach a sandbox that already
+    exists, so re-running would reuse the same unready one.
+    """
+    return f"  Then remove the sandbox so the next run rebuilds it with the credential: sbx rm --force {name}"
+
+
+def _claude_compile_prompt(document: Path) -> str:
+    """The same shape as Pi's: name the skill file, which works however skills are activated.
+
+    The plan proposed `/compile-okf`; whether a slash-invoked skill works in
+    `claude -p` was not measured by the spike, and reading the file is what
+    Pi already does reliably.
+    """
+    return (
+        "Load the compile-okf skill: read ~/.claude/skills/compile-okf/SKILL.md, "
+        f"then follow it to compile {document} directly into the workspace root. "
+        f"{WORKSPACE_ROOT_RULE}"
+    )
+
+
+def _claude_check_credentials(name: str) -> str | None:
+    """`claude auth status` must report `"loggedIn": true`.
+
+    Local, non-interactive and unpaid: it reads the credential sbx injected at
+    create time (the host's `anthropic` secret, OAuth or API key) and starts no
+    model turn. Anything else -- a non-zero exit, output that is not that JSON
+    -- is "not ready".
+
+    The remedy's subscription route is a sign-in inside a Claude sandbox: sbx
+    0.45 refuses `sbx secret set anthropic --oauth` ("openai/global only") and
+    says to sign in from inside the Claude sandbox instead.
+    """
+    result = sandbox.exec_capture(name, ["claude", "auth", "status"])
+    try:
+        status = json.loads(result.stdout)
+    except ValueError:
+        status = None
+    if result.returncode == 0 and isinstance(status, dict) and status.get("loggedIn") is True:
+        return None
+    return (
+        f"Claude Code inside {name!r} is not logged in.\n"
+        "  Give sbx the credential on the host, as one of:\n"
+        "  sbx run claude, then /login in it    # a Claude subscription; sbx keeps the sign-in\n"
+        "  sbx secret set anthropic            # an Anthropic API key\n"
+        f"{_rebuild_hint(name)}"
+    )
+
+
+# Every in-sandbox argv starts with the kit's `md2okf-agent` wrapper, not the
+# agent itself: `sbx exec` bypasses the kit entrypoint, so the wrapper is what
+# guarantees the agent's traces land on host-backed state (see
+# kits/<agent>/files/home/.local/lib/md2okf/md2okf-agent.sh).
+WRAPPER = "md2okf-agent"
 
 PI = Agent(
     name="pi",
     min_sbx_version=sandbox.MIN_VERSION,
-    compile_args=lambda prompt: ["pi", "--mode", "json", prompt],
-    interactive_args=("pi",),
+    compile_args=lambda prompt: [WRAPPER, "pi", "--mode", "json", prompt],
+    interactive_args=(WRAPPER, "pi"),
     compile_prompt=_pi_compile_prompt,
     check_credentials=_pi_check_credentials,
     protocol=pi_protocol,
 )
 
-AGENTS: dict[str, Agent] = {PI.name: PI}
+CLAUDE = Agent(
+    name="claude",
+    # The only version the spike ran on; the kit relies on the claude parent's
+    # behaviour there. See the Claude spike findings in the plan.
+    min_sbx_version=(0, 45, 0),
+    # --permission-mode: the parent already defaults to bypassPermissions, but
+    # a compile must not depend on a parent default. --strict-mcp-config with
+    # no --mcp-config: no MCP servers at all -- neither the parent's gateway
+    # nor the logged-in account's claude.ai connectors, none of which a
+    # compile uses.
+    compile_args=lambda prompt: [
+        WRAPPER,
+        "claude",
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--permission-mode",
+        "bypassPermissions",
+        "--strict-mcp-config",
+        prompt,
+    ],
+    interactive_args=(WRAPPER, "claude", "--permission-mode", "bypassPermissions"),
+    compile_prompt=_claude_compile_prompt,
+    check_credentials=_claude_check_credentials,
+    protocol=claude_protocol,
+)
+
+
+def _codex_compile_prompt(document: Path) -> str:
+    """`$compile-okf` activates the skill directly (measured by the Codex spike).
+
+    Naming the file path also worked, but only after the model first guessed
+    `~` as the host's home; `$name` found the skill at once.
+    """
+    return f"$compile-okf Compile {document} directly into the workspace root. {WORKSPACE_ROOT_RULE}"
+
+
+def _codex_check_credentials(name: str) -> str | None:
+    """`codex login status` must exit 0 and report "Logged in".
+
+    Local, non-interactive and unpaid. The codex parent routes the host's
+    `openai` secret through sbx's own model provider and leaves a placeholder
+    login behind at create time, which this sees; without the secret there is
+    nothing to see.
+    """
+    result = sandbox.exec_capture(name, ["codex", "login", "status"])
+    if result.returncode == 0 and "Logged in" in f"{result.stdout}\n{result.stderr}":
+        return None
+    return (
+        f"Codex inside {name!r} is not logged in.\n"
+        "  Store the credential on the host with sbx secret, as one of:\n"
+        "  sbx secret set openai --oauth    # a ChatGPT subscription\n"
+        "  sbx secret set openai            # an OpenAI API key\n"
+        f"{_rebuild_hint(name)}"
+    )
+
+
+CODEX = Agent(
+    name="codex",
+    # The only version the Codex spike ran on.
+    min_sbx_version=(0, 45, 0),
+    # Neither --skip-git-repo-check nor --dangerously-bypass-... was
+    # load-bearing in the spike (the parent's config already allows both), but
+    # a compile must not depend on a parent default. The -c override switches
+    # off the parent's MCP gateway, which a compile does not use -- the
+    # counterpart of Claude's --strict-mcp-config (measured: `-c
+    # mcp_servers={}` does not remove it, `enabled=false` does).
+    compile_args=lambda prompt: [
+        WRAPPER,
+        "codex",
+        "exec",
+        "--json",
+        "--skip-git-repo-check",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        "mcp_servers.mcp-gateway.enabled=false",
+        prompt,
+    ],
+    interactive_args=(WRAPPER, "codex", "--dangerously-bypass-approvals-and-sandbox"),
+    compile_prompt=_codex_compile_prompt,
+    check_credentials=_codex_check_credentials,
+    protocol=codex_protocol,
+)
+
+AGENTS: dict[str, Agent] = {PI.name: PI, CLAUDE.name: CLAUDE, CODEX.name: CODEX}
 
 
 def resolve(value: str) -> Agent:

@@ -10,13 +10,45 @@ and this project adheres to
 
 ### Added
 
-- **`MD2OKF_AGENT` selects the agent framework.** Today `pi` is the only value
-  and the default (unset or empty means `pi`); anything else is refused with
-  exit 2 before any work starts. This is the groundwork for running Claude
-  Code, Codex and Cursor through the same compile pipeline: everything that
+- **`MD2OKF_AGENT` selects the agent framework.** `pi` is the default (unset or
+  empty means `pi`); anything unregistered is refused with
+  exit 2 before any work starts. It is what runs Claude Code and Codex
+  through the same compile pipeline as Pi: everything that
   differs between agents — command lines, first-turn prompt, credential check,
   minimum sbx version, event-stream parser — now belongs to the agent, not to
   the driver. `--dry-run` prints the resolved agent.
+- **`md2okf-agent`, a wrapper every agent process now starts through.** Each
+  compile turn and `md2okf --agent` session runs `md2okf-agent pi …` rather
+  than `pi …`. `sbx exec` bypasses the kit's entrypoint, so the wrapper is what
+  guarantees, per process, that the agent's traces are bind-mounted onto
+  host-backed state before it starts — and it refuses to start the agent when
+  they are not. The script is shared by every kit; each kit's shim names its
+  own trace directory.
+- **Credential remedies now end by rebuilding the sandbox**
+  (`sbx rm --force md2okf-<agent>`): sbx injects a credential only when a
+  sandbox is created, so fixing the secret alone left the old sandbox unready.
+- **`MD2OKF_AGENT=claude`: Claude Code**, through its own kit (`kits/claude/`,
+  on sbx's built-in `claude` parent) and sandbox (`md2okf-claude`). It logs in
+  with the host's `anthropic` secret — a `/login` inside a Claude sandbox
+  (`sbx run claude`) for a subscription, or `sbx secret set anthropic` for an
+  API key — and needs sbx 0.45.0. Compile turns run
+  `claude -p --output-format stream-json` with no MCP servers
+  (`--strict-mcp-config`), and a `result` event reporting `is_error` fails the
+  turn. Verified live: the sandbox checks pass, and a compile of
+  `tests/fixtures/smoke.md` converges and passes the gate. See
+  `kits/claude/README.md`.
+- **`MD2OKF_AGENT=codex`: Codex**, through its own kit (`kits/codex/`, on sbx's
+  built-in `codex` parent) and sandbox (`md2okf-codex`). It logs in with the
+  host's `openai` secret — `sbx secret set openai --oauth` for a ChatGPT
+  subscription, or an API key — and needs sbx 0.45.0. The OKF contract ships
+  as Codex's global `~/.codex/AGENTS.md`, because Codex does not read
+  instructions from outside a git project. Compile turns run
+  `codex exec --json` with the parent's MCP gateway switched off, and
+  `turn.failed` fails the turn. Verified live: a compile of
+  `tests/fixtures/smoke.md` converges and passes the gate. See
+  `kits/codex/README.md`.
+- **`tests/fixtures/smoke.md`**, a short document for cheap live smoke runs:
+  `uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md`.
 
 ### Changed
 
@@ -34,9 +66,23 @@ and this project adheres to
 - **A failure the agent reports in its own event stream fails the turn** even
   when the process exits 0, and is named in the error. Pi's parser reports none
   yet, so Pi runs behave as before; the rule is in place for the agents to come.
+- **A failed turn's message keeps lines that were cut short.** The diagnostic
+  tail used to drop every line starting with `{`, including a truncated JSON
+  line that may be the only clue. Now only whole JSON objects — the agent's own
+  protocol events — and lines the agent's parser knows to be noise (Codex's
+  stdin notice) are left out.
 - **`make test-sandbox` checks every registered agent**, or one with
   `AGENT=pi`; `tests/test-sandbox.sh` now requires the agent as its argument,
-  and the guest checks live in `tests/test-sandbox-guest-pi.sh`.
+  and the guest checks live in `tests/test-sandbox-guest-pi.sh`. It now also
+  checks from the host that a trace written through the agent's native path
+  reached the workbench's `sessions/`, and runs the wrapper through a plain
+  `sbx exec`, exactly as the driver does.
+- **`make validate` checks every `kits/*/spec.yaml`**, not just Pi's, so a kit
+  being authored is validated before it is ever registered.
+- **`tests/test_kit.py` is now `tests/test_kits.py`** and runs over every kit:
+  the shared OKF authoring contract, the kit's own `generated.by` producer, no
+  other agent's config paths, every file the instructions name, and helpers
+  that are byte-identical across kits.
 
 ### Fixed
 
@@ -46,8 +92,8 @@ and this project adheres to
   `settings.json` or `mount-state.sh` never triggered a rebuild, and a stale
   sandbox was reused. Only host clutter (`.DS_Store`, `._*` AppleDouble files,
   `__pycache__`) is skipped now. Expect one rebuild on upgrade.
-- **The sdist no longer strips kit directories named `.claude` or `.cursor`.**
-  The exclusion meant for the repository's own tool directories was
+- **The sdist no longer strips a kit's `.claude` directory.** The exclusion
+  meant for the repository's own tool directories (`.claude`, `.cursor`) was
   unanchored, so it matched at any depth. It is now anchored to the root.
 
 ### Upgrading

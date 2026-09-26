@@ -1,0 +1,247 @@
+---
+schemaVersion: "2"
+kind: sandbox
+# Not `codex`: that is the built-in parent this kit extends.
+name: md2okf-codex
+displayName: Codex kit
+description: >
+  Runs Codex in a Docker Sandbox microVM for md2okf, on the built-in codex
+  parent kit, logged in through the host's openai secret.
+
+# The parent brings the image, Codex itself, the OpenAI network hosts, the
+# credential (sbx routes the host's `openai` secret, OAuth or API key, through
+# its own model provider, configured in Codex's config.toml at create time),
+# and permissive defaults (approval_policy "never", sandbox_mode
+# "danger-full-access"). See the Codex spike findings in
+# .claude/plans/generalise-agent-framework.md for what was measured.
+#
+# No agentInstructions: sbx would write them to the workspace's parent
+# directory, and Codex never reads them there -- it looks for AGENTS.md from a
+# git project root down, and the wiki is not a repository (measured). The OKF
+# contract ships instead as ~/.codex/AGENTS.md, Codex's global instructions,
+# which it does read (files/home/.codex/AGENTS.md).
+extends: codex
+
+sandbox:
+  # Replaces the parent's own entrypoint only to relocate the transcripts
+  # first, the same as kits/pi. md2okf itself never goes through here -- every
+  # process it starts is a plain `sbx exec` through md2okf-agent (see files
+  # below) -- but a session started with `sbx run` must not write traces to
+  # the VM's disposable disk either.
+  entrypoint:
+    - sh
+    - -c
+    - |
+      set -eu
+      mount_state_status=0
+      sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+        "$HOME/.codex/sessions" sessions || mount_state_status=$?
+      if [ "${mount_state_status}" -ne 0 ]; then
+        echo "md2okf: could not relocate Codex sessions onto state; refusing to start codex" >&2
+        exit "${mount_state_status}"
+      fi
+      exec codex "$@"
+    - md2okf-entrypoint
+
+# Outbound egress allowlist. The parent kit already allows the OpenAI hosts;
+# these are the OKF toolchain's, the same as kits/pi's minus openrouter.ai,
+# pi.dev and context7.com (no OpenRouter, no Pi, no MCP here). Listed even
+# where a host may already be reachable through a global `sbx policy` rule, so
+# the kit never depends on the user's own rules.
+permissions:
+  network:
+    allow:
+      # npm: markdownlint-cli2, cspell.
+      - "registry.npmjs.org:443"
+      # uv tool install: ruff, yamllint (index + wheels).
+      - "pypi.org:443"
+      - "files.pythonhosted.org:443"
+      # apt-get update refreshes every template source: Ubuntu amd64
+      # (archive/security), arm64 (ports), and Docker's apt repo.
+      - "archive.ubuntu.com:80"
+      - "security.ubuntu.com:80"
+      - "ports.ubuntu.com:80"
+      - "download.docker.com:443"
+      # mq and okfctl release binaries: github.com redirects to a GitHub CDN
+      # host.
+      - "github.com:443"
+      - "objects.githubusercontent.com:443"
+      - "release-assets.githubusercontent.com:443"
+      # mq docs and language reference, for the agent to consult at runtime.
+      - "mqlang.org/book/"
+
+# Runs once at sandbox create, in order, via `sh -c`, merged with the parent
+# kit's own setup. `user` defaults to root ("0"); "1000" is the agent.
+setup:
+  install:
+    # Distro CLI tools the agent shells out to.
+    - command: |
+        set -eu
+        apt-get update
+        apt-get install -y \
+          curl \
+          fd-find \
+          jq \
+          python3 \
+          ripgrep \
+          shellcheck \
+          tree
+      description: Install distro CLI tools
+
+    - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
+      user: "1000"
+      description: Install Markdown and spelling linters
+
+    - command: |
+        set -eu
+        uv tool install ruff@0.16.2
+        uv tool install yamllint@1.38.0
+      user: "1000"
+      description: Install Python linters
+
+    # No apt/uv/npm package; fetched as a pinned, checksummed release binary.
+    - command: |
+        set -eu
+        MQ_VERSION=0.8.2
+
+        case "$(uname -m)" in
+          x86_64) MQ_TARGET=x86_64-unknown-linux-gnu ;;
+          aarch64) MQ_TARGET=aarch64-unknown-linux-gnu ;;
+          *)
+            echo "mq: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        base="https://github.com/harehare/mq/releases/download/v${MQ_VERSION}"
+        curl -fsSL -o "$tmp/mq" "${base}/mq-${MQ_TARGET}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="mq-${MQ_TARGET}/mq-${MQ_TARGET}" '$2 == f { print $1 }' \
+          "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/mq" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "mq: checksum mismatch for ${MQ_TARGET}" >&2
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/mq" "$HOME/.local/bin/mq"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install mq (Markdown query tool)
+
+    # Same story as mq, one release archive rather than a bare binary. The
+    # checksums.txt second column is a plain filename here, so the awk match is
+    # on the archive name. Only okfctl is extracted: the archive also carries
+    # okfctl-search, whose semantic index needs a model download from a host
+    # that is not allowlisted.
+    - command: |
+        set -eu
+        OKFCTL_VERSION=0.4.0
+
+        case "$(uname -m)" in
+          x86_64) OKFCTL_ARCH=amd64 ;;
+          aarch64) OKFCTL_ARCH=arm64 ;;
+          *)
+            echo "okfctl: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        archive="okfctl_${OKFCTL_VERSION}_linux_${OKFCTL_ARCH}.tar.gz"
+        base="https://github.com/cwest/okfctl/releases/download/v${OKFCTL_VERSION}"
+        curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
+        curl -fsSL -o "$tmp/checksums.txt" "${base}/checksums.txt"
+
+        expected=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
+        actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          echo "okfctl: checksum mismatch for ${archive}" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$archive" -C "$tmp" okfctl
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/okfctl" "$HOME/.local/bin/okfctl"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install okfctl (OKF bundle tool)
+
+    # Static files/home/ copies do not reliably preserve the git 100755 bit;
+    # set it explicitly so the compile-okf skill can invoke the wrapper.
+    - command: |
+        set -eu
+        scripts=/home/agent/.agents/skills/compile-okf/scripts
+        chmod 0755 "$scripts/check-okf.sh"
+      description: Make the compile-okf check script executable
+
+  # Bind mounts do not survive a sandbox stop. The startup hook covers normal
+  # starts and sbx exec; the entrypoint above is a second required call site for
+  # starts where the hook is not replayed, and md2okf-agent.sh (see files below)
+  # a third, for every process the driver starts. The helper is idempotent.
+  startup:
+    - command:
+        - sh
+        - -c
+        - |
+          set -eu
+          HOME="${HOME:-/home/agent}"
+          export HOME
+          sh "$HOME/.local/lib/md2okf/mount-state.sh" \
+            "$HOME/.codex/sessions" sessions
+      user: "agent"
+      description: Bind-mount Codex sessions onto persistent state
+
+  # Workspace is not mounted during setup.install, so the CLIs are shims that
+  # resolve from ${WORKDIR} — the workspace path — rather than from a copy
+  # (always tracks the tree). ${WORKDIR} is the wiki, and the projects sit in
+  # the scripts/ mount beside it, hence the dirname.
+  files:
+    # The driver runs every compile turn and `md2okf --agent` through this, so
+    # each Codex process first checks the sessions bind itself: `sbx exec`
+    # bypasses the entrypoint above. The shared script (identical in every
+    # kit) does the work; this shim only names Codex's own trace directory.
+    - path: /home/agent/.local/bin/md2okf-agent
+      mode: "0755"
+      description: Per-process wrapper the driver starts Codex through
+      content: |
+        #!/bin/sh
+        set -eu
+        home="${HOME:-/home/agent}"
+        exec sh "${home}/.local/lib/md2okf/md2okf-agent.sh" \
+          "${home}/.codex/sessions" "$@"
+
+    - path: /home/agent/.local/bin/inspectmd
+      mode: "0755"
+      description: Workspace-backed inspectmd CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectmd" inspectmd "$@"
+
+    - path: /home/agent/.local/bin/inspectokf
+      mode: "0755"
+      description: Workspace-backed inspectokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/inspectokf" inspectokf "$@"
+
+    - path: /home/agent/.local/bin/sizeokf
+      mode: "0755"
+      description: Workspace-backed sizeokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/sizeokf" sizeokf "$@"
+
+    - path: /home/agent/.local/bin/merkleokf
+      mode: "0755"
+      description: Workspace-backed merkleokf CLI
+      content: |
+        #!/bin/sh
+        set -eu
+        exec uv tool run --from "$(dirname "${WORKDIR}")/scripts/merkleokf" merkleokf "$@"

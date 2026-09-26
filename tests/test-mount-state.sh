@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HELPER="${ROOT}/kits/pi/files/home/.local/lib/md2okf/mount-state.sh"
+WRAPPER="${ROOT}/kits/pi/files/home/.local/lib/md2okf/md2okf-agent.sh"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/md2okf-state-test.XXXXXX")"
 TESTS=0
 
@@ -158,59 +159,152 @@ assert_eq 1 "${STATUS}" "copy failure status"
 [[ "${STDERR}" == *"could not copy"* ]] || fail "copy failure was not reported"
 pass "a copy failure is fatal"
 
-# Extract and execute the real entrypoint block. Pi must not launch after a
-# relocation failure.
-SPEC="${ROOT}/kits/pi/spec.yaml"
-ENTRYPOINT="$(awk '
-	$0 == "    - |" { block = 1; next }
-	block && /^    - / { exit }
-	block { sub(/^      /, ""); print }
-' "${SPEC}")"
-fresh entrypoint
+# --- md2okf-agent.sh: the per-process wrapper ---------------------------------
+#
+# The driver starts every agent process through it (`sbx exec` bypasses the
+# entrypoint), so it is the only relocation guard on an automated turn. Driven
+# like the entrypoint above: a stub mount-state.sh under a fake HOME whose
+# status the case chooses, and a stub agent that records exactly what it got.
+fresh wrapper
 FAKE_HOME="${CASE}/home/agent"
 FAKE_BIN="${CASE}/bin"
 AGENT_LOG="${CASE}/agent.log"
+MOUNT_LOG="${CASE}/mount.log"
 mkdir -p "${FAKE_HOME}/.local/lib/md2okf" "${FAKE_BIN}"
 # shellcheck disable=SC2016 # variables belong to the generated scripts
-printf '#!/bin/sh\nexit "${MOUNT_STATE_TEST_STATUS}"\n' \
+printf '#!/bin/sh\nprintf "%%s|" "$@" >"${WRAPPER_MOUNT_LOG}"\nexit "${MOUNT_STATE_TEST_STATUS}"\n' \
 	>"${FAKE_HOME}/.local/lib/md2okf/mount-state.sh"
 # shellcheck disable=SC2016 # variables belong to the generated scripts
-printf '#!/bin/sh\nprintf "started\\n" >>"${ENTRYPOINT_AGENT_LOG}"\n' \
-	>"${FAKE_BIN}/pi"
-chmod +x "${FAKE_HOME}/.local/lib/md2okf/mount-state.sh" "${FAKE_BIN}/pi"
-: >"${AGENT_LOG}"
-MOUNT_STATE_TEST_STATUS=0 ENTRYPOINT_AGENT_LOG="${AGENT_LOG}" HOME="${FAKE_HOME}" \
-	PATH="${FAKE_BIN}:${PATH}" sh -c "${ENTRYPOINT}" md2okf-entrypoint
-[[ -s "${AGENT_LOG}" ]] || fail "entrypoint did not launch Pi after a successful bind"
-: >"${AGENT_LOG}"
-set +e
-MOUNT_STATE_TEST_STATUS=1 ENTRYPOINT_AGENT_LOG="${AGENT_LOG}" HOME="${FAKE_HOME}" \
-	PATH="${FAKE_BIN}:${PATH}" sh -c "${ENTRYPOINT}" md2okf-entrypoint \
-	2>"${CASE}/entrypoint-stderr"
-STATUS=$?
-set -e
-assert_eq 1 "${STATUS}" "entrypoint failure status"
-[[ ! -s "${AGENT_LOG}" ]] || fail "entrypoint launched Pi after relocation failed"
-grep -q 'refusing to start pi' "${CASE}/entrypoint-stderr" ||
-	fail "entrypoint did not explain its refusal"
-pass "the Pi entrypoint refuses to launch when relocation fails"
+printf '#!/bin/sh\nfor arg in "$@"; do printf "[%%s]\\n" "$arg"; done >"${WRAPPER_AGENT_LOG}"\nexit "${FAKE_AGENT_STATUS:-0}"\n' \
+	>"${FAKE_BIN}/fake-agent"
+chmod +x "${FAKE_BIN}/fake-agent"
 
-# The bind is required from both lifecycle sites. Exactly two helper calls
-# prevent either a missing site or an accidental duplicate.
-calls="$(grep -c 'lib/md2okf/mount-state\.sh' "${SPEC}" || true)"
-assert_eq 2 "${calls}" "mount-state call count"
-STARTUP="$(awk '
-	$0 == "  startup:" { block = 1; next }
-	block && /^  [^ ]/ { exit }
-	block { print }
-' "${SPEC}")"
-[[ "${STARTUP}" == *'lib/md2okf/mount-state.sh'* ]] ||
-	fail "startup hook does not invoke mount-state.sh"
-# shellcheck disable=SC2016 # match the spec's literal in-sandbox HOME
-[[ "${STARTUP}" == *'"$HOME/.pi/agent/sessions" sessions'* ]] ||
-	fail "startup hook passes the wrong session path"
-[[ "${STARTUP}" == *'user: "agent"'* ]] ||
-	fail "startup hook does not run as the agent user"
-pass "the kit invokes mount-state.sh from entrypoint and startup"
+run_wrapper() {
+	local stderr_file="${CASE}/wrapper-stderr"
+	: >"${AGENT_LOG}"
+	: >"${MOUNT_LOG}"
+	set +e
+	WRAPPER_AGENT_LOG="${AGENT_LOG}" WRAPPER_MOUNT_LOG="${MOUNT_LOG}" \
+		HOME="${FAKE_HOME}" PATH="${FAKE_BIN}:${PATH}" sh "${WRAPPER}" "$@" \
+		2>"${stderr_file}"
+	STATUS=$?
+	set -e
+	STDERR="$(<"${stderr_file}")"
+}
+
+MOUNT_STATE_TEST_STATUS=0 run_wrapper /trace/dir fake-agent "two words" "" last
+assert_eq 0 "${STATUS}" "wrapper success status"
+assert_eq "/trace/dir|sessions|" "$(<"${MOUNT_LOG}")" "wrapper relocation arguments"
+assert_eq $'[two words]\n[]\n[last]' "$(<"${AGENT_LOG}")" "wrapper argument forwarding"
+pass "the wrapper relocates the trace directory, then runs the agent with its arguments intact"
+
+MOUNT_STATE_TEST_STATUS=0 FAKE_AGENT_STATUS=7 run_wrapper /trace/dir fake-agent
+assert_eq 7 "${STATUS}" "wrapper exit status passthrough"
+pass "the agent's own exit status comes back unchanged"
+
+MOUNT_STATE_TEST_STATUS=1 run_wrapper /trace/dir fake-agent --should-not-run
+assert_eq 1 "${STATUS}" "wrapper relocation failure status"
+[[ ! -s "${AGENT_LOG}" ]] || fail "the wrapper started the agent after relocation failed"
+[[ "${STDERR}" == *"refusing to start fake-agent"* ]] ||
+	fail "the wrapper did not explain its refusal: ${STDERR}"
+pass "the wrapper refuses to start the agent when relocation fails"
+
+MOUNT_STATE_TEST_STATUS=0 run_wrapper /trace/dir
+assert_eq 2 "${STATUS}" "wrapper usage status"
+[[ ! -s "${MOUNT_LOG}" ]] || fail "the wrapper relocated with no command to run"
+[[ "${STDERR}" == *"usage:"* ]] || fail "the wrapper did not print its usage"
+pass "the wrapper refuses to run without a command"
+
+# --- every kit's relocation sites ----------------------------------------------
+#
+# The bind is required from all three lifecycle sites: the entrypoint (starts
+# where the startup hook is not replayed), the startup hook (normal starts),
+# and the wrapper shim (every process the driver starts with `sbx exec`). Each
+# is named rather than counted, so a missing site and a stray duplicate are
+# both caught with a message saying which -- and all three must name the same
+# native trace directory, or an agent's traces would be bound in one lifecycle
+# and land on the VM's disposable disk in another.
+#
+# check_kit KIT AGENT_BINARY TRACE_DIR -- TRACE_DIR relative to $HOME.
+check_kit() {
+	local kit="$1" binary="$2" trace="$3"
+	local spec="${ROOT}/kits/${kit}/spec.yaml"
+	local entrypoint startup shim calls fake_home fake_bin agent_log
+	[[ -f "${spec}" ]] || fail "kits/${kit}/spec.yaml is missing"
+
+	# Extract and execute the real entrypoint block: the agent must not launch
+	# after a relocation failure.
+	entrypoint="$(awk '
+		$0 == "    - |" { block = 1; next }
+		block && /^    - / { exit }
+		block { sub(/^      /, ""); print }
+	' "${spec}")"
+	[[ -n "${entrypoint}" ]] || fail "kits/${kit}: no entrypoint block found"
+	fresh "entrypoint-${kit}"
+	fake_home="${CASE}/home/agent"
+	fake_bin="${CASE}/bin"
+	agent_log="${CASE}/agent.log"
+	mkdir -p "${fake_home}/.local/lib/md2okf" "${fake_bin}"
+	# shellcheck disable=SC2016 # variables belong to the generated scripts
+	printf '#!/bin/sh\nexit "${MOUNT_STATE_TEST_STATUS}"\n' \
+		>"${fake_home}/.local/lib/md2okf/mount-state.sh"
+	# shellcheck disable=SC2016 # variables belong to the generated scripts
+	printf '#!/bin/sh\nprintf "started\\n" >>"${ENTRYPOINT_AGENT_LOG}"\n' \
+		>"${fake_bin}/${binary}"
+	chmod +x "${fake_home}/.local/lib/md2okf/mount-state.sh" "${fake_bin}/${binary}"
+	: >"${agent_log}"
+	MOUNT_STATE_TEST_STATUS=0 ENTRYPOINT_AGENT_LOG="${agent_log}" HOME="${fake_home}" \
+		PATH="${fake_bin}:${PATH}" sh -c "${entrypoint}" md2okf-entrypoint
+	[[ -s "${agent_log}" ]] || fail "kits/${kit}: entrypoint did not launch ${binary} after a successful bind"
+	: >"${agent_log}"
+	set +e
+	MOUNT_STATE_TEST_STATUS=1 ENTRYPOINT_AGENT_LOG="${agent_log}" HOME="${fake_home}" \
+		PATH="${fake_bin}:${PATH}" sh -c "${entrypoint}" md2okf-entrypoint \
+		2>"${CASE}/entrypoint-stderr"
+	STATUS=$?
+	set -e
+	assert_eq 1 "${STATUS}" "kits/${kit} entrypoint failure status"
+	[[ ! -s "${agent_log}" ]] || fail "kits/${kit}: entrypoint launched ${binary} after relocation failed"
+	grep -q "refusing to start ${binary}" "${CASE}/entrypoint-stderr" ||
+		fail "kits/${kit}: entrypoint did not explain its refusal"
+	pass "kits/${kit}: the entrypoint refuses to launch ${binary} when relocation fails"
+
+	calls="$(grep -c 'lib/md2okf/mount-state\.sh' "${spec}" || true)"
+	assert_eq 2 "${calls}" "kits/${kit}: mount-state calls in the spec (entrypoint and startup)"
+	# shellcheck disable=SC2016 # match the spec's literal in-sandbox HOME
+	[[ "${entrypoint}" == *'"$HOME/'"${trace}"'" sessions'* ]] ||
+		fail "kits/${kit}: entrypoint does not relocate ~/${trace}"
+	startup="$(awk '
+		$0 == "  startup:" { block = 1; next }
+		block && /^  [^ ]/ { exit }
+		block { print }
+	' "${spec}")"
+	# shellcheck disable=SC2016 # match the spec's literal in-sandbox HOME
+	[[ "${startup}" == *'"$HOME/'"${trace}"'" sessions'* ]] ||
+		fail "kits/${kit}: startup hook does not relocate ~/${trace}"
+	[[ "${startup}" == *'user: "agent"'* ]] ||
+		fail "kits/${kit}: startup hook does not run as the agent user"
+	shim="$(awk '
+		$0 == "    - path: /home/agent/.local/bin/md2okf-agent" { block = 1; next }
+		block && /^    - path: / { exit }
+		block { print }
+	' "${spec}")"
+	[[ -n "${shim}" ]] || fail "kits/${kit}: no md2okf-agent shim"
+	[[ "${shim}" == *'/.local/lib/md2okf/md2okf-agent.sh"'* ]] ||
+		fail "kits/${kit}: the md2okf-agent shim does not run md2okf-agent.sh"
+	# shellcheck disable=SC2016 # match the spec's literal in-sandbox paths
+	[[ "${shim}" == *'"${home}/'"${trace}"'" "$@"'* ]] ||
+		fail "kits/${kit}: the md2okf-agent shim does not pass ~/${trace}"
+	cmp -s "${WRAPPER}" "${ROOT}/kits/${kit}/files/home/.local/lib/md2okf/md2okf-agent.sh" ||
+		fail "kits/${kit}: md2okf-agent.sh differs from kits/pi's"
+	pass "kits/${kit}: entrypoint, startup hook and wrapper all relocate ~/${trace}"
+}
+
+grep -q 'lib/md2okf/mount-state\.sh' "${WRAPPER}" ||
+	fail "md2okf-agent.sh does not invoke mount-state.sh"
+
+check_kit pi pi .pi/agent/sessions
+check_kit claude claude .claude/projects
+check_kit codex codex .codex/sessions
 
 echo "All ${TESTS} mount-state tests passed."

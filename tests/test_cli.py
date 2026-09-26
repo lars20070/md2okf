@@ -99,7 +99,7 @@ def test_dry_run_prints_the_command_lines_that_would_run(tmp_path, capsys, isola
     assert "  agent:  pi\n" in out
     assert f"sbx run --detached --name {PI_SANDBOX} " in out
     assert f"{resources.kit_dir('pi')} " in out
-    assert f"sbx exec {PI_SANDBOX} -- pi --mode json 'Load the compile-okf skill" in out
+    assert f"sbx exec {PI_SANDBOX} -- md2okf-agent pi --mode json 'Load the compile-okf skill" in out
     assert doc.name in out  # the staged basename is embedded in the pi prompt
     assert fake_sbx.calls == []
 
@@ -118,7 +118,7 @@ def test_unknown_agent_is_exit_2_before_any_work(flags, tmp_path, capsys, isolat
     assert cli.main(args) == 2
     err = capsys.readouterr().err
     assert "MD2OKF_AGENT='bogus'" in err
-    assert "valid: pi" in err
+    assert "valid: claude, codex, pi" in err
     assert fake_sbx.calls == []
     assert not (isolated_state / "xdg-state").exists()
 
@@ -394,7 +394,7 @@ def test_shell_execs_an_interactive_bash_in_the_sandbox(isolated_state, fake_sbx
 def test_agent_execs_a_bare_interactive_agent_in_the_sandbox(isolated_state, fake_sbx, a_tty):
     with pytest.raises(ExecvpCalled) as excinfo:
         cli.main(["--agent"])
-    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "pi"]
+    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "md2okf-agent", "pi"]
 
 
 def test_shell_opens_with_a_warning_when_credentials_are_not_ready(isolated_state, fake_sbx, a_tty, capsys):
@@ -578,3 +578,149 @@ def test_interactive_entry_without_a_tty_touches_no_sandbox(capsys, isolated_sta
         assert rc == 2, flag
         assert "needs a terminal" in capsys.readouterr().err, flag
     assert fake_sbx.calls == []
+
+
+# --- a second agent: Claude ------------------------------------------------------
+#
+# The same command with MD2OKF_AGENT=claude: its own sandbox, kit, workbench,
+# argv, sbx minimum and credential check, and its own protocol parsing a
+# stream the Claude spike captured.
+
+CLAUDE_SANDBOX = workbench.sandbox_name("claude")
+CLAUDE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "claude"
+
+
+@pytest.fixture
+def claude(monkeypatch, fake_sbx):
+    """Select Claude, on an sbx new enough for its kit."""
+    monkeypatch.setenv("MD2OKF_AGENT", "claude")
+    fake_sbx.version_string = "0.45.0"
+    return fake_sbx
+
+
+def test_claude_dry_run_resolves_its_own_sandbox_kit_workbench_and_argv(tmp_path, capsys, isolated_state, claude):
+    doc = _md(tmp_path)
+    assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
+    out = capsys.readouterr().out
+    assert "  agent:  claude\n" in out
+    assert f"sbx run --detached --name {CLAUDE_SANDBOX} " in out
+    assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'claude'} " in out
+    assert f"{resources.kit_dir('claude')} " in out
+    assert (
+        f"sbx exec {CLAUDE_SANDBOX} -- md2okf-agent claude -p --output-format stream-json --verbose "
+        "--permission-mode bypassPermissions --strict-mcp-config 'Load the compile-okf skill: "
+        "read ~/.claude/skills/compile-okf/SKILL.md"
+    ) in out
+    assert claude.calls == []
+
+
+def test_claude_refuses_an_sbx_older_than_its_kit_needs(tmp_path, capsys, isolated_state, claude):
+    claude.version_string = "0.44.9"
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "at least version 0.45.0" in capsys.readouterr().err
+
+
+def _write_a_claude_page() -> None:
+    work_okf = workbench.Workbench.default("claude").work_okf
+    (work_okf / "page.md").write_text("compiled", encoding="utf-8")
+
+
+def test_claude_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_state, claude):
+    doc = _md(tmp_path)
+    lines = (CLAUDE_FIXTURES / "success-write.jsonl").read_text(encoding="utf-8").splitlines()
+    claude.queue_hash("aaaa0000")
+    claude.queue_turn(lines, side_effect=_write_a_claude_page)
+    claude.queue_hash("bbbb1111")
+    claude.queue_turn(lines)
+    claude.queue_hash("bbbb1111")
+
+    assert cli.main(["-v", "-o", str(tmp_path / "out"), str(doc)]) == 0
+
+    out, err = capsys.readouterr()
+    assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
+    assert "Write {'file_path': " in err  # -v renders Claude's tool calls like Pi's
+    assert sandbox.exists(CLAUDE_SANDBOX)
+    assert all(argv[:2] == ["md2okf-agent", "claude"] for argv in claude.turn_argvs)
+    assert (tmp_path / "out" / "page.md").is_file()
+
+
+def test_claude_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_state, claude):
+    claude.claude_logged_in = False
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    err = capsys.readouterr().err
+    assert "sbx run claude, then /login" in err
+    assert f"sbx rm --force {CLAUDE_SANDBOX}" in err
+    assert claude.turn_argvs == []
+
+
+def test_claude_agent_session_runs_through_the_wrapper(isolated_state, claude, a_tty):
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--agent"])
+    assert excinfo.value.argv == [
+        "sbx", "exec", "-it", CLAUDE_SANDBOX, "--",
+        "md2okf-agent", "claude", "--permission-mode", "bypassPermissions",
+    ]  # fmt: skip
+
+
+def test_claude_shell_opens_with_a_warning_when_not_logged_in(isolated_state, claude, a_tty, capsys):
+    claude.claude_logged_in = False
+    with pytest.raises(ExecvpCalled) as excinfo:
+        cli.main(["--shell"])
+    assert excinfo.value.argv == ["sbx", "exec", "-it", CLAUDE_SANDBOX, "--", "bash"]
+    assert "md2okf: warning: Claude Code inside" in capsys.readouterr().err
+
+
+def test_agents_keep_separate_sandboxes_and_workbenches(tmp_path, isolated_state, fake_sbx, monkeypatch):
+    """Coexistence: a Claude run neither reuses nor disturbs Pi's sandbox."""
+    fake_sbx.version_string = "0.45.0"
+    for agent in ("pi", "claude"):
+        monkeypatch.setenv("MD2OKF_AGENT", agent)
+        assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
+    assert sandbox._ensure_default_sandbox() == 0  # claude, still selected
+    monkeypatch.setenv("MD2OKF_AGENT", "pi")
+    assert sandbox._ensure_default_sandbox() == 0
+    assert sandbox.exists(CLAUDE_SANDBOX)
+    assert sandbox.exists(workbench.sandbox_name("pi"))
+    for agent in ("pi", "claude"):
+        assert workbench.read_ownership_marker(workbench.Workbench.default(agent)) is not None
+
+
+
+# --- a third agent: Codex --------------------------------------------------------
+
+CODEX_SANDBOX = workbench.sandbox_name("codex")
+CODEX_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "codex"
+
+
+def test_codex_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    monkeypatch.setenv("MD2OKF_AGENT", "codex")
+    fake_sbx.version_string = "0.45.0"
+    lines = ["Reading additional input from stdin..."]
+    lines += (CODEX_FIXTURES / "success-write.jsonl").read_text(encoding="utf-8").splitlines()
+
+    def write_a_page() -> None:
+        (workbench.Workbench.default("codex").work_okf / "page.md").write_text("compiled", encoding="utf-8")
+
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_turn(lines, side_effect=write_a_page)
+    fake_sbx.queue_hash("bbbb1111")
+    fake_sbx.queue_turn(lines)
+    fake_sbx.queue_hash("bbbb1111")
+
+    assert cli.main(["-v", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
+
+    out, err = capsys.readouterr()
+    assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
+    assert "file_change add /Users/user/" in err
+    assert "Reading additional input" not in err
+    assert fake_sbx.turn_argvs[0][:3] == ["md2okf-agent", "codex", "exec"]
+    assert fake_sbx.turn_argvs[0][-1].startswith("$compile-okf Compile ")
+    assert sandbox.exists(CODEX_SANDBOX)
+
+
+def test_codex_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    monkeypatch.setenv("MD2OKF_AGENT", "codex")
+    fake_sbx.version_string = "0.45.0"
+    fake_sbx.codex_logged_in = False
+    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
+    assert "sbx secret set openai --oauth" in capsys.readouterr().err

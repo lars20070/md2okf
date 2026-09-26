@@ -41,10 +41,11 @@ def _build_parser() -> argparse.ArgumentParser:
         # Held to 79 columns so it renders in a standard terminal; the epilog is
         # printed verbatim. These are the only four variables a user of the
         # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
-        epilog="""\
+        epilog=f"""\
 Environment:
-  MD2OKF_AGENT        agent framework to run: pi. Each agent has its own
-                      sandbox (md2okf-<agent>) and workbench. (default: pi)
+  MD2OKF_AGENT        agent framework to run: {", ".join(sorted(agents.AGENTS))}. Each agent
+                      has its own sandbox (md2okf-<agent>) and workbench.
+                      (default: {agents.DEFAULT_AGENT})
   OPENROUTER_API_KEY  required for pi, but read from `sbx secret`, never from
                       this environment
   XDG_STATE_HOME      session state and the run workbench. Absolute paths

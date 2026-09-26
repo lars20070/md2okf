@@ -252,7 +252,7 @@ def test_continuation_prompt_appended_from_iteration_two(fake_sbx, tmp_path):
     compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
     first, second = fake_sbx.turn_argvs
-    assert first == ["pi", "--mode", "json", PI.compile_prompt(wb.work_md / "a.md")]
+    assert first == ["md2okf-agent", "pi", "--mode", "json", PI.compile_prompt(wb.work_md / "a.md")]
     assert compile_mod.CONTINUATION_PROMPT not in first[-1]
     assert second[-1] == f"{first[-1]} {compile_mod.CONTINUATION_PROMPT}"
 
@@ -464,6 +464,20 @@ def test_verbose_does_not_echo_pi_protocol_events(fake_sbx, tmp_path):
     assert seen == ["Read {}", "plain stderr text worth seeing"]
 
 
+def test_failure_tail_keeps_a_line_cut_short_but_drops_whole_envelopes():
+    """Only whole JSON objects are protocol noise; a truncated one is a symptom worth showing."""
+    lines = [
+        '{"type": "message_update"}',
+        '{"type": "assistant", "message": {"content": [{"type": "te',
+        "[1, 2, 3]",
+        "",
+        "RuntimeError: the actual reason",
+    ]
+    assert compile_mod._diagnostic_tail(lines) == "\n".join(
+        ['{"type": "assistant", "message": {"content": [{"type": "te', "[1, 2, 3]", "RuntimeError: the actual reason"]
+    )
+
+
 def test_failure_tail_excludes_protocol_json(fake_sbx, tmp_path):
     """The cause belongs in the message, not a wall of JSON envelopes."""
     fake_sbx.register(NAME)
@@ -607,3 +621,38 @@ def test_no_tool_calls_names_the_agent(fake_sbx, tmp_path):
 
     with pytest.raises(compile_mod.CompileError, match="stub session made no tool calls"):
         compile_mod.compile_document(STUB, STUB_NAME, _doc(tmp_path), wb, out)
+
+
+def test_a_line_the_protocol_hides_stays_out_of_the_failure_message(fake_sbx, tmp_path):
+    """Regression, seen live: Codex's stdin notice ended every Codex error message."""
+
+    class _Hiding:
+        @staticmethod
+        def process(lines):
+            for line in lines:
+                if line == "harmless notice":
+                    yield Event(line, None, False, None)
+                else:
+                    yield Event(line, line, False, None)
+
+    agent = agents.Agent(
+        name="hider",
+        min_sbx_version=(0, 43, 0),
+        compile_args=lambda prompt: ["hider", prompt],
+        interactive_args=("hider",),
+        compile_prompt=lambda document: str(document),
+        check_credentials=lambda _name: None,
+        protocol=_Hiding(),
+    )
+    name = workbench.sandbox_name(agent.name)
+    fake_sbx.register(name)
+    wb = _wb(tmp_path)
+    (wb.work_okf / "page.md").write_text("seed", encoding="utf-8")
+    fake_sbx.queue_hash("aaaa0000")
+    fake_sbx.queue_turn(["the real cause", "harmless notice"], returncode=1)
+
+    with pytest.raises(compile_mod.CompileError) as excinfo:
+        compile_mod.compile_document(agent, name, _doc(tmp_path), wb, tmp_path / "out")
+
+    assert "the real cause" in str(excinfo.value)
+    assert "harmless notice" not in str(excinfo.value)

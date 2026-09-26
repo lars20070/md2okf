@@ -6,10 +6,11 @@
 
 Compile Markdown documents into an OKF knowledge base with a coding agent.
 
-Point `md2okf` at a Markdown file or folder and the [Pi coding
-agent](https://pi.dev) writes a wiki into the output directory: a page per
-topic, an index in every directory, links between them, and a log of what each
-run changed. OKF,
+Point `md2okf` at a Markdown file or folder and a coding agent — the [Pi coding
+agent](https://pi.dev) by default, or [Claude Code](https://code.claude.com)
+or [Codex](https://github.com/openai/codex) — writes a wiki into the output
+directory: a page per topic, an index in every directory, links between them,
+and a log of what each run changed. OKF,
 the [Open Knowledge
 Format](https://github.com/GoogleCloudPlatform/open-knowledge-format),
 is a tree of Markdown files with YAML frontmatter and nothing else — no schema
@@ -82,7 +83,10 @@ them survey the source markdown and wiki, `curate-okf` maintains its nodes and
 indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx proxy, which injects the
-OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
+OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).
+The diagram shows Pi, the default. Claude Code and Codex run the same way in
+sandboxes of their own, signed in to their own model providers instead of
+OpenRouter — see [Choosing an agent](#choosing-an-agent).*
 
 <!-- cspell:enable -->
 
@@ -90,6 +94,7 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 
 - [Requirements](#requirements)
 - [Quickstart](#quickstart)
+- [Choosing an agent](#choosing-an-agent)
 - [Session state](#session-state)
 - [How it works](#how-it-works)
 - [What lands in okf/](#what-lands-in-okf)
@@ -106,9 +111,13 @@ OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).*
 - macOS with [Homebrew](https://brew.sh), or
   Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
   required.
-- [sbx](https://github.com/docker/sbx-releases) 0.43.0 is required. sbx is experimental. A later version may break `md2okf`.
-- An [OpenRouter](https://openrouter.ai) API key, which pays for the model the
-  agent runs on.
+- [sbx](https://github.com/docker/sbx-releases) 0.43.0 is required, or 0.45.0
+  for Claude Code and Codex. sbx is experimental. A later version may break
+  `md2okf`.
+- One model credential, for the agent you choose: an
+  [OpenRouter](https://openrouter.ai) API key for Pi, the default; a Claude
+  subscription or Anthropic API key for Claude Code; a ChatGPT subscription or
+  OpenAI API key for Codex. See [Choosing an agent](#choosing-an-agent).
 - [uv](https://docs.astral.sh/uv/), which installs and runs `md2okf`.
 - `git`. `make` and `jq` are needed only for the developer tasks in
   [the contributing guide](CONTRIBUTING.md), not for compiling.
@@ -140,8 +149,10 @@ sudo usermod -aG kvm "$USER" && newgrp kvm
 sbx login
 ```
 
-Hand sbx your OpenRouter key once — see [Set up the OpenRouter
-key](#set-up-the-openrouter-key). Then install the command and compile:
+Hand sbx your agent's credential once — for Pi, the default, that is the
+OpenRouter key, see [Set up the OpenRouter key](#set-up-the-openrouter-key);
+for the others, [Choosing an agent](#choosing-an-agent). Then install the
+command and compile:
 
 ```bash
 uv tool install md2okf                  # Install from PyPI
@@ -170,12 +181,12 @@ md2okf --agent                            # Interactive agent session
 Both are for inspecting the sandbox rather than authoring in it. They do not
 restage a compile run: helper CLIs are refreshed, an empty spec mount gets the
 bundled spec, and prior workbench content otherwise remains. The next compile
-replaces `work/okf`; Pi transcripts persist. The workbench lock remains held
+replaces `work/okf`; the agent's transcripts persist. The workbench lock remains held
 until the session exits, so a concurrent compile or `--fresh` invocation is
 refused. Only `--fresh` combines with them.
 
-Session state defaults to `~/.local/state/md2okf/pi` — one folder per agent;
-see [Environment](#environment) to put it elsewhere.
+Session state defaults to `~/.local/state/md2okf/<agent>` — one folder per
+agent; see [Environment](#environment) to put it elsewhere.
 
 Each document gets its own agent run, and each run reports the wiki's root hash
 before and after (tool calls and agent prose stream in between):
@@ -194,14 +205,52 @@ output directory: it creates one that does not exist, adopts one that is empty
 or already an OKF bundle root, and refuses anything else rather than deleting
 what it finds.
 
+## Choosing an agent
+
+`MD2OKF_AGENT` picks the coding agent that compiles; unset, it is Pi. Each
+agent runs in a sandbox of its own, built from its own kit under `kits/`, with
+its own workbench, so switching back and forth rebuilds nothing — though runs
+still take one lock, so two never compile at once.
+
+```bash
+md2okf md/                                  # Pi, the default
+MD2OKF_AGENT=claude md2okf md/              # Claude Code
+MD2OKF_AGENT=codex md2okf -o wikis/c md/    # Codex, into another wiki
+MD2OKF_AGENT=claude md2okf --agent          # open Claude Code in its sandbox
+```
+
+| `MD2OKF_AGENT` | Agent | Sandbox | Needs | Set the credential on the host |
+| --- | --- | --- | --- | --- |
+| `pi` (default) | [Pi](https://pi.dev) | `md2okf-pi` | sbx 0.43.0 | an OpenRouter key — see [Set up the OpenRouter key](#set-up-the-openrouter-key) |
+| `claude` | [Claude Code](https://code.claude.com) | `md2okf-claude` | sbx 0.45.0 | `/login` inside a Claude sandbox, such as `sbx run claude` (Claude subscription), or `sbx secret set anthropic` (API key) |
+| `codex` | [Codex](https://github.com/openai/codex) | `md2okf-codex` | sbx 0.45.0 | `sbx secret set openai --oauth` (ChatGPT subscription) or `sbx secret set openai` (API key) |
+
+`sbx` keeps every credential outside the virtual machine and hands it to the
+sandbox when the sandbox is **created**. So set it before the first run with
+that agent; set or change it later, and remove the sandbox once
+(`sbx rm --force md2okf-<agent>`) so the next run builds one that has it.
+`md2okf` checks the credential before every run and prints the exact commands
+when it is missing.
+
+All three compile the same way, to the same OKF conventions: the same
+`compile-okf` procedure and helper skills, the same gate, the same wiki
+layout. Each signs the pages it writes with its own name in `generated.by` —
+`pi/…`, `claude/…`, `codex/…` — so a wiki written by several agents says which
+wrote what. They differ in the model behind them, so page boundaries and prose
+choices can differ between agents on the same source; the fidelity rule and
+the gate hold for all of them. The kit guides — [Pi](kits/pi/README.md),
+[Claude Code](kits/claude/README.md), [Codex](kits/codex/README.md) — cover
+each agent's configuration.
+
 ## Session state
 
-Pi writes transcripts through its native `~/.pi/agent/sessions` path. Inside
-the sandbox that directory is bind-mounted onto the host's
-`$XDG_STATE_HOME/md2okf/pi/sessions`, so sessions survive `sbx rm` and retain Pi's
-native per-working-directory layout. All md2okf clones using the same state
-home intentionally share this directory; Pi's own layout separates their
-working directories.
+Each agent writes transcripts through its own native path — Pi to
+`~/.pi/agent/sessions`, Claude Code to `~/.claude/projects`, Codex to
+`~/.codex/sessions`. Inside the sandbox that directory is bind-mounted onto the
+host's `$XDG_STATE_HOME/md2okf/<agent>/sessions`, so transcripts survive
+`sbx rm` and keep the agent's native layout. All md2okf clones using the same
+state home intentionally share this directory; each agent's own layout
+separates their working directories.
 
 State location follows this precedence: an exported absolute `XDG_STATE_HOME`,
 then `~/.local/state`. XDG requires an absolute path, so a relative value counts
@@ -215,11 +264,11 @@ kit, or change anything else the fingerprint covers, and the next run rebuilds
 by itself.
 
 Changing `XDG_STATE_HOME` is the exception, because it moves the record out of
-view: the new state root has no marker, so a sandbox still named `md2okf-pi`
-cannot be proved to be ours. `md2okf` stops with exit 2 rather than deleting
-something it may not own, and `--fresh` does not override that — it recreates a
-sandbox we *can* prove is ours. Run `sbx rm --force md2okf-pi` yourself, then use
-the new state home.
+view: the new state root has no marker, so a sandbox still named
+`md2okf-<agent>` cannot be proved to be ours. `md2okf` stops with exit 2 rather
+than deleting something it may not own, and `--fresh` does not override that —
+it recreates a sandbox we *can* prove is ours. Run
+`sbx rm --force md2okf-<agent>` yourself, then use the new state home.
 
 ## How it works
 
@@ -227,11 +276,11 @@ the new state home.
 until a hash of the output stops moving. The host drives; everything else
 happens inside the sandbox.
 
-One sandbox per agent serves every run with that agent: `md2okf-pi` for Pi,
-the default. Rather than mounting your folders
-— sbx fixes a sandbox's mounts when it is created, so a second `-o` would mean
-either a rebuild or writing into the first wiki — the command stages each run
-through a fixed workbench under `$XDG_STATE_HOME/md2okf/pi/work`: your inputs are
+One sandbox per agent serves every run with that agent — `md2okf-pi`,
+`md2okf-claude`, `md2okf-codex`. Rather than mounting your folders — sbx fixes
+a sandbox's mounts when it is created, so a second `-o` would mean either a
+rebuild or writing into the first wiki — the command stages each run through a
+fixed workbench under `$XDG_STATE_HOME/md2okf/<agent>/work`: your inputs are
 copied in, the target wiki is mirrored in before the run and back out after
 every iteration, and the mount paths never change. The sandbox is rebuilt only
 when the kit it was built from changes, when the configuration no longer
@@ -245,8 +294,8 @@ nothing — which on a first pass is the idempotent re-run, not a failure. The
 loop is capped by `-n` (default 10). The agent's only writable content output is
 `okf/`, the [okfctl](https://github.com/cwest/okfctl) check must pass before it
 finishes, and `SPEC.md` outranks every instruction file. Each run streams
-tool names and assistant text as it goes, and Pi writes its session transcript
-through its native session path into persistent host state.
+tool names and assistant text as it goes, and the agent writes its transcript
+through its native path into persistent host state.
 
 ### What the sandbox can reach
 
@@ -261,15 +310,15 @@ nothing else of yours is visible inside the microVM — not `.git`, not the
 | `work/md` | read-only | the staged source documents, read as data and never modified |
 | `work/scripts` | read-only | the four helper CLI projects the agent runs |
 | `work/SPEC.md` | read-only | the specification that outranks every instruction |
-| `$XDG_STATE_HOME/md2okf/pi/sessions` | read-write | persistent Pi session state |
+| `$XDG_STATE_HOME/md2okf/<agent>/sessions` | read-write | the agent's persistent transcripts |
 
-Every one of them is under `$XDG_STATE_HOME/md2okf/pi`, so the agent never sees a
+Every one of them is under `$XDG_STATE_HOME/md2okf/<agent>`, so the agent never sees a
 path of yours: it works on the staged copies, and the driver mirrors the wiki
 back out. The state *root* is deliberately not mounted — it also holds the
 host-side ownership marker — and no read-write mount is an ancestor of a
 read-only one, so `work/md` and `work/SPEC.md` stay read-only even against root
 in the guest. The mount list lives in one place,
-[`src/md2okf/workbench.py`](src/md2okf/workbench.py); `sbx inspect md2okf-pi` shows
+[`src/md2okf/workbench.py`](src/md2okf/workbench.py); `sbx inspect md2okf-<agent>` shows
 what a running sandbox actually got. Because `work/okf` is the primary mount it
 is also the working directory inside the VM, which is why the agent addresses
 its siblings as `../md/`, `../scripts/` and `../SPEC.md`.
@@ -283,9 +332,9 @@ its siblings as `../md/`, `../scripts/` and `../SPEC.md`.
 | `src/md2okf/` | the `md2okf` command: workbench, sbx seam, Ralph loop |
 | `Makefile` | the developer tasks — lint, validate, tests, installs |
 | `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus repository chores |
-| `kits/pi/` | what the driver runs: the Docker Sandbox kit and the config it carries |
+| `kits/<agent>/` | what the driver runs: one Docker Sandbox kit per agent (`pi`, `claude`, `codex`) and the config it carries |
 | `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against — vendored verbatim, Apache-2.0, see [NOTICE-OKF-SPEC.md](NOTICE-OKF-SPEC.md) |
-| `AGENTS.md` | instructions for coding agents working *on this repo*, not for Pi |
+| `AGENTS.md` | instructions for coding agents working *on this repo*, not for the agents md2okf drives |
 | `pdf2md/` | optional: converts a PDF into `md` |
 | `web2md/` | optional: scrapes a documentation site into `md` |
 
@@ -352,7 +401,7 @@ set. `md2okf --help` lists the same four.
 
 | Variable | What it does |
 | --- | --- |
-| `MD2OKF_AGENT` | Optional. The agent framework to run; today only `pi`, the default (unset or empty means `pi`). An unknown value is refused with exit 2 before anything runs. Each agent has its own sandbox (`md2okf-<agent>`) and workbench (`$XDG_STATE_HOME/md2okf/<agent>`), so several can exist side by side — but runs are still serialised by one lock, so they never compile at the same time. |
+| `MD2OKF_AGENT` | Optional. The agent that compiles: `pi`, the default (unset or empty means `pi`), `claude` for Claude Code, or `codex` for Codex — see [Choosing an agent](#choosing-an-agent). An unknown value is refused with exit 2 before anything runs. |
 | `OPENROUTER_API_KEY` | Required for `pi`. `md2okf` takes the key from `sbx secret` and refuses to start unless it is proxy-managed — see [Set up the OpenRouter key](#set-up-the-openrouter-key). |
 | `XDG_STATE_HOME` | Optional. Where session state and the run workbench live. Absolute paths only — a relative value counts as unset — and the default is `~/.local/state`. Changing it once a sandbox exists takes one manual step; see [Session state](#session-state). |
 | `SPEC_MD` | Optional. The spec the frontmatter guard reads, which defaults to the sibling of the bundle root. Needed when checking a wiki outside this repository: `SPEC_MD=/path/to/SPEC.md check-okf.sh /some/wiki`. |
@@ -362,23 +411,30 @@ and `WORKDIR` are injected at creation, and nothing reads them from your shell.
 
 ## Troubleshooting
 
-**`sbx` reports unknown fields from `kits/pi/spec.yaml`.** Your sbx is older
-than 0.43.0 and does not know the kit-spec v2 grammar. Run `brew upgrade sbx`.
+**`sbx` reports unknown fields from a kit's `spec.yaml`.** Your sbx is older
+than the kit needs — 0.43.0 for Pi, 0.45.0 for Claude Code and Codex. Run
+`brew upgrade sbx`.
+
+**`… inside 'md2okf-<agent>' is not proxy-managed` or `is not logged in`.**
+The agent's credential did not reach its sandbox. Run the commands the message
+prints — they store it on the host — and then `sbx rm --force md2okf-<agent>`:
+sbx hands a credential over only when it creates a sandbox, so an existing one
+never sees a secret set afterwards.
 
 **A runtime command fails to authenticate.** `md2okf` and `make test-sandbox`
 need an active `sbx login` session.
 
 **`hit 10 iterations without converging`.** The wiki root hash kept changing.
 Raise the cap for one run with `md2okf -n 20 …`, or inspect
-`$XDG_STATE_HOME/md2okf/pi/sessions` to see what the agent was doing (by default,
-`~/.local/state/md2okf/pi/sessions`).
+`$XDG_STATE_HOME/md2okf/<agent>/sessions` to see what the agent was doing (by
+default, `~/.local/state/md2okf/pi/sessions` for Pi).
 
-**`a sandbox called 'md2okf-pi' exists but is not recognisably ours`.** Most often
+**`a sandbox called 'md2okf-<agent>' exists but is not recognisably ours`.** Most often
 you changed `XDG_STATE_HOME` since the sandbox was built, so the ownership
 record it left behind is under the old state root. It can also mean something
 else created it — an older release, or a manual `sbx run`. Either way `md2okf`
 will not delete a sandbox it cannot prove it owns, and `--fresh` will not either:
-run `sbx rm --force md2okf-pi` yourself and try again.
+run `sbx rm --force md2okf-<agent>` yourself and try again.
 
 **An old `md2okf` sandbox is left over after upgrading.** Releases before
 per-agent sandboxes used one sandbox called `md2okf` and a workbench directly
@@ -390,7 +446,7 @@ can go.
 
 Lint, tests, the sandbox checks, the helper CLIs and the per-subproject layout
 are covered in [the contributing guide](CONTRIBUTING.md). The short version:
-`make lint` checks the source tree, `make validate` checks the sandbox kit spec,
+`make lint` checks the source tree, `make validate` checks every sandbox kit spec,
 and CI runs both on every pull request. `uv run md2okf` runs the command from a
 clone without installing it, `make install` puts it on your PATH, and
 `make install-clis` does the same for the four helper CLIs.

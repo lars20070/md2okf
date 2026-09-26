@@ -99,7 +99,11 @@ Host install for these four CLIs is `make install-clis`; run `make test-clis`
 after touching any of them.
 
 The agent framework is selected by `MD2OKF_AGENT` (`src/md2okf/agents.py`);
-`pi` is the only registered one and the default. Each agent has its own kit
+`pi` (the default), `claude` and `codex` are registered. Where each agent
+reads its instructions differs, and was measured, not assumed: Pi from
+`~/.pi/agent/AGENTS.md`, Claude Code from the kit's `agentInstructions` (sbx
+writes `../CLAUDE.md`), Codex from `~/.codex/AGENTS.md` (it ignores files
+outside a git project). Each kit's `README.md` says why. Each agent has its own kit
 (`kits/<agent>/`), sandbox (`md2okf-<agent>`) and workbench
 (`$XDG_STATE_HOME/md2okf/<agent>/`); everything agent-specific — command lines,
 first-turn prompt, credential check, sbx minimum, event-stream parser
@@ -127,10 +131,20 @@ section.** Helper skill:
 a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds the driver's pytest suite (offline: `conftest.py` fakes the one
-`sbx` seam) and two shell suites that pytest cannot replace — the paired
-live-sandbox check (`test-sandbox.sh`, which asks the driver for a sandbox and
-then runs `test-sandbox-guest-<agent>.sh` inside the VM) and `test-mount-state.sh` for
-the guest-side bind helper.
+`sbx` seam; `test_kits.py` holds every `kits/*/` to the shared authoring
+contract, its own provenance and byte-identical helpers) and two shell suites
+that pytest cannot replace — the paired live-sandbox check (`test-sandbox.sh`,
+which asks the driver for a sandbox, runs `test-sandbox-guest-<agent>.sh` inside
+the VM, then checks from the host what only the host can see) and
+`test-mount-state.sh` for the guest-side bind helper and the `md2okf-agent`
+wrapper.
+
+Every agent process the driver starts — each compile turn and `md2okf --agent`
+— runs through the kit's `md2okf-agent` wrapper
+(`files/home/.local/lib/md2okf/md2okf-agent.sh`, identical in every kit, put on
+PATH by a per-kit `setup.files` shim naming the agent's native trace
+directory). `sbx exec` bypasses the kit entrypoint, so per-process setup goes in
+the wrapper, never the entrypoint. The agent's flags stay in `agents.py`.
 
 ## Commands
 
@@ -138,8 +152,8 @@ the guest-side bind helper.
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
                          # subproject (scripts/sync-versions.sh --check)
-make validate            # validate the sandbox kit spec (runs scripts/validate-spec.sh)
-make test-shell          # host test for the guest's session bind helper
+make validate            # validate every sandbox kit spec (runs scripts/validate-spec.sh)
+make test-shell          # host test for the session bind helper and md2okf-agent
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
 make test-md2okf         # pytest, the md2okf driver suite (offline, fake sbx)
@@ -160,6 +174,7 @@ uv run md2okf md/                            # compile from a clone, no install
 uv run md2okf -o wikis/other docs/other/     # any input folder, any output folder
 uv run md2okf --dry-run md/                  # resolve and print; no sandbox, nothing paid
 uv run md2okf -n 20 md/                      # raise the per-document iteration cap
+uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md  # cheap live smoke run
 MD2OKF_AGENT=pi uv run md2okf md/            # pick the agent framework (pi is the default)
 uv run python -m md2okf.sandbox              # ensure the sandbox exists, compile nothing
 uv run md2okf --shell                        # ensure the sandbox, then shell into it
@@ -215,14 +230,14 @@ matching `CHANGELOG.md` section and whose assets are those same artifacts. See
 
 ## Always validate the sandbox kit spec before finishing
 
-Whenever you change anything under `kits/pi/` or `scripts/*.sh`, you MUST validate the Pi
-Sandbox Kit spec before considering the task complete:
+Whenever you change anything under `kits/` or `scripts/*.sh`, you MUST validate the
+Sandbox Kit specs before considering the task complete:
 
 ```bash
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks `kits/pi/spec.yaml` against the current Sandbox Kit schema (a
+This checks every `kits/*/spec.yaml` against the current Sandbox Kit schema (a
 static schema check — no Docker, login, or network required). The same check runs
 in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
 first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI

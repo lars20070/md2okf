@@ -37,7 +37,7 @@ def test_state_home_relative_value_counts_as_unset(monkeypatch, tmp_path):
 # --- per-agent names ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("agent", ["pi", "claude", "codex", "cursor"])
+@pytest.mark.parametrize("agent", ["pi", "claude", "codex"])
 def test_each_agent_gets_its_own_sandbox_and_workbench(monkeypatch, tmp_path, agent):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
     assert workbench.sandbox_name(agent) == f"md2okf-{agent}"
@@ -577,7 +577,6 @@ def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
         "files/home/.claude/skills/compile-okf/SKILL.md",
         "files/home/.agents/skills/compile-okf/SKILL.md",
         "files/home/.codex/config.toml",
-        "files/home/.cursor/mcp.json",
     ],
 )
 def test_fingerprint_changes_when_a_hidden_kit_file_changes(tmp_path, relative):

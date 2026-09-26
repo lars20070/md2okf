@@ -12,7 +12,7 @@ you only want to compile a wiki, [the README](README.md) is enough.
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
                          # subproject (scripts/sync-versions.sh --check)
-make validate            # check kits/pi/spec.yaml against the Sandbox Kit schema
+make validate            # check every kits/*/spec.yaml against the Sandbox Kit schema
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
@@ -45,21 +45,23 @@ make test-clis && make test-md2okf && make dist` locally means a green build.
 
 ## Validate the kit spec before you finish
 
-Touch anything under `kits/pi/` or `scripts/*.sh` and run `make validate`
-before you call the job done. It checks the kit spec against the schema bundled
+Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
+before you call the job done. It checks every kit spec against the schema bundled
 in your `sbx` binary, and needs no Docker, no login and no network. CI runs the
 same check in its `validate-kit` job, so catching a break locally saves a red
-build. The current kit requires sbx 0.43.0 or newer; `brew upgrade sbx` fixes
-unknown field errors from an older install.
+build. The Pi kit requires sbx 0.43.0 or newer, the Claude Code and Codex kits
+0.45.0; `brew upgrade sbx` fixes unknown field errors from an older install.
 
-`make test-sandbox` asks the other question: does the sandbox actually have
-every tool `kits/pi/spec.yaml` installs, the agent config copied in from
-`kits/pi/files/`, and a proxy-managed key? It needs an `sbx login` session.
+`make test-sandbox` asks the other question: does each agent's sandbox
+actually have every tool its `kits/<agent>/spec.yaml` installs, the agent
+config copied in from `kits/<agent>/files/`, and a ready credential? It needs
+an `sbx login` session, and each agent's credential (see the README's
+"Choosing an agent").
 Like the scripts below it reuses the sandbox — fast, and nothing a compile left
 behind is lost — and only builds one if none exists. That also means it tests
-the sandbox you have, which may be older than your last `kits/pi/` edit. To
-check the current kit from scratch, throw the sandbox away first with
-`sbx rm --force md2okf-pi`; building the next one takes minutes. It checks every
+the sandbox you have, which may be older than your last `kits/<agent>/` edit.
+To check the current kit from scratch, throw the sandbox away first with
+`sbx rm --force md2okf-<agent>`; building the next one takes minutes. It checks every
 registered agent in turn; `make test-sandbox AGENT=pi` checks one.
 
 ## Working inside the sandbox
@@ -158,7 +160,9 @@ strips frontmatter: `merkleokf` answers "did this change", `sizeokf` answers
 
 ## How the agent knows what to do
 
-The instructions come in two parts. `kits/pi/files/home/.pi/agent/AGENTS.md`
+The instructions come in two parts, shown here for Pi; the Claude Code and
+Codex kits carry the same two parts, ported, in the places their agents read
+them (see each kit's `README.md`). `kits/pi/files/home/.pi/agent/AGENTS.md`
 holds what every task must respect: the OKF conventions, the directories the
 agent may write to, and the rule that `SPEC.md` outranks both. Each task's
 procedure lives in a skill of its own. Task skill today: `compile-okf`. Tool
@@ -169,7 +173,10 @@ new task gets a new directory rather than more rules in `AGENTS.md`.
 
 A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
 `description`, then the instructions, plus any scripts it needs. Pi picks skills
-up from `~/.pi/agent/skills/`.
+up from `~/.pi/agent/skills/`, Claude Code from `~/.claude/skills/`, Codex from
+`~/.agents/skills/`. A change to a skill or to the shared contract belongs in
+every kit: `tests/test_kits.py` checks each kit for the shared rules, its own
+`generated.by` producer, and byte-identical helper and gate scripts.
 
 The kit is `kits/pi/`, and the config it carries lives in
 `kits/pi/files/home/.pi/agent/`. That config is copied into the sandbox when
@@ -180,8 +187,10 @@ running one was built from, or immediately on `--fresh`.
 
 `tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which asks the
 driver for a sandbox and then calls `sbx`, and the POSIX `sh` script it runs
-inside the VM), plus `test-mount-state.sh` for the guest-side bind helper. The
-driver's own suite is pytest, under the same `tests/` directory.
+inside the VM), plus `test-mount-state.sh` for the guest-side bind helper and
+the `md2okf-agent` wrapper every agent process starts through. The driver's own
+suite is pytest, under the same `tests/` directory; `test_kits.py` in it checks
+every kit's instructions statically.
 
 ## Checking the wiki
 

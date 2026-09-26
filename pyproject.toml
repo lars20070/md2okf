@@ -1,7 +1,7 @@
 [project]
 name = "md2okf"
 dynamic = ["version"]
-description = "Compile Markdown into an OKF wiki with the Pi coding agent, via a sandboxed sbx runtime"
+description = "Compile Markdown into an OKF wiki with a coding agent (Pi, Claude Code or Codex), via a sandboxed sbx runtime"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
@@ -61,6 +61,8 @@ packages = ["src/md2okf"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "kits/pi" = "md2okf/kits/pi"
+"kits/claude" = "md2okf/kits/claude"
+"kits/codex" = "md2okf/kits/codex"
 "SPEC.md" = "md2okf/SPEC.md"
 "scripts/inspectmd/pyproject.toml" = "md2okf/clis/inspectmd/pyproject.toml"
 "scripts/inspectmd/src" = "md2okf/clis/inspectmd/src"
@@ -82,7 +84,7 @@ packages = ["src/md2okf"]
 [tool.hatch.build.targets.sdist]
 # Anchored with a leading slash: a bare ".claude" is a gitignore-style pattern
 # that matches at any depth, and would also strip a kit's own
-# files/home/.claude/ (or .cursor/) agent config out of the sdist -- and so out
+# files/home/.claude/ agent config out of the sdist -- and so out
 # of the wheel `uv build` makes from it.
 exclude = ["/.claude", "/.cursor"]
 

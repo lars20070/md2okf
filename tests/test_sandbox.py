@@ -182,12 +182,23 @@ def test_ensure_default_sandbox_creates_and_reports(fake_sbx, isolated_state, ca
     assert workbench.Workbench.default("pi").fingerprint_path.is_file()
 
 
+def test_ensure_default_sandbox_follows_md2okf_agent_to_claude(fake_sbx, isolated_state, capsys, monkeypatch):
+    """The maintainer entry point must never create or inspect a different sandbox from the CLI's."""
+    monkeypatch.setenv("MD2OKF_AGENT", "claude")
+    fake_sbx.version_string = "0.45.0"
+    assert sandbox._ensure_default_sandbox() == 0
+    assert capsys.readouterr().out == "md2okf.sandbox: sandbox 'md2okf-claude' created\n"
+    assert sandbox.exists("md2okf-claude")
+    assert not sandbox.exists(PI_SANDBOX)
+    assert workbench.Workbench.default("claude").fingerprint_path.is_file()
+
+
 def test_ensure_default_sandbox_refuses_an_unknown_agent_before_touching_sbx(
     fake_sbx, isolated_state, capsys, monkeypatch
 ):
     monkeypatch.setenv("MD2OKF_AGENT", "bogus")
     assert sandbox._ensure_default_sandbox() == 2
-    assert "valid: pi" in capsys.readouterr().err
+    assert "valid: claude, codex, pi" in capsys.readouterr().err
     assert fake_sbx.calls == []
 
 

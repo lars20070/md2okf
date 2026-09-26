@@ -1,4 +1,4 @@
-# Multi-agent sandbox kits: pi, claude, codex, cursor
+# Multi-agent sandbox kits: pi, claude, codex
 
 ## Context
 
@@ -13,13 +13,18 @@ hardcodes all of the above (`sandbox.py:248-287`), and — the deepest coupling 
 `events.py` parses Pi's own NDJSON protocol to render progress and detect
 whether a turn did any work.
 
-The user wants to add `claude` (Claude Code), `codex` (OpenAI Codex CLI) and
-`cursor` (Cursor CLI) as equally-supported agent frameworks, selected by an
-environment variable, with the **same automated compile pipeline** Pi gets
-today (not just an interactive shell). `lars20070/sbxagent` is the style guide
+The user wants to add `claude` (Claude Code) and `codex` (OpenAI Codex CLI) as
+equally-supported agent frameworks, selected by an environment variable, with
+the **same automated compile pipeline** Pi gets today (not just an interactive shell). `lars20070/sbxagent` is the style guide
 for the kits themselves: a thin kit that `extends:` a built-in parent (native
-vendor login, not OpenRouter). All three CLIs support a non-interactive,
+vendor login, not OpenRouter). Both CLIs support a non-interactive,
 NDJSON-streaming mode comparable to Pi's.
+
+Cursor (Cursor CLI) was the fourth candidate and has been dropped. Its
+subscription login could not be carried into a headless compile: the host's
+OAuth secret was not injected into the sandbox, and after an interactive login
+persisted to the file store, `agent -p` still failed with "Authentication
+required". Adding it again would start from a new spike.
 
 **sbxagent is a guide for kit *contents*, not for process lifecycle.**
 sbxagent starts agents through the kit entrypoint (`sbx run`). md2okf creates a
@@ -33,9 +38,9 @@ confirmed after the external reviews):
 
 - Full compile-pipeline parity per agent.
 - Native vendor login per agent (not routed through OpenRouter).
-- `kits/md2okf/` renamed to `kits/pi/`, with `kits/claude/`, `kits/codex/`,
-  `kits/cursor/` as symmetric siblings.
-- One sandbox + one workbench per agent, namespaced, so all four can
+- `kits/md2okf/` renamed to `kits/pi/`, with `kits/claude/` and `kits/codex/`
+  as symmetric siblings.
+- One sandbox + one workbench per agent, namespaced, so all three can
   **coexist** — their sandboxes and state survive side by side; they do **not**
   compile concurrently. The global per-user lock (`workbench.LOCK_PATH_TEMPLATE`)
   stays as it is. Document this in the README.
@@ -45,9 +50,6 @@ confirmed after the external reviews):
   nor Context7 — the compile procedure uses neither) and no vendor network-block
   hooks (the sandbox allowlist is already the enforcement boundary). Both are
   listed under "Deferred". Pi keeps its existing Context7 extension unchanged.
-- Cursor gets its procedures through kit-provided instructions only, never
-  through a `.cursor/` directory in the workspace (which *is* the generated
-  wiki).
 - Instruction and procedure files are **checked in per agent**, not generated
   from a shared template — see Part 2.
 
@@ -77,9 +79,8 @@ fingerprint. Existing users get one rebuild.
 
 `pyproject.toml:73` has `exclude = [".claude", ".cursor"]`. Hatchling reads
 these gitignore-style, so a slash-less pattern matches at any depth — it would
-strip `kits/claude/files/home/.claude/**` and `kits/cursor/files/home/.cursor/**`
-from the sdist, and the wheel built from it (`uv build` builds the wheel from
-the sdist) would lose them or fail resolving the force-include. Anchor them:
+strip `kits/claude/files/home/.claude/**` from the sdist, and the wheel built
+from it (`uv build` builds the wheel from the sdist) would lose them or fail resolving the force-include. Anchor them:
 `exclude = ["/.claude", "/.cursor"]`. Pin the behavior with a
 `tests/test_package.py` assertion that every packaged kit's hidden files are
 present in the wheel, and make `make dist` part of every stage's offline gate.
@@ -107,10 +108,10 @@ module keeps a Pi branch:
 ```python
 @dataclass(frozen=True)
 class Agent:
-    name: str                                    # "pi" | "claude" | "codex" | "cursor"
+    name: str                                    # "pi" | "claude" | "codex"
     min_sbx_version: tuple[int, int, int]        # pi (0, 43, 0); extends-kits per "sbx version"
     compile_args: Callable[[str], list[str]]     # prompt -> full argv for one Ralph-loop turn
-    interactive_args: list[str]                  # argv for `--agent`
+    interactive_args: tuple[str, ...]            # argv for `--agent`
     compile_prompt: Callable[[str], str]         # document path -> first-turn prompt
     check_credentials: Callable[[str], str | None]  # sandbox name -> None if ready, else a remedy message
     protocol: Protocol                           # the protocols/<name>.py module (see below)
@@ -130,22 +131,27 @@ before any new agent depends on it.
 
 | Agent | `compile_args(prompt)` | `interactive_args` |
 |---|---|---|
-| pi | `["pi", "--mode", "json", prompt]` (unchanged) | `["pi"]` |
-| claude | `["md2okf-agent", "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", prompt]` | `["md2okf-agent", "claude", "--permission-mode", "bypassPermissions"]` |
-| codex | `["md2okf-agent", "codex", "exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", prompt]` | `["md2okf-agent", "codex", "--dangerously-bypass-approvals-and-sandbox"]` |
-| cursor | `["md2okf-agent", "agent", "-p", "--output-format", "stream-json", "--force", "--trust", prompt]` | `["md2okf-agent", "agent"]` |
+| pi | `["md2okf-agent", "pi", "--mode", "json", prompt]` (from stage 1.6; `pi` directly before) | `["md2okf-agent", "pi"]` |
+| claude | `["md2okf-agent", "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--strict-mcp-config", prompt]` | `["md2okf-agent", "claude", "--permission-mode", "bypassPermissions"]` |
+| codex | `["md2okf-agent", "codex", "exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-c", "mcp_servers.mcp-gateway.enabled=false", prompt]` | `["md2okf-agent", "codex", "--dangerously-bypass-approvals-and-sandbox"]` |
 
 Why each flag is load-bearing:
 
-- **claude `--permission-mode bypassPermissions`** — headless `-p` starts in
-  the default mode and, with no one to approve, denies every tool call that
-  would prompt; without it the turn cannot write the wiki. The microVM is the
-  isolation boundary, as for the other agents.
+- **claude `--permission-mode bypassPermissions`** — headless `-p` in the
+  default mode denies every tool call that would prompt, with no one to
+  approve it. The spike found the `claude` parent already makes
+  `bypassPermissions` the default (a run without the flag wrote its file, and
+  its `system/init` event reports `bypassPermissions`). The flag stays anyway:
+  it costs nothing and keeps the compile independent of a parent default that
+  may change. The microVM is the isolation boundary, as for the other agents.
+- **claude `--strict-mcp-config`** (compile only; added by the spike) — with no
+  `--mcp-config`, the turn loads no MCP servers. Without it the spike's turns
+  loaded the parent's `mcp-gateway` plus every claude.ai connector on the
+  logged-in account (Gmail, Drive and others, some `needs-auth`), which a
+  compile needs none of and which make runs depend on the account.
+  `--agent` keeps them.
 - **codex `--skip-git-repo-check`** — `codex exec` refuses to run outside a Git
   repository, and the workspace is the generated wiki, which has no `.git`.
-- **cursor `--force`** — without it print mode only proposes edits.
-  **`--trust`** — skips the workspace-trust prompt that would block headless
-  mode.
 
 Unit tests assert each registered agent's exact argv. Each row is confirmed
 against the CLI's `--help` in the agent's spike (stage N.1) and
@@ -155,7 +161,7 @@ does not catch a command that never gets far enough to emit useful events.
 #### `compile_prompt`
 
 The current `COMPILE_PROMPT` is not neutral — it tells the agent to read
-`~/.pi/agent/skills/compile-okf/SKILL.md` — and the four runtimes have no shared
+`~/.pi/agent/skills/compile-okf/SKILL.md` — and the three runtimes have no shared
 activation syntax. So prompt construction is agent-owned; only the document
 path, the workspace-root sentence ("never create an okf/ child directory") and
 `CONTINUATION_PROMPT` stay common:
@@ -163,9 +169,8 @@ path, the workspace-root sentence ("never create an okf/ child directory") and
 | Agent | activation in the first-turn prompt |
 |---|---|
 | pi | read `~/.pi/agent/skills/compile-okf/SKILL.md` (today's text, unchanged) |
-| claude | `/compile-okf` (skill at `~/.claude/skills/compile-okf/SKILL.md`) |
+| claude | read `~/.claude/skills/compile-okf/SKILL.md` — Pi's wording with Claude's path (built in stage 2.4: slash activation in `-p` was never measured, and naming the file works however skills load) |
 | codex | `$compile-okf` (skill at `~/.agents/skills/compile-okf/SKILL.md`) |
-| cursor | "follow the compile procedure in your instructions" (no skill mechanism) |
 
 Tests assert each agent's prompt names the procedure its kit actually installs,
 by checking the path/name exists in `kits/<agent>/`.
@@ -189,7 +194,13 @@ Lifecycle rules:
   `--agent` and `python -m md2okf.sandbox`, so it must be a local probe through
   `sandbox._run` (stdin `/dev/null`) — an env sentinel or a CLI's own
   auth-status command — never a model request. Each new agent's probe is chosen
-  in its spike.
+  in its spike. Claude's (from its spike): `claude auth status` prints JSON
+  with `"loggedIn": true` when the credential is in place.
+- **A secret takes effect only when a sandbox is created.** sbx injects the
+  credential at create time (the spike's sandbox got its
+  `~/.claude/.credentials.json` then), so the remedy for a not-ready
+  credential is "set the secret, then `sbx rm --force md2okf-<agent>`", not
+  merely "run again". Each agent's remedy text says so.
 - **`--shell` does not require it.** A failed check is fatal for compile,
   `--agent` and `python -m md2okf.sandbox`; for `--shell` it prints the remedy as
   a warning and opens the shell anyway, since a diagnostic shell is most needed
@@ -198,14 +209,19 @@ Lifecycle rules:
 Tests (fake sbx): create → not ready → `CredentialNotReadyError`, marker
 written; remedy applied → next call reuses and succeeds; reuse while not ready
 → error, no rebuild; `--shell` with not-ready credentials → warning, shell
-opens.
+opens. (The fake models a credential that becomes ready in place. Live, sbx
+injects credentials at create time, so the real remedy ends with `--fresh` —
+see the Claude spike findings. Pi's remedy text does not yet say so; the
+`sbx secret set-custom` output itself warns that existing sandboxes may keep
+the old value. Fix Pi's remedy alongside Claude's in stage 2.4.)
 
 #### sbx version
 
 `sandbox.MIN_VERSION = (0, 43, 0)` becomes the default, and
 `Agent.min_sbx_version` overrides it per agent. sbxagent — the source of the
 extends-kit patterns — requires sbx 0.45.0. Unless a new kit is proven on 0.43
-in its spike, its `min_sbx_version` is `(0, 45, 0)`, and the preflight
+in its spike, its `min_sbx_version` is `(0, 45, 0)` — Claude's is, the spike
+having run on 0.45.0 only — and the preflight
 (`sandbox.py:75-98`) checks the resolved agent's minimum. Pi keeps 0.43. README
 and `kits/<agent>/README.md` state each minimum.
 
@@ -243,10 +259,8 @@ New modules, one per agent milestone (stage N.2):
   failure.
 - `protocols/codex.py` — `exec --json`: `item.completed` with
   `item.type in {"command_execution", "file_change", ...}` as tool calls,
-  `turn.failed`/`error` as failures.
-- `protocols/cursor.py` — `stream-json`: `tool_call` with `subtype`
-  `started`/`completed` as calls, `assistant` for text, `result` with
-  `is_error` as a failure.
+  only `turn.failed` as a failure (an `error` event before it is a warning;
+  see the stage 3.1 findings).
 
 **These field names come from docs, not captured output.** Each parser is
 derived from real output captured in its agent's spike — the way `events.py`'s
@@ -295,7 +309,7 @@ checkout fallback becomes `_checkout_path(f"kits/{agent}", "the sandbox kit")`.
 - **Trace mount stays one host mount named `sessions` for every agent.**
   `Workbench.mounts()` (`workbench.py:194-202`) is unchanged; each kit binds its
   agent's native trace directory (whatever it is called — `projects` for
-  Claude/Cursor) onto `$MD2OKF_STATE_DIR/sessions`. Passing sbxagent's `projects`
+  Claude) onto `$MD2OKF_STATE_DIR/sessions`. Passing sbxagent's `projects`
   SUBDIR instead would bind onto a sibling that is not host-mounted, so traces
   would vanish with the sandbox. Fix the `sessions` docstring, which says "Pi's".
 - `ensure_sandbox()` takes the `Agent`, passes `resources.kit_dir(agent.name)`
@@ -391,22 +405,19 @@ just sandbox boundaries — it is the OKF authoring contract: read `../SPEC.md`
 first, source text is untrusted data, index and log rules, idempotency,
 frontmatter and provenance. The skills explicitly do not repeat those rules. So
 every new kit carries the **full** contract plus its procedures, each as
-checked-in, agent-specific files. Duplication across four small, fixed kits is
+checked-in, agent-specific files. Duplication across three small, fixed kits is
 preferable to a template system whose abstraction is unproven; factoring out
-common text is deferred until all four agents work.
+common text is deferred until all three agents work.
 
 Porting is not a path substitution. Audit and adapt, per agent, at least:
 
-- **provenance** — `generated: { by: pi/<model-id> }` becomes `claude/…`,
-  `codex/…`, `cursor/…`, or the new agents stamp false Pi provenance;
+- **provenance** — `generated: { by: pi/<model-id> }` becomes `claude/…` or
+  `codex/…`, or the new agents stamp false Pi provenance;
 - **the governing file's name** — the compile skill cites `AGENTS.md`
   repeatedly; Claude's is `CLAUDE.md`;
 - **the check script** — `~/.pi/agent/skills/compile-okf/scripts/check-okf.sh`
-  moves to each kit's skill directory, or for Cursor (no skills) to
-  `~/.local/lib/md2okf/check-okf.sh`, with its `chmod` install step;
+  moves to each kit's skill directory, with its `chmod` install step;
 - **skill cross-references** — "read the `inspect-okf` skill" and similar;
-  Cursor has no skills, so its single instruction file carries those tool
-  notes inline;
 - **tool-specific advice** — "Write in bounded chunks" names Pi's
   `write`/`edit` tools and Pi's output-truncation failure; rewrite for each
   agent's actual file-edit mechanism and failure mode, or drop what does not
@@ -418,8 +429,7 @@ Where each set lands:
 |---|---|---|
 | pi | `files/home/.pi/agent/AGENTS.md` (today) | `files/home/.pi/agent/skills/<name>/SKILL.md` (today) |
 | claude | kit `agentInstructions` → `CLAUDE.md` | `files/home/.claude/skills/<name>/SKILL.md` |
-| codex | kit `agentInstructions` → `AGENTS.md` | `files/home/.agents/skills/<name>/SKILL.md` |
-| cursor | kit `agentInstructions` → `AGENTS.md`, carrying the full procedure | none, and **no** `.cursor/rules` in the workspace, which is the generated wiki |
+| codex | `files/home/.codex/AGENTS.md` (no `agentInstructions`; see stage 3.1b) | `files/home/.agents/skills/<name>/SKILL.md` |
 
 A static pytest (`tests/test_kits.py`), for every registered kit, asserts:
 the shared invariants are present (SPEC first, untrusted input, frontmatter,
@@ -432,9 +442,9 @@ across kits.
 ### spec.yaml skeleton (per new kit)
 
 ```yaml
-extends: claude   # or codex / cursor — the sbx built-in parent kit
+extends: claude   # or codex — the sbx built-in parent kit
 agentInstructions:
-  filename: CLAUDE.md   # AGENTS.md for codex/cursor
+  filename: CLAUDE.md   # codex declares none: ~/.codex/AGENTS.md instead
   content: |
     <checked-in, agent-specific: sandbox boundary (work_okf rw;
     work_md/work_scripts/work_spec ro; $MD2OKF_STATE_DIR/sessions), the tool list,
@@ -467,12 +477,16 @@ setup:
 
 ### Per-agent differences
 
-| | claude | codex | cursor |
-|---|---|---|---|
-| `extends:` | `claude` | `codex` | `cursor` |
-| instruction filename | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
-| native trace dir (bound to `sessions`) | `~/.claude/projects` | `~/.codex/sessions` | `~/.cursor/projects` |
-| procedure delivery | skills | skills | instruction file only |
+| | claude | codex |
+|---|---|---|
+| `extends:` | `claude` | `codex` |
+| instruction filename | `CLAUDE.md` | `AGENTS.md` (global, not `agentInstructions`) |
+| native trace dir (bound to `sessions`) | `~/.claude/projects` (confirmed: `<escaped cwd>/<session>.jsonl`) | `~/.codex/sessions` |
+| procedure delivery | skills | skills |
+| where `agentInstructions` lands | `<workspace>/../CLAUDE.md`, parent's text plus the kit's, loaded by Claude (confirmed) | nowhere Codex reads (the wiki is not a git repo); the kit ships the contract as `~/.codex/AGENTS.md` instead (confirmed) |
+| credential | host `anthropic` secret, OAuth or API key; injected at create (confirmed) | host `openai` secret, OAuth or API key; injected at create (confirmed) |
+| credential probe | `claude auth status` → `"loggedIn": true` | `codex login status` → "Logged in" |
+| sbx minimum | 0.45.0 | 0.45.0 |
 
 ## Part 3 — Tooling and tests
 
@@ -480,7 +494,7 @@ setup:
 
 - Force-include one line per **registered** kit, added in that kit's
   release stage: `"kits/pi" = "md2okf/kits/pi"` in stage 1.1, then claude,
-  codex, cursor.
+  then codex.
 - Anchored sdist excludes (Part 0).
 
 ### `scripts/validate-spec.sh`
@@ -503,6 +517,13 @@ a discovered loop:
   ```
 
 ### `tests/test-sandbox.sh` + guest scripts
+
+*(As built, stage 2.4: the agent-neutral checks — toolchain, shared helpers,
+provenance, the `../okf` rule, the trace bind and host probe, the mount-escape
+invariants — live in `tests/test-sandbox-guest-common.sh`. Each
+`test-sandbox-guest-<agent>.sh` only defines `AGENT_*` variables and an
+`agent_checks` function; `test-sandbox.sh` pipes the agent file and then the
+common file into the VM as one script.)*
 
 `kit_name="md2okf"` (`test-sandbox.sh:18`) becomes a **required** positional
 argument — no default, so nothing falls back to Pi by accident — driving the
@@ -584,7 +605,7 @@ Defined once, referenced by every stage.
   tests/fixtures/smoke.md -o "$(mktemp -d)"`. Passes when: exit 0; converges
   within the iteration cap; the compile-okf `check-okf.sh` passes on the output
   directory; pages carry `generated.by: <agent>/…`; and the output holds no
-  agent artefacts (`.claude/`, `.cursor/`, `.agents/`, `.pi/`, `AGENTS.md`,
+  agent artefacts (`.claude/`, `.agents/`, `.pi/`, `.codex/`, `AGENTS.md`,
   `CLAUDE.md`). Needs `sbx login` and the agent's credential; costs cents.
 
 ### Milestone 0 — Groundwork and existing bugs (Pi only)
@@ -728,6 +749,69 @@ exactly the way md2okf creates (`sbx run --detached`, captured output, stdin
 Part 1 and Part 2 tables. The only code change is the fixtures, so the offline
 gate stays green.
 
+*Findings (run 2026-09-26, sbx 0.45.0, Claude Code 2.1.280; raw answers in the
+untracked `spikes/claude/out/`, fixtures in `tests/fixtures/protocols/claude/`):*
+
+- **Detached create works.** With the host's `anthropic` secret set by OAuth
+  (a `/login` inside a Claude sandbox — `sbx secret set anthropic --oauth` is
+  refused, see the open gates below; an API key via `sbx secret set anthropic`
+  is the alternative), `sbx run --detached` finished in 5 s with no prompt and
+  the sandbox came up logged in (`claude auth status`: `loggedIn: true`,
+  `authMethod: claude.ai`; `~/.claude/.credentials.json` present; no
+  `ANTHROPIC_*` variable set). No stop-and-replan. **Not observed:** a create
+  with *no* secret, because one was already configured; the not-ready path
+  stays covered by the fake-sbx lifecycle tests, and the remedy is "set the
+  secret, then `--fresh`" because sbx injects credentials at create time.
+- **Argv.** The planned command wrote its file in a non-git workspace from a
+  plain `sbx exec` (exit 0; the file appeared on the host). Every flag exists
+  in `claude --help` (2.1.280) except `--max-turns`, which is accepted but
+  undocumented. `--strict-mcp-config` added — see Part 1.
+- **Where things land.** sbx writes `CLAUDE.md` (≈17 KB: the parent's own
+  sandbox text plus the kit's `agentInstructions`) into the workspace's parent,
+  next to `md/` and `SPEC.md`, and Claude loads it from there: asked for the
+  marker line, it quoted it and named `CLAUDE.md`. Outside the wiki, so never
+  part of the output. Pi's kit does the same (`work/AGENTS.md`). The parent's
+  part of that file was not captured; stage 2.3 reads it (`sbx exec … cat
+  ../CLAUDE.md`) for anything that contradicts the OKF rules.
+- **Traces** are written to `~/.claude/projects/<cwd with / as ->/<session>.jsonl`,
+  so the kit binds `~/.claude/projects` as planned.
+- **Parent image:** `docker/sandbox-templates:claude-code-docker`, Ubuntu 26.04,
+  `claude` at `~/.local/bin`, which is on a plain `sbx exec` PATH. It has `jq`,
+  `curl`, `python3`, `uv`, `node`, `npm`, `rg` and `git`, but not `tree`,
+  `shellcheck` or `fdfind`, so the kit keeps kits/pi's apt step. `~/.claude/`
+  already holds the parent's `settings.json` and a `skills/` directory with 18
+  bundled skills; stage 2.4 checks that the kit's skills appear beside them
+  (the `skills` list in a turn's `system/init` event).
+- **Network:** `mqlang.org` and `context7.com` were blocked; npm, PyPI,
+  GitHub, the Ubuntu mirrors and Docker's apt repo were reachable. That host
+  may carry global `sbx policy` allow rules from other projects, so the kit
+  still lists every host kits/pi does (minus `openrouter.ai`, `pi.dev` and
+  `context7.com`) rather than relying on them.
+- **Protocol** (for stage 2.2): one JSON object per line. `system/init` first;
+  `assistant` events carry `message.content` blocks of type `text`, `thinking`
+  (often an empty string) and `tool_use` (`name`, `input`) — one `tool_use`
+  block is one tool call; `user` events carry `tool_result` blocks whose
+  `is_error` is per call, not terminal; `system` subtypes `commands_changed`
+  and `thinking_tokens`, and `rate_limit_event`, are noise. The last event is
+  `result`, and **`is_error` is the failure signal**: an unknown model gives
+  `subtype: success` with `is_error: true`, `terminal_reason: api_error` and
+  the reason in `result`; `--max-turns` gives `subtype: error_max_turns`,
+  `is_error: true`, `result` absent and the reason in `errors`. Both exited 1.
+  stderr carries plain-text lines such as
+  `[claude-code:unrecognized_model] {…}`.
+- **Stage 2.4 sandbox check (2026-09-26):** `make test-sandbox` passed for
+  both agents. In `md2okf-claude` the parent's part of `../CLAUDE.md` is the
+  generic Docker Sandbox text (environment persistence, network-policy
+  remedies, git authentication and pushing, workspace modes), with md2okf's
+  text after it; nothing there conflicts with the OKF contract once md2okf's
+  precedence line applies (the wiki is not a git repository). One compile-argv
+  turn's `system/init` event reported `mcp_servers: []` (so
+  `--strict-mcp-config` removes the parent's gateway and the account's
+  connectors) and the six md2okf skills first in `skills`.
+- **Stage 2.5's streamed failure** can be provoked with `--max-turns 1` on a
+  task needing several tool calls: cheap, and it fails inside the stream after
+  real tool calls, which is the case the driver's failure rule exists for.
+
 **Stage 2.2 — `protocols/claude.py`**, offline and unregistered.
 *Checkpoint:* offline gate; fixture tests: tool calls counted, `display` in the
 same style as Pi's, the terminal failure fixture yields `failure`, and the
@@ -740,12 +824,16 @@ check script and wrapper shim. Not registered.
 `test_kits.py` passes for claude (producer, no `.pi/` paths, referenced paths
 exist, helpers byte-identical), and a fingerprint test covers `.claude/`. A
 human review of the instruction diff against Pi's: this is the stage to read
-most closely, because it sets the pattern for Codex and Cursor.
+most closely, because it sets the pattern for Codex.
 
 **Stage 2.4 — Register for checkout use; first sandbox.** Add `claude` to
 `AGENTS` (argv, prompt, credential probe, sbx minimum, protocol), to the
-Makefile `AGENTS` list, and add `test-sandbox-guest-claude.sh`. No force-include
-or docs yet.
+Makefile `AGENTS` list, and add `test-sandbox-guest-claude.sh`. *As built:* the
+force-include moved here from stage 2.6, because `tests/test_package.py` holds
+every registered kit to being in the wheel and a registered agent that fails
+from an installed wheel is a trap; only the full docs wait for 2.6. The kit is
+named `md2okf-claude` (not `claude`, the parent it extends), and both agents'
+credential remedies end with `sbx rm --force md2okf-<agent>`.
 *Checkpoint:* offline gate plus argv and prompt tests. Dry-run diff for
 `MD2OKF_AGENT=claude`: `md2okf-claude`, `kits/claude`, the exact argv. Sandbox
 check (claude): the toolchain is present, `CLAUDE.md` names producer `claude`,
@@ -773,6 +861,22 @@ layout; live smoke (claude) and live smoke (pi).
 
 *Milestone 2 exit:* merge; release.
 
+*Stages 2.6 and 3.6, as built (2026-09-26):* the force-includes and
+`test_package.py` coverage landed with registration (2.4, 3.4). The docs landed
+together for both agents: a README "Choosing an agent" section (per-agent
+sandbox, sbx minimum and host credential, the create-time injection rule, and
+the per-agent `generated.by`), Requirements, Quickstart, Session state, How it
+works and Troubleshooting made agent-neutral; `kits/claude/README.md` and
+`kits/codex/README.md`; CONTRIBUTING, AGENTS.md, the package description and
+the CHANGELOG. The installed-wheel check resolves `kits/claude` and
+`kits/codex` from site-packages. (A note for re-running it by hand: `uv tool
+run --from <wheel>` caches by path, so re-running a rebuilt wheel of the same
+version from the same path can test the old one even with `--refresh`;
+`--no-cache` or a fresh path avoids it. `make dist` builds into a fresh
+`mktemp` directory each time, so it is not affected.) `make test-sandbox
+AGENT=codex` passed on the host (including the MCP-gateway override and
+`codex login status`), so Milestones 2 and 3 are complete.
+
 ### Milestone 3 — Codex
 
 The same six stages, with these Codex-specific checkpoint items:
@@ -787,39 +891,127 @@ The same six stages, with these Codex-specific checkpoint items:
 *Milestone 3 exit:* the stage 2.6 checkpoint for codex, plus live smoke for
 claude and pi.
 
-### Milestone 4 — Cursor
+*Stage 3.1 findings (run 2026-09-26, sbx 0.45.0, `codex-cli` 0.149.1; raw
+answers in the untracked `spikes/codex/out/`, fixtures in
+`tests/fixtures/protocols/codex/`):*
 
-The same six stages, with these Cursor-specific checkpoint items:
+- **Detached create works** — 5 s, no approval prompt, with the host's `openai`
+  secret set by OAuth. The parent writes `~/.codex/config.toml` with
+  `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, a
+  `sandboxd` model provider (the credential goes through sbx; `OPENAI_API_KEY`
+  is unset, `SBX_CRED_OPENAI_MODE=oauth`) and an `mcp-gateway` MCP server.
+  `codex login status` says "Logged in using an API key" (the injected
+  placeholder), so it is the credential probe candidate.
+- **Argv:** the planned command wrote its file from a plain `sbx exec` in the
+  non-git workspace. Neither `--skip-git-repo-check` nor
+  `--dangerously-bypass-approvals-and-sandbox` turned out to be load-bearing
+  (each control run wrote too) — the parent's config already allows it. Both
+  stay, for the same reason as Claude's `--permission-mode`.
+  `-c 'web_search="disabled"'` is accepted. Every run prints
+  `Reading additional input from stdin...` on stderr.
+- **Skills:** `$md2okf-spike-probe` activated a skill shipped in
+  `~/.agents/skills` at once, so Codex's compile prompt uses `$compile-okf`, as
+  the Part 1 table says. Naming the file path also worked, but only after the
+  model guessed `~` as `/Users/lars` first.
+- **BLOCKER — instructions are not read.** sbx writes `agentInstructions` to
+  `<workspace>/../AGENTS.md`, but asked for the marker line, Codex answered
+  `NONE`: it reads `AGENTS.md` from a project root (git) down to the working
+  directory, and the wiki is not a repository. Stage 3.1b probes the
+  alternatives side by side: `~/.codex/AGENTS.md` (Codex's global
+  instructions) and `-c 'project_root_markers=["SPEC.md"]'` (making the
+  workspace's parent the project root). It also checks whether the gateway
+  can be switched off for a compile. Codex's kit waits for that answer.
+- **Model:** asked, Codex answered only "GPT-5"; `config.toml` sets no model.
+  Provenance can be `codex/gpt-5` unless a turn event carries a precise ID.
+- **Traces:** `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl`, as planned.
+- **Protocol** (for stage 3.2): `thread.started`, `turn.started`; tool work as
+  `item.started`/`item.completed` with `item.type` `file_change` or
+  `command_execution`; prose as `agent_message` items; `turn.completed`
+  (usage) at the end. A failure is `turn.failed` with `error.message`, preceded
+  by a top-level `error` event; an `error` *item* at the start of the failing
+  run was only a warning, so only `turn.failed` is terminal. Exit 1.
+- **Image and network** as for Claude: no `tree`, `shellcheck`, `fdfind`;
+  `mqlang.org` blocked.
 
-- **4.1 spike:** the instruction-location gate — `agentInstructions` must load
-  from outside the workspace; if it only works with a file in the wiki root,
-  stop and decide. Confirm `--force --trust` suffice headless, and that no MCP
-  or other approval prompt appears with no MCP servers configured.
-- **4.3 authoring:** a single instruction file with the procedures inline;
-  the check script at `~/.local/lib/md2okf/check-okf.sh`; `test_kits.py`
-  asserts that no instruction text tells the agent to write into `.cursor/`.
-- **4.5 compiles:** the live smoke's no-agent-artefacts rule matters most here;
-  check the output for `.cursor/`, `AGENTS.md` and `CLAUDE.md` explicitly.
+*Stage 3.1b findings (same day, `spikes/codex/followup.sh`):*
 
-*Milestone 4 exit:* the stage 2.6 checkpoint for cursor, plus live smoke for
-all four agents.
+- **Instructions: resolved.** A kit-shipped `files/home/.codex/AGENTS.md`
+  survives the parent's setup (`CODEX_HOME=/home/agent/.codex`) and Codex reads
+  it by default. With `-c 'project_root_markers=["SPEC.md"]'` Codex reads
+  `../AGENTS.md` too, but the global file needs no flag, so the kit ships the
+  whole OKF contract there and declares no `agentInstructions`.
+- **MCP gateway:** `-c 'mcp_servers={}'` leaves it enabled;
+  `-c 'mcp_servers.mcp-gateway.enabled=false'` disables it (`codex mcp list`),
+  and a turn with the override runs. Compile turns pass it.
 
-### Milestone 5 — Deferred items (optional)
+*As built (stages 3.2–3.4):* `protocols/codex.py` counts each tool item once
+(start, or completion when the start was never seen), treats only
+`turn.failed` as terminal and hides the stdin notice. `kits/codex` (named
+`md2okf-codex`) carries `~/.codex/AGENTS.md`, the six skills under
+`~/.agents/skills` and the shared helpers, and relocates `~/.codex/sessions`.
+`MD2OKF_AGENT=codex` is registered and packaged, prompt `$compile-okf …`,
+credential probe `codex login status`. Web search is left as the parent has
+it, like Claude's web tools — see Deferred.
+
+*Stage 3.5 (2026-09-26):* `--agent` opens Codex (`gpt-5.6-sol`, "YOLO mode").
+The smoke compile converged in 2 iterations like Pi's and Claude's, passed the
+gate (one `missing-xref` advice), split the document into five topic pages,
+signed `codex/gpt-5.6`, and left no agent files. The forced failure
+(`-m` unknown model) gave `codex exited 1: turn.failed: …` with nothing
+mirrored; it also showed Codex's stdin notice leaking into the message, now
+fixed (the diagnostic tail keeps only lines the protocol shows).
+`make test-sandbox AGENT=codex` passed later the same day.
+
+*Open live gates (from the code review, 2026-09-26).* The implementation of
+Milestones 0–3 is complete; two live checks the stages ask for have no record
+yet, and neither implies a code change unless it fails:
+
+- **Detached create without the vendor secret** (stage 2.1, and 3.1 by
+  inheritance). Both spikes created with the secret already set. The fake-sbx
+  tests prove the remedy only once `sbx run --detached` finishes; create runs
+  with stdin `/dev/null` and no timeout, so a parent that prompts should fail
+  fast, but one that waits on anything else would hang. Service secrets are
+  global, so the check means removing the secret, running
+  `MD2OKF_AGENT=<agent> uv run python -m md2okf.sandbox` against a removed
+  sandbox, and restoring the secret. Pass: exit 2 with the agent's remedy.
+- **The full-document comparison** (stages 2.5 and 3.5): compile
+  `md/GoogleStyleGuide-abridged.md` with pi, claude and codex; record
+  iterations, page count, `generated.by` and the `check-okf.sh` outcome here.
+  Only the smoke fixture has been compiled with Claude and Codex.
+
+*Gate 1, claude (2026-09-26): passed.* With no `anthropic` secret, the
+detached create finished and `python -m md2okf.sandbox` exited 2 with the
+remedy. Restoring the secret showed the remedy itself was wrong:
+`sbx secret set anthropic --oauth` is refused ("`--oauth`: openai/global
+only"; "sign in from inside the Claude sandbox"), so the Claude remedy and docs
+now say `sbx run claude`, then `/login`. Confirmed: a `/login` inside a Claude
+sandbox brought `sbx secret ls` back to `anthropic (oauth configured)`.
+
+*Gate 1, codex (2026-09-26): passed.* With no `openai` secret, the detached
+create finished and `python -m md2okf.sandbox` exited 2 with the remedy, whose
+`sbx secret set openai --oauth` then restored the secret from the host. Gate 1
+is closed for both agents; the full-document comparison remains open.
+
+### Milestone 4 — Deferred items (optional)
 
 Each item under "Deferred" becomes its own stage, gated by the offline gate
 plus the live smoke of every agent it touches.
 
-## Deferred (after all four compile paths are stable)
+## Deferred (after all three compile paths are stable)
 
 - **Vendor network-block hooks** for Claude (`PostToolUse` managed settings)
   and Codex (`requirements.toml`), ported from sbxagent. The sandbox allowlist
-  already enforces egress; the hooks are asymmetric (none for Pi or Cursor)
+  already enforces egress; the hooks are asymmetric (none for Pi)
   and add failure modes to the compile path.
 - **MCP servers in the new kits** — Context7 and, if ever wanted, GitHub — as an
   interactive-agent (`--agent`) enhancement. Includes Codex's install-time
-  `config.toml` append and Cursor's `--approve-mcps`.
+  `config.toml` append.
 - **A shared instruction source** (template plus a sync script with a lint
-  `--check`), once four working, checked-in instruction sets show which text is
+  `--check`), once three working, checked-in instruction sets show which text is
   genuinely common and whether duplication is actually a maintenance problem.
 - **Concurrent compilation across agents** — would need per-agent locks plus
   output locking for a shared `-o` directory.
+- **Web tools during a compile.** Claude keeps its `WebSearch`/`WebFetch` tools
+  and Codex its hosted `web_search` (which runs on OpenAI's side, outside the
+  sandbox's network allowlist; `-c 'web_search="disabled"'` is accepted).
+  Pi has none. Decide once, for every agent, whether a compile may search.

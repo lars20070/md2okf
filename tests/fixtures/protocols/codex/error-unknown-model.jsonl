@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a0dd59-5f34-7f73-8b03-32fcd191c25b"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `md2okf-spike-no-such-model` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"error","message":"{\"detail\":\"The 'md2okf-spike-no-such-model' model is not supported when using Codex with a ChatGPT account.\"}"}
+{"type":"turn.failed","error":{"message":"{\"detail\":\"The 'md2okf-spike-no-such-model' model is not supported when using Codex with a ChatGPT account.\"}"}}
