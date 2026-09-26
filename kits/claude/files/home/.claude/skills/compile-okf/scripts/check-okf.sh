@@ -89,6 +89,13 @@ if [[ "${lint_status}" -ne 0 ]] || [[ -z "${lint_json}" ]]; then
 	exit 2
 fi
 
+# Parse before counting: jq prints nothing on invalid JSON, and [[ "" -eq 0 ]]
+# is true, so an unreadable report would otherwise pass as "no findings".
+if ! jq -e 'type == "array"' <<<"${lint_json}" >/dev/null; then
+	echo "Error: 'okfctl lint --json ${bundle}' did not print a JSON array." >&2
+	exit 2
+fi
+
 if [[ "$(jq 'length' <<<"${lint_json}")" -eq 0 ]]; then
 	echo "OK: no lint findings"
 else
