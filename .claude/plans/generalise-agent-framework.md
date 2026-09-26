@@ -7,58 +7,54 @@ kit (`kits/md2okf/`). The Python driver assumes Pi everywhere: the kit
 directory is a fixed lookup (`resources.kit_dir()`), the sandbox has one fixed
 name (`workbench.SANDBOX_NAME = "md2okf"`), post-create validation checks Pi's
 OpenRouter sentinel (`workbench.py:597`), the compile prompt names Pi's skill
-path (`compile.py:21-25`), and — the deepest coupling — `compile.py`'s Ralph
-loop invokes `["pi", "--mode", "json", prompt]` and `events.py` parses Pi's own
-NDJSON protocol to render progress and detect whether a turn did any work.
+path (`compile.py:21-25`), the maintainer entry point `python -m md2okf.sandbox`
+hardcodes all of the above (`sandbox.py:248-287`), and — the deepest coupling —
+`compile.py`'s Ralph loop invokes `["pi", "--mode", "json", prompt]` and
+`events.py` parses Pi's own NDJSON protocol to render progress and detect
+whether a turn did any work.
 
 The user wants to add `claude` (Claude Code), `codex` (OpenAI Codex CLI) and
 `cursor` (Cursor CLI) as equally-supported agent frameworks, selected by an
 environment variable, with the **same automated compile pipeline** Pi gets
-today (not just an interactive shell) — confirmed in review. `lars20070/sbxagent`
-is the style guide for the kits themselves: a thin kit that `extends:` a
-built-in parent (native vendor login, not OpenRouter), per-agent MCP config,
-and — for claude/codex — a network-block enforcement hook. All three CLIs
-support a non-interactive, NDJSON-streaming mode comparable to Pi's.
+today (not just an interactive shell). `lars20070/sbxagent` is the style guide
+for the kits themselves: a thin kit that `extends:` a built-in parent (native
+vendor login, not OpenRouter). All three CLIs support a non-interactive,
+NDJSON-streaming mode comparable to Pi's.
 
 **sbxagent is a guide for kit *contents*, not for process lifecycle.**
 sbxagent starts agents through the kit entrypoint (`sbx run`). md2okf creates a
 detached sandbox and then runs every compile turn and every `--agent` session
 through `sbx exec <name> -- <argv>`, which never passes through the entrypoint.
-Anything sbxagent does in its entrypoint (env exports, the fatal trace-mount
-check, permission flags) must be re-homed for md2okf — see "Per-process
-wrapper" in Part 2.
+Anything sbxagent does in its entrypoint must be re-homed for md2okf — see
+"Per-process wrapper" in Part 2.
 
-Design decisions locked in (the four `AskUserQuestion` answers from the
-planning session, plus the defaults taken after the external review):
+Design decisions locked in (planning-session answers, plus defaults the user
+confirmed after the external reviews):
 
 - Full compile-pipeline parity per agent.
 - Native vendor login per agent (not routed through OpenRouter).
 - `kits/md2okf/` renamed to `kits/pi/`, with `kits/claude/`, `kits/codex/`,
   `kits/cursor/` as symmetric siblings.
 - One sandbox + one workbench per agent, namespaced, so all four can
-  **coexist** — meaning their sandboxes and state survive side by side, **not**
-  that they compile concurrently. The global per-user lock
-  (`workbench.LOCK_PATH_TEMPLATE`) stays exactly as it is; two agents writing
-  the same `-o` directory at once would need output locking that this plan
-  does not add. Document this in the README.
-- No GitHub MCP in the md2okf kits (departure from sbxagent). The Pi kit has
-  none, the compile task never touches GitHub, and dropping it removes a
-  credential, a network host, and the whole GH_TOKEN→GITHUB_TOKEN export
-  problem. Each kit gets Context7 only, matching Pi's native
-  `@upstash/context7-pi`. Revisit if `--agent` users ask for it.
+  **coexist** — their sandboxes and state survive side by side; they do **not**
+  compile concurrently. The global per-user lock (`workbench.LOCK_PATH_TEMPLATE`)
+  stays as it is. Document this in the README.
+- **The new kits carry only what compiling needs:** vendor authentication,
+  instructions and procedure, the OKF toolchain, trace persistence, the sandbox
+  network allowlist, and the headless command. No MCP servers (neither GitHub
+  nor Context7 — the compile procedure uses neither) and no vendor network-block
+  hooks (the sandbox allowlist is already the enforcement boundary). Both are
+  listed under "Deferred". Pi keeps its existing Context7 extension unchanged.
 - Cursor gets its procedures through kit-provided instructions only, never
   through a `.cursor/` directory in the workspace (which *is* the generated
   wiki).
-
-This is a large change. It touches the driver's core abstractions (kit lookup,
-sandbox naming, credential validation, prompt construction, event parsing),
-three new sandbox kits authored from scratch, and every piece of tooling that
-assumed exactly one kit.
+- Instruction and procedure files are **checked in per agent**, not generated
+  from a shared template — see Part 2.
 
 ## Part 0 — Pre-existing bugs to fix first (independent of new agents)
 
-Found while reviewing this plan. Both hit Pi today and both would silently
-break the new kits, so they land first, on their own.
+Both hit Pi today and both would silently break the new kits, so they land
+first, on their own.
 
 ### Kit fingerprint ignores almost the whole kit
 
@@ -74,8 +70,8 @@ Fix: narrow the exclusion to actual noise — a basename of `.DS_Store`, a
 basename starting with `._` (AppleDouble), and any `__pycache__` component.
 Keep `test_fingerprint_ignores_dotfiles_and_pycache` for those cases (rename to
 match), and add a test that mutating a file under a hidden directory
-(`files/home/.pi/agent/AGENTS.md`, and later `.claude`/`.agents`/`.codex`/
-`.cursor` equivalents) changes the fingerprint. Existing users get one rebuild.
+(`files/home/.pi/agent/AGENTS.md`, later the new kits' equivalents) changes the
+fingerprint. Existing users get one rebuild.
 
 ### sdist excludes are unanchored
 
@@ -85,8 +81,8 @@ strip `kits/claude/files/home/.claude/**` and `kits/cursor/files/home/.cursor/**
 from the sdist, and the wheel built from it (`uv build` builds the wheel from
 the sdist) would lose them or fail resolving the force-include. Anchor them:
 `exclude = ["/.claude", "/.cursor"]`. Pin the behavior with a
-`tests/test_package.py` assertion that every packaged kit's hidden config files
-are present in the wheel, and make `make dist` part of every increment's gate.
+`tests/test_package.py` assertion that every packaged kit's hidden files are
+present in the wheel, and make `make dist` part of every stage's offline gate.
 
 ## Part 1 — Driver: from one fixed kit to a selectable `Agent`
 
@@ -95,7 +91,8 @@ are present in the wheel, and make `make dist` part of every increment's gate.
 Read once via `os.environ.get("MD2OKF_AGENT", "pi")`, following the precedence
 pattern `workbench.state_home()` already uses for `XDG_STATE_HOME`
 (`workbench.py:83-92`). Valid values are exactly the **registered** agents at
-that increment — `pi` only in increment 1, growing as each kit lands. An
+that stage — `pi` only through Milestone 1, growing as each agent registers
+(stage N.4). An
 unrecognized value is a decided-before-any-work-starts failure (exit 2), same
 tier as an unresolvable `--spec` file today.
 
@@ -111,14 +108,14 @@ module keeps a Pi branch:
 @dataclass(frozen=True)
 class Agent:
     name: str                                    # "pi" | "claude" | "codex" | "cursor"
-    min_sbx_version: tuple[int, int, int]        # pi (0, 43, 0); extends-kits per Part 1 "sbx version"
+    min_sbx_version: tuple[int, int, int]        # pi (0, 43, 0); extends-kits per "sbx version"
     compile_args: Callable[[str], list[str]]     # prompt -> full argv for one Ralph-loop turn
     interactive_args: list[str]                  # argv for `--agent`
     compile_prompt: Callable[[str], str]         # document path -> first-turn prompt
     check_credentials: Callable[[str], str | None]  # sandbox name -> None if ready, else a remedy message
     protocol: Protocol                           # the protocols/<name>.py module (see below)
 
-AGENTS: dict[str, Agent] = {"pi": ...}           # grows one entry per increment
+AGENTS: dict[str, Agent] = {"pi": ...}           # grows one entry per agent milestone
 DEFAULT_AGENT = "pi"
 
 class UnknownAgentError(Exception): ...
@@ -128,36 +125,32 @@ def resolve(value: str) -> Agent: ...            # AGENTS[value] or raise listin
 #### `compile_args` / `interactive_args`
 
 Every argv goes through the kit's per-process wrapper `md2okf-agent` (Part 2),
-except Pi's compile argv in increment 1 (no behavior change) — Pi moves onto
-the wrapper with the rest once it exists.
+except Pi's until stage 1.6, which introduces the wrapper and moves Pi onto it
+before any new agent depends on it.
 
 | Agent | `compile_args(prompt)` | `interactive_args` |
 |---|---|---|
 | pi | `["pi", "--mode", "json", prompt]` (unchanged) | `["pi"]` |
 | claude | `["md2okf-agent", "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", prompt]` | `["md2okf-agent", "claude", "--permission-mode", "bypassPermissions"]` |
 | codex | `["md2okf-agent", "codex", "exec", "--json", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", prompt]` | `["md2okf-agent", "codex", "--dangerously-bypass-approvals-and-sandbox"]` |
-| cursor | `["md2okf-agent", "agent", "-p", "--output-format", "stream-json", "--force", "--trust", "--approve-mcps", prompt]` | `["md2okf-agent", "agent", "--approve-mcps"]` |
+| cursor | `["md2okf-agent", "agent", "-p", "--output-format", "stream-json", "--force", "--trust", prompt]` | `["md2okf-agent", "agent"]` |
 
 Why each flag is load-bearing:
 
 - **claude `--permission-mode bypassPermissions`** — headless `-p` starts in
   the default mode and, with no one to approve, denies every tool call that
   would prompt; without it the turn cannot write the wiki. The microVM is the
-  isolation boundary, as for the other agents. (`--dangerously-skip-permissions`
-  is equivalent; pick one.)
+  isolation boundary, as for the other agents.
 - **codex `--skip-git-repo-check`** — `codex exec` refuses to run outside a Git
   repository, and the workspace is the generated wiki, which has no `.git`.
-  Without it the first Codex turn exits before any tool call.
 - **cursor `--force`** — without it print mode only proposes edits.
-  **`--trust`** — skips the workspace-trust prompt that would otherwise block
-  headless mode. **`--approve-mcps`** — auto-approves the Context7 MCP server
-  instead of needing sbxagent's separate startup approval step.
+  **`--trust`** — skips the workspace-trust prompt that would block headless
+  mode.
 
-Unit tests assert each registered agent's exact argv. Verify spelling against
-each CLI's `--help` in the live sandbox during implementation, and back every
-row with one **live headless write test** (Verification §5): capturing protocol
-samples alone does not catch a command that never gets far enough to emit
-useful events.
+Unit tests assert each registered agent's exact argv. Each row is confirmed
+against the CLI's `--help` in the agent's spike (stage N.1) and
+backed by one **live headless write test**: capturing protocol samples alone
+does not catch a command that never gets far enough to emit useful events.
 
 #### `compile_prompt`
 
@@ -179,22 +172,40 @@ by checking the path/name exists in `kits/<agent>/`.
 
 #### `check_credentials`
 
-Replaces the unconditional `sandbox.key_is_proxy_managed()` call in
-`ensure_sandbox()` (`workbench.py:597`), which would reject every non-Pi
-sandbox. Pi's implementation is today's OpenRouter sentinel check.
+Replaces the Pi-only `sandbox.key_is_proxy_managed()` call in `ensure_sandbox()`.
 `KeyNotProxyManagedError` generalises to `CredentialNotReadyError(name, remedy)`
-carrying an agent-specific remedy message; ownership-marker semantics are
-unchanged (the marker is still written before the check). The new agents'
-checks are decided in their own increments — a cheap probe of the
-proxy-managed vendor credential, confirmed during the live spike, not guessed.
+carrying an agent-specific remedy message. Pi's implementation is today's
+OpenRouter sentinel check.
+
+Lifecycle rules:
+
+- **Checked on both create and reuse.** Today `ensure_sandbox()` returns
+  `"reuse"` before the key check (`workbench.py:590-592`), so a sandbox whose
+  create succeeded but whose credential was not ready is never re-checked once
+  the user follows the remedy — or, worse, is reused while still broken. The
+  check moves to after both branches. Ownership-marker semantics are unchanged
+  (the marker is still written before the check on create).
+- **Non-interactive and unpaid.** It runs on every compile, `--shell`,
+  `--agent` and `python -m md2okf.sandbox`, so it must be a local probe through
+  `sandbox._run` (stdin `/dev/null`) — an env sentinel or a CLI's own
+  auth-status command — never a model request. Each new agent's probe is chosen
+  in its spike.
+- **`--shell` does not require it.** A failed check is fatal for compile,
+  `--agent` and `python -m md2okf.sandbox`; for `--shell` it prints the remedy as
+  a warning and opens the shell anyway, since a diagnostic shell is most needed
+  exactly when credentials are broken.
+
+Tests (fake sbx): create → not ready → `CredentialNotReadyError`, marker
+written; remedy applied → next call reuses and succeeds; reuse while not ready
+→ error, no rebuild; `--shell` with not-ready credentials → warning, shell
+opens.
 
 #### sbx version
 
 `sandbox.MIN_VERSION = (0, 43, 0)` becomes the default, and
 `Agent.min_sbx_version` overrides it per agent. sbxagent — the source of the
-extends-kit patterns — requires sbx 0.45.0 and depends on its parent-kit merge,
-startup, credential and managed-hook behavior. Unless a new kit is proven on
-0.43, its `min_sbx_version` is `(0, 45, 0)`, and the preflight
+extends-kit patterns — requires sbx 0.45.0. Unless a new kit is proven on 0.43
+in its spike, its `min_sbx_version` is `(0, 45, 0)`, and the preflight
 (`sandbox.py:75-98`) checks the resolved agent's minimum. Pi keeps 0.43. README
 and `kits/<agent>/README.md` state each minimum.
 
@@ -202,49 +213,46 @@ and `kits/<agent>/README.md` state each minimum.
 
 `src/md2okf/events.py` moves to `src/md2okf/protocols/pi.py`, and
 `tests/test_events.py` moves alongside it. Each protocol module exposes the
-same interface, but the normalized record gains the failure information the
-current tuple cannot carry:
+same interface, with a normalized record that carries a terminal outcome:
 
 ```python
 class Event(NamedTuple):
     raw: str
     display: str | None       # what -v prints, or None
     is_tool_call: bool
-    diagnostic: str | None    # a structured error worth keeping (result error, turn.failed, ...)
+    failure: str | None       # the protocol declared the turn failed (result is_error, turn.failed, error, ...)
 
 def translate(line: str) -> str | None: ...
 def is_tool_call(line: str) -> bool: ...
 def process(lines: Iterable[str]) -> Iterator[Event]: ...
 ```
 
-Today `_diagnostic_tail()` (`compile.py:43-51`) drops every line starting with
-`{`, so an error that the agent reports *as JSON* (Claude `result` with
-`is_error`, Codex `turn.failed`/`error`, Cursor `result.is_error`) would
-surface as a bare "agent exited 1". `compile.py` therefore collects the
-`diagnostic` values alongside the non-JSON lines and folds both into the same
-bounded tail. The process exit code stays authoritative for success/failure;
-`diagnostic` only enriches the message. `test_failure_tail_excludes_protocol_json`
-(`tests/test_compile.py:463`) stays true for non-diagnostic envelopes and gains
-a sibling asserting a structured error does appear.
+**A protocol-declared failure is authoritative, like a non-zero exit.** A CLI
+can emit a terminal error event and still exit 0, or report it after earlier
+tool calls. Relying on the exit code alone would then either raise the
+misleading "made no tool calls" error or, worse, treat the turn as a success and
+mirror its output to `-o`. So a turn fails when **either** the process exits
+non-zero **or** any event carries a `failure`. Pi's parser reports `failure`
+only if its captured output shows a terminal error event; otherwise it is
+always `None`, keeping Milestone 1 behavior-neutral.
 
-New modules, one per agent increment:
+New modules, one per agent milestone (stage N.2):
 
-- `protocols/claude.py` — `stream-json` events: `assistant` messages with
-  `content` blocks, `tool_use` blocks as calls, final `result` (with
-  `is_error`) as the outcome.
-- `protocols/codex.py` — `exec --json` stream: `item.completed` with
+- `protocols/claude.py` — `stream-json`: `assistant` messages with `content`
+  blocks, `tool_use` blocks as calls, final `result` with `is_error` as a
+  failure.
+- `protocols/codex.py` — `exec --json`: `item.completed` with
   `item.type in {"command_execution", "file_change", ...}` as tool calls,
-  `turn.failed`/`error` as diagnostics.
+  `turn.failed`/`error` as failures.
 - `protocols/cursor.py` — `stream-json`: `tool_call` with `subtype`
   `started`/`completed` as calls, `assistant` for text, `result` with
-  `is_error` as the outcome.
+  `is_error` as a failure.
 
-**Risk, resolved per increment, not on paper:** these field names come from
-docs, not captured output. Before writing each parser, run the agent headless
-in its real sandbox, capture the output, and derive the parser from it — the
-way `events.py`'s docstring says it replaced the old jq filter. Fixtures per
-protocol: a successful run, a structured failure, malformed JSON, and plain
-stderr — all from captured output, not hand-written from guessed schemas.
+**These field names come from docs, not captured output.** Each parser is
+derived from real output captured in its agent's spike — the way `events.py`'s
+docstring says it replaced the old jq filter. Fixtures per protocol, all
+captured: a successful run, a terminal failure, malformed JSON, and plain
+stderr.
 
 Keep `display` consistent across modules (tool call → `"ToolName args"` cut to
 `DISPLAY_WIDTH`; assistant text/thinking joined by blank lines) so `-v` reads
@@ -255,10 +263,21 @@ the same regardless of `MD2OKF_AGENT`.
 `compile_document` gains `agent: agents.Agent`:
 
 - `compile.py:221` → `sandbox.exec_stream(name, agent.compile_args(prompt))`.
-- `compile.py:225` → `agent.protocol.process(stream)`, consuming `Event`s.
+- `compile.py:225` → `agent.protocol.process(stream)`, consuming `Event`s and
+  remembering the last `failure`.
 - `COMPILE_PROMPT.format(...)` → `agent.compile_prompt(document)`;
   `CONTINUATION_PROMPT` stays shared.
-- The failure path folds `Event.diagnostic` values into the diagnostic tail.
+- After the stream closes, in this order: a `failure` or a non-zero exit raises
+  `CompileError(f"{agent.name} turn failed: ...")` — the protocol failure text
+  first, then `_diagnostic_tail()` for any plain-text context; only then the
+  "made no tool calls" check; only then `mirror_out`. The hardcoded "pi exited"
+  and "pi session" messages (`compile.py:244-246`) use `agent.name`.
+
+Tests: exit 0 plus a protocol failure → `CompileError`, nothing mirrored; tool
+calls followed by a protocol failure → `CompileError` (not success, not "no
+tool calls"); non-zero exit with no structured failure → today's tail message;
+`test_failure_tail_excludes_protocol_json` (`tests/test_compile.py:463`) still
+holds.
 
 ### `resources.py`
 
@@ -280,107 +299,135 @@ checkout fallback becomes `_checkout_path(f"kits/{agent}", "the sandbox kit")`.
   SUBDIR instead would bind onto a sibling that is not host-mounted, so traces
   would vanish with the sandbox. Fix the `sessions` docstring, which says "Pi's".
 - `ensure_sandbox()` takes the `Agent`, passes `resources.kit_dir(agent.name)`
-  and `sandbox_name(agent.name)` to `sandbox.create(...)`, and replaces the
-  OpenRouter check with `agent.check_credentials(name)`.
-- The lock stays global (see Context).
+  and `sandbox_name(agent.name)` to `sandbox.create(...)`, and runs
+  `agent.check_credentials(name)` on both create and reuse (see above).
+- The lock stays global.
 
 **One-time migration note** (CHANGELOG.md): the existing `md2okf` sandbox and
 `$XDG_STATE_HOME/md2okf/` workbench layout are superseded by `md2okf-pi` and
 `.../md2okf/pi/`. Cleanup is `sbx rm --force md2okf`. The old workbench's
 top-level `work/`, `sessions/` and fingerprint files sit beside the new `pi/`
-subdirectory and can be deleted by hand — note that `sessions/` holds old Pi
+subdirectory and can be deleted by hand — `sessions/` holds old Pi
 transcripts, in case the user wants to move them into `pi/sessions/`.
 
 ### `cli.py`
 
 - Resolve `MD2OKF_AGENT` right after `parser.parse_args` in `main()`
-  (`cli.py:301-309`), before the `--shell`/`--agent` branch.
-  `agents.UnknownAgentError` joins the exception tuple in `_resolve_inputs`
-  (`cli.py:106`) — or is caught in `main()` directly if that branch runs first.
+  (`cli.py:301-309`), before the `--shell`/`--agent` branch, and map
+  `agents.UnknownAgentError` to exit 2 there.
 - `_format_sbx_run`/`_format_sbx_exec_pi` (`cli.py:130-153`) take `agent`;
   the latter becomes `_format_sbx_exec_agent` and uses `agent.compile_args` and
   `agent.compile_prompt`. `--dry-run` also prints the resolved agent name.
 - `_enter_sandbox` (`cli.py:193-246`): `["bash"] if args.shell else
-  agent.interactive_args` replaces the hardcoded `["pi"]` at `cli.py:240`.
+  agent.interactive_args` replaces the hardcoded `["pi"]` at `cli.py:240`, and
+  applies the `--shell` credential-warning rule.
 - `_run` (`cli.py:249-298`) passes `agent` into `compile_document` and
   `ensure_sandbox`.
 - The sbx version preflight uses `agent.min_sbx_version`.
+
+### `python -m md2okf.sandbox` (maintainer entry point)
+
+`_ensure_default_sandbox()` (`sandbox.py:248-287`) is documented in AGENTS.md
+and is how `tests/test-sandbox.sh` asks the driver for a correctly mounted
+sandbox. It independently hardcodes `preflight()`, `Workbench.default()`,
+`ensure_sandbox(wb)`, `SANDBOX_NAME` and `KeyNotProxyManagedError`. It must:
+
+- resolve `MD2OKF_AGENT` the same way as `cli.py` (unknown → exit 2);
+- preflight against `agent.min_sbx_version`;
+- use `Workbench.default(agent.name)`, `ensure_sandbox(wb, agent)` and
+  `sandbox_name(agent.name)` in its output line;
+- catch `CredentialNotReadyError` (exit 2, remedy printed).
+
+Parameterize its existing tests over `pi` and, from stage 2.4, one non-Pi
+agent, so the live sandbox test can never create or inspect the wrong sandbox
+while the main CLI works.
 
 ## Part 2 — Kits
 
 ### Rename `kits/md2okf/` → `kits/pi/`
 
 `spec.yaml` `name: md2okf` → `name: pi`; the `md2okf-entrypoint` id, the
-`~/.local/lib/md2okf/mount-state.sh` path and the `md2okf:` log prefix can stay
+`~/.local/lib/md2okf/mount-state.sh` path and the `md2okf:` log prefix stay
 (they name the tool, not the kit); `kits/pi/README.md`'s `sbx exec md2okf`
 examples → `md2okf-pi`. Keep `MD2OKF_STATE_DIR` in all kits — it is
 driver-owned.
 
 ### Per-process wrapper: `md2okf-agent`
 
-Because `sbx exec` bypasses the entrypoint, each kit installs
-`/home/agent/.local/bin/md2okf-agent` (via `setup.files`, mode `0755`), and every
-driver argv (Part 1 table) runs through it:
+Because `sbx exec` bypasses the entrypoint, each kit ships the wrapper script
+at `files/home/.local/lib/md2okf/md2okf-agent.sh` (beside `mount-state.sh`, and
+testable the same way), exposed on PATH by a `setup.files` shim
+`/home/agent/.local/bin/md2okf-agent` (mode `0755`, like the CLI shims) that
+runs `exec sh "$HOME/.local/lib/md2okf/md2okf-agent.sh" "$@"`. Every driver argv
+(Part 1 table) goes through it.
 
 ```sh
 #!/bin/sh
+# Usage: sh md2okf-agent.sh TRACE_DIR COMMAND [ARG...]  -- the shim passes TRACE_DIR
 set -eu
+trace_dir=$1; shift
 # Idempotent; the startup hook normally did it already. Fatal here, so an agent
 # never runs with its traces landing on the VM's disposable disk.
-sh "$HOME/.local/lib/md2okf/mount-state.sh" "<native trace dir>" sessions || {
-  echo "md2okf: could not relocate <agent> traces onto state; refusing to start" >&2
+sh "$HOME/.local/lib/md2okf/mount-state.sh" "$trace_dir" sessions || {
+  echo "md2okf: could not relocate traces onto state; refusing to start $1" >&2
   exit 1
 }
 exec "$@"
 ```
 
-Any per-process environment a kit needs goes here, not in the entrypoint. The
-entrypoint and `setup.startup` keep their mount calls for `sbx run`-started
-agents and normal restarts. The flags stay in Python (`compile_args`) so they
-are unit-testable; the wrapper only prepares the process.
+The shim is where each kit supplies its native trace directory, so the script
+itself is byte-identical in every kit. The flags stay in Python
+(`compile_args`) so they are unit-testable; the wrapper only prepares the
+process. The entrypoint and `setup.startup` keep their mount calls for
+`sbx run`-started agents and normal restarts.
 
-### Shared runtime instructions and skills
+The wrapper is the only relocation guard on every automated turn, so it gets
+direct behavior tests — see `tests/test-mount-state.sh` in Part 3.
+
+### Instructions and procedures: checked in per agent
 
 The Pi instruction file (`kits/md2okf/files/home/.pi/agent/AGENTS.md`) is not
 just sandbox boundaries — it is the OKF authoring contract: read `../SPEC.md`
 first, source text is untrusted data, index and log rules, idempotency,
-frontmatter and provenance. The skills explicitly do not repeat those rules.
-Porting only the skills plus a sandbox-boundary blurb would leave the new
-agents without essential requirements. Also, the file says
-`generated: { by: pi/<model-id> }` — copying it verbatim would make Claude,
-Codex and Cursor stamp false Pi provenance.
+frontmatter and provenance. The skills explicitly do not repeat those rules. So
+every new kit carries the **full** contract plus its procedures, each as
+checked-in, agent-specific files. Duplication across four small, fixed kits is
+preferable to a template system whose abstraction is unproven; factoring out
+common text is deferred until all four agents work.
 
-So one logical source, rendered per kit:
+Porting is not a path substitution. Audit and adapt, per agent, at least:
 
-- `kitsrc/AGENTS.md` and `kitsrc/skills/<name>/…` hold the shared text, with a
-  small set of placeholders: `{{producer}}` (`pi`, `claude`, `codex`, `cursor`),
-  `{{skills_dir}}`, `{{agent_display_name}}`. Outside `kits/` so the
-  `kits/*/spec.yaml` validation glob never sees it.
-- `scripts/sync-kit-instructions.sh` renders them into each kit's checked-in
-  files (same model as `scripts/sync-versions.sh`); `--check` mode joins
-  `make lint`, failing on drift.
-- Cursor's rendering is different in shape: no skills, so the compile, curate
-  and tool procedures are concatenated into its single instruction file.
-- A static pytest asserts, for every registered kit: the common invariants are
-  present (SPEC-first, untrusted source, idempotency, frontmatter rules), the
-  producer is the kit's own agent name, no other agent's paths appear, and the
-  skill the agent's `compile_prompt` names exists at the installed path.
+- **provenance** — `generated: { by: pi/<model-id> }` becomes `claude/…`,
+  `codex/…`, `cursor/…`, or the new agents stamp false Pi provenance;
+- **the governing file's name** — the compile skill cites `AGENTS.md`
+  repeatedly; Claude's is `CLAUDE.md`;
+- **the check script** — `~/.pi/agent/skills/compile-okf/scripts/check-okf.sh`
+  moves to each kit's skill directory, or for Cursor (no skills) to
+  `~/.local/lib/md2okf/check-okf.sh`, with its `chmod` install step;
+- **skill cross-references** — "read the `inspect-okf` skill" and similar;
+  Cursor has no skills, so its single instruction file carries those tool
+  notes inline;
+- **tool-specific advice** — "Write in bounded chunks" names Pi's
+  `write`/`edit` tools and Pi's output-truncation failure; rewrite for each
+  agent's actual file-edit mechanism and failure mode, or drop what does not
+  apply.
 
-Where each rendered set lands:
+Where each set lands:
 
 | | instruction file | procedures |
 |---|---|---|
 | pi | `files/home/.pi/agent/AGENTS.md` (today) | `files/home/.pi/agent/skills/<name>/SKILL.md` (today) |
 | claude | kit `agentInstructions` → `CLAUDE.md` | `files/home/.claude/skills/<name>/SKILL.md` |
-| codex | kit `agentInstructions` → `AGENTS.md` | `files/home/.agents/skills/<name>/SKILL.md` (user scope; `/etc/codex/skills` is the admin alternative) |
-| cursor | kit `agentInstructions` → `AGENTS.md`, carrying the full procedure | none — no skill mechanism, and **no** `.cursor/rules` in the workspace, which is the generated wiki |
+| codex | kit `agentInstructions` → `AGENTS.md` | `files/home/.agents/skills/<name>/SKILL.md` |
+| cursor | kit `agentInstructions` → `AGENTS.md`, carrying the full procedure | none, and **no** `.cursor/rules` in the workspace, which is the generated wiki |
 
-**Cursor verification gate:** Cursor CLI documents reading `AGENTS.md`,
-`CLAUDE.md` and `.cursor/rules` from the *project*. Before building the cursor
-kit, confirm where sbx's `cursor` parent writes `agentInstructions` and that
-`agent -p` actually loads it when the workspace is the wiki. If it only works by
-placing a file in the workspace root, stop and decide — a file there would
-become part of the output (and `okfctl` would see it).
+A static pytest (`tests/test_kits.py`), for every registered kit, asserts:
+the shared invariants are present (SPEC first, untrusted input, frontmatter,
+idempotency); `generated.by` names the kit's own agent; no other agent's paths
+appear (e.g. no `.pi/` in the claude kit); every path the instructions and
+procedures reference exists in the kit; the skill the agent's `compile_prompt`
+names exists; and `mount-state.sh` and `md2okf-agent.sh` are byte-identical
+across kits.
 
 ### spec.yaml skeleton (per new kit)
 
@@ -389,7 +436,7 @@ extends: claude   # or codex / cursor — the sbx built-in parent kit
 agentInstructions:
   filename: CLAUDE.md   # AGENTS.md for codex/cursor
   content: |
-    <rendered from kitsrc/AGENTS.md: sandbox boundary (work_okf rw;
+    <checked-in, agent-specific: sandbox boundary (work_okf rw;
     work_md/work_scripts/work_spec ro; $MD2OKF_STATE_DIR/sessions), the tool list,
     and the full OKF authoring contract with producer = this agent>
 entrypoint:
@@ -403,21 +450,19 @@ entrypoint:
 permissions:
   network:
     allow:
-      # kits/pi's OKF-toolchain hosts, minus openrouter.ai and pi.dev: npm,
-      # PyPI, Ubuntu archives, download.docker.com, github.com + release CDNs,
-      # mqlang.org/book/, context7.com. Vendor API hosts come from the
-      # extends: parent's preset — confirm with `sbx policy` against the
-      # live sandbox rather than assuming.
+      # kits/pi's OKF-toolchain hosts, minus openrouter.ai, pi.dev and
+      # context7.com: npm, PyPI, Ubuntu archives, download.docker.com,
+      # github.com + release CDNs, mqlang.org/book/. Vendor API hosts come
+      # from the extends: parent's preset — confirm against the live sandbox
+      # in the spike rather than assuming.
 setup:
   install:
     # OKF CLI installs from kits/pi, verbatim: apt tools, markdownlint-cli2,
-    # cspell, ruff, yamllint, mq, okfctl.
-    # Context7 MCP registration (per-agent syntax, table below).
-    # Network-block escalation hook (claude, codex only).
+    # cspell, ruff, yamllint, mq, okfctl. Plus the check-okf.sh chmod.
   startup:
     # mount-state.sh <native trace dir> sessions   (idempotent)
   files:
-    # md2okf-agent wrapper; inspectmd/inspectokf/sizeokf/merkleokf shims from kits/pi.
+    # md2okf-agent shim; inspectmd/inspectokf/sizeokf/merkleokf shims from kits/pi.
 ```
 
 ### Per-agent differences
@@ -427,144 +472,354 @@ setup:
 | `extends:` | `claude` | `codex` | `cursor` |
 | instruction filename | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
 | native trace dir (bound to `sessions`) | `~/.claude/projects` | `~/.codex/sessions` | `~/.cursor/projects` |
-| Context7 MCP | `~/.claude.json` / managed MCP config | appended to `~/.codex/config.toml` **once, in `setup.install`**, after the parent truncates it — never in `startup`, which would append duplicate TOML tables on every start and eventually break the config | static `files/home/.cursor/mcp.json`; approval via `--approve-mcps` in the argv |
-| network-block guard | managed-settings `PostToolUse`/`PostToolUseFailure` hook, hard stop (`continue: false`), matcher `Bash\|WebFetch` | same hook via `/etc/codex/requirements.toml`, soft (cannot force a stop), matcher `^Bash$` | none — no verified hook; instructions ask the agent to report a block (Pi's status quo too) |
-| first-use credential | decide in spike | **blocked on the auth spike below** | decide in spike |
-
-Reuse `mount-state.sh` verbatim in all kits. Port the network-block `jq` filter
-and hook setup from sbxagent's `kits/sbxclaude/spec.yaml` and
-`kits/sbxcodex/spec.yaml`, adjusting the matcher and the self-reference
-exemption's file list to md2okf's own filenames.
-
-### Codex first-use authentication (spike, gates increment 4)
-
-sbxagent documents that the built-in `codex` parent asks the user to approve
-the `openai` credential on first creation. md2okf creates with
-`sbx run --detached`, captured output and `stdin=DEVNULL` (`sandbox.py:53-55,
-122-137`), so that prompt cannot be answered — the run would fail minutes into
-creation with a generic `sbx run failed`. `--agent` cannot help, because it
-creates the sandbox before entering it.
-
-Spike: provision the credential on the host first (`sbx secret set openai …`
-or the parent's documented equivalent), then run the exact detached create
-md2okf uses. Then:
-
-- **If creation proceeds without prompting** → make host provisioning a
-  documented prerequisite, and make `codex.check_credentials` give that exact
-  remedy command when it is missing.
-- **If it still prompts** → add an explicit bootstrap: for an agent flagged
-  `interactive_create`, `sandbox.create` runs `sbx run` attached to the
-  terminal (and refuses without one, like `--shell`/`--agent` do today), so
-  the first creation happens in a session where the user can approve it.
-
-Run the same check for claude and cursor in their increments; do not assume
-they are prompt-free.
+| procedure delivery | skills | skills | instruction file only |
 
 ## Part 3 — Tooling and tests
 
 ### `pyproject.toml`
 
 - Force-include one line per **registered** kit, added in that kit's
-  increment: `"kits/pi" = "md2okf/kits/pi"` in increment 1, then claude,
-  codex, cursor. Never advertise a kit that does not exist yet.
+  release stage: `"kits/pi" = "md2okf/kits/pi"` in stage 1.1, then claude,
+  codex, cursor.
 - Anchored sdist excludes (Part 0).
 
 ### `scripts/validate-spec.sh`
 
 Replace the hardcoded `kits/md2okf/spec.yaml` (`validate-spec.sh:22-23`) with
-a discovered loop, like sbxagent's release workflow:
+a discovered loop:
 `for spec in kits/*/spec.yaml; do sbx kit validate "$(dirname "$spec")"; done`.
 
 ### `Makefile`
 
 - `check-okf` (`Makefile:91`) repoints from `kits/md2okf/files/...` to
   `kits/pi/files/...`.
-- `lint` gains `scripts/sync-kit-instructions.sh --check`.
-- Optional follow-up: a cross-kit parity check that `mount-state.sh` and the
-  `md2okf-agent` template are byte-identical across kits.
+- `test-sandbox` (`Makefile:179-180`) passes the agent explicitly — today it
+  passes nothing, so `make test-sandbox AGENT=claude` would silently test Pi:
+
+  ```make
+  AGENTS ?= pi        # registered agents; grows at stage N.4
+  test-sandbox:
+  	for agent in $(or $(AGENT),$(AGENTS)); do ./tests/test-sandbox.sh "$$agent" || exit 1; done
+  ```
 
 ### `tests/test-sandbox.sh` + guest scripts
 
-`kit_name="md2okf"` (`test-sandbox.sh:18`) becomes `AGENT=${1:-pi}`, driving
-the kit path and the sandbox name (`md2okf-${AGENT}`). Split
-`test-sandbox-guest.sh` into `test-sandbox-guest-<agent>.sh`, starting from
-today's script as `-pi`; only `-pi` checks the `OPENROUTER_API_KEY` sentinel.
-Each guest script must, among its checks:
+`kit_name="md2okf"` (`test-sandbox.sh:18`) becomes a **required** positional
+argument — no default, so nothing falls back to Pi by accident — driving the
+kit path, the sandbox name (`md2okf-$1`) and `MD2OKF_AGENT` for the
+`python -m md2okf.sandbox` call. Split `test-sandbox-guest.sh` into
+`test-sandbox-guest-<agent>.sh`, starting from today's script as `-pi`; only
+`-pi` checks the `OPENROUTER_API_KEY` sentinel. Each guest script must:
 
 - write a file through the agent's **native** trace path, and the host side
   must then find it under the workbench's `sessions/` — proving the bind lands
   on host-backed state, not on a VM-local sibling;
-- confirm `md2okf-agent` is on PATH and executable;
-- confirm the rendered instruction file names the right producer.
+- confirm `md2okf-agent` is on PATH and runs a trivial command through it;
+- confirm the instruction file names the right producer.
 
-`make test-sandbox` runs every registered agent, or one with `AGENT=`.
+### `tests/test-mount-state.sh`
+
+It asserts **exactly two** `mount-state.sh` call sites in the spec
+(`test-mount-state.sh:198-201`), so it fails the moment the wrapper lands
+(stage 1.6). Update it in that stage:
+
+- replace the count with explicit checks for the three intended sites — the
+  entrypoint, the startup hook, and `md2okf-agent.sh`;
+- exercise `md2okf-agent.sh` directly under the existing fake `HOME`: success
+  (bind in place, command runs), relocation failure (non-zero exit, command
+  **not** run, message on stderr), and exact argument forwarding (arguments
+  with spaces and an empty argument arrive unchanged);
+- point `HELPER` (`test-mount-state.sh:6`) at `kits/pi/…` after the rename.
 
 ### `tests/conftest.py`
 
 `FakePopen` (`conftest.py:190`) hardcodes `tail[0] == "pi"`. Generalize to
-accept any registered agent's `compile_args` head (`pi`, `md2okf-agent`).
+accept any registered agent's `compile_args` head (`pi`, `md2okf-agent`), and
+let a test script the stream's lines and exit code independently, for the
+failure-combination tests.
 
-### New/updated tests
+### New/updated tests (summary)
 
 - `agents.py`: `resolve()` for every registered name; `UnknownAgentError`
-  listing valid names otherwise; exact `compile_args`, `interactive_args` and
+  listing valid names; exact `compile_args`, `interactive_args` and
   `compile_prompt` per agent.
-- `resources.kit_dir(<agent>)` in both installed and checkout paths
-  (`tests/test_resources.py`).
-- `workbench.sandbox_name(<agent>)` / `Workbench.default(<agent>)`;
-  `ensure_sandbox` calls `agent.check_credentials` and no longer calls the
-  OpenRouter check for a non-Pi agent (`tests/test_workbench.py`).
-- Fingerprint: hidden-directory changes move it; `.DS_Store`/`._*`/`__pycache__`
-  do not (Part 0).
-- Package: every packaged kit's hidden files are in the wheel (Part 0).
-- Protocols: per module, captured fixtures for success, structured failure,
-  malformed JSON and plain stderr; a structured failure appears in the
-  `CompileError` message.
-- Instructions: the static render test from Part 2.
-- `cli.py`: `MD2OKF_AGENT=bogus md2okf ...` exits 2 with a clear message; the
-  sbx preflight uses the agent's minimum version.
+- `resources.kit_dir(<agent>)` in both installed and checkout paths.
+- `workbench.sandbox_name` / `Workbench.default` per agent; the credential
+  lifecycle sequence (Part 1).
+- `python -m md2okf.sandbox` over `pi` and one non-Pi agent; unknown → exit 2.
+- Fingerprint and package tests (Part 0).
+- Protocols: captured fixtures per module; failure-combination tests in
+  `test_compile.py` (Part 1).
+- `tests/test_kits.py` static invariants (Part 2).
+- `cli.py`: `MD2OKF_AGENT=bogus md2okf ...` exits 2; the preflight uses the
+  agent's minimum.
 
-## Verification (every increment)
+## Staged roadmap
 
-1. `make lint` — including `sync-versions.sh --check` and
-   `sync-kit-instructions.sh --check`.
-2. `make validate` — every `kits/*/spec.yaml`.
-3. `make test-md2okf`, `make test-clis`, `make test-web2md`, `make test-shell`.
-4. `make dist` — the wheel built *from the sdist*, which is where the hidden-dir
-   exclusion bug would show.
-5. Per registered agent, live (needs `sbx login`, plus the agent's vendor
-   credential):
-   - `sbx rm --force md2okf-<agent>; MD2OKF_AGENT=<agent> uv run md2okf --dry-run md/<doc>.md`
-     — resolved agent, kit dir, sandbox name and exact argv.
-   - `sbx rm --force md2okf-<agent> && make test-sandbox AGENT=<agent>` —
-     fresh sandbox, native trace write verified from the host.
-   - `MD2OKF_AGENT=<agent> uv run md2okf md/<small-doc>.md -o /tmp/okf-<agent>`
-     — a real headless write: tool calls detected, convergence reached, pages
-     written with `generated.by: <agent>/…`.
-   - Force a failure (e.g. unset the vendor credential) and confirm the
-     `CompileError` carries the structured error, not just "exited 1".
-   - `MD2OKF_AGENT=<agent> uv run md2okf --agent` — launches the right CLI in
-     the right sandbox.
+Five milestones, each split into small stages. A **stage** is one reviewable
+commit (or a short series) that ends in a **checkpoint**; the next stage does
+not start until the checkpoint passes. A **milestone** is the merge and release
+unit: work happens on a branch, and only a finished milestone is merged to
+`master` and tagged. That is what lets a stage leave something deliberately
+incomplete (a kit authored but not yet packaged, an agent registered for
+checkout use but not yet documented) without it ever reaching a user.
 
-## Delivery order
+### Checkpoint vocabulary
 
-Each increment updates the registry, the packaged-kit list, docs and tests
-together, so every intermediate state is internally consistent.
+Defined once, referenced by every stage.
 
-0. **Fingerprint and sdist fixes** (Part 0). Standalone, benefits Pi now.
-1. **Foundation, Pi only.** `agents.py` with agent-owned argv, prompt,
-   credential check, sbx minimum and protocol; `protocols/` package with the
-   `Event` record and diagnostic folding; `kits/md2okf/` → `kits/pi/`;
-   namespaced sandbox/workbench; `kitsrc/` + sync script producing Pi's current
-   files byte-for-byte; tooling from Part 3. Only `pi` is registered, packaged
-   or documented. Behavior change for users: the one-time sandbox/workbench
-   rename.
-2. **Claude**, end to end: kit, `md2okf-agent` wrapper (Pi moves onto it here
-   too), rendered instructions and skills, `protocols/claude.py` from captured
-   output, credential check, live headless write and persisted-trace test.
-   Proves the parent-kit, permission, instruction and protocol patterns — the
-   increment to review most closely.
-3. **Codex**, after the auth spike: `--skip-git-repo-check`, install-time MCP
-   append, `~/.agents/skills`, and the chosen first-use flow.
-4. **Cursor**, after the instruction-location gate: single rendered instruction
-   file, `--force --trust --approve-mcps`.
+- **Offline gate** — `make lint && make validate && make test-shell &&
+  make test-md2okf && make dist`. No `sbx login`, no cost; runs at every stage.
+  (`make test-clis` and `make test-web2md` are kit-agnostic; run them at
+  milestone ends.)
+- **Dry-run diff** — `uv run md2okf --dry-run tests/fixtures/smoke.md` (with
+  `MD2OKF_AGENT=<agent>` where relevant), diffed against the baseline saved in
+  stage 0.1. Every difference must be one the stage says it introduces. This is
+  the cheap, deterministic proof that a refactor did not change what the driver
+  would run.
+- **Sandbox check (`<agent>`)** — `sbx rm --force <sandbox>; make test-sandbox
+  AGENT=<agent>` (before stage 1.4: `sbx rm --force md2okf; make test-sandbox`).
+  Needs `sbx login`; minutes, no model cost.
+- **Live smoke (`<agent>`)** — `MD2OKF_AGENT=<agent> uv run md2okf
+  tests/fixtures/smoke.md -o "$(mktemp -d)"`. Passes when: exit 0; converges
+  within the iteration cap; the compile-okf `check-okf.sh` passes on the output
+  directory; pages carry `generated.by: <agent>/…`; and the output holds no
+  agent artefacts (`.claude/`, `.cursor/`, `.agents/`, `.pi/`, `AGENTS.md`,
+  `CLAUDE.md`). Needs `sbx login` and the agent's credential; costs cents.
+
+### Milestone 0 — Groundwork and existing bugs (Pi only)
+
+**Stage 0.1 — Baselines and a smoke fixture.** Add `tests/fixtures/smoke.md`:
+a short (300–500 words), licence-clean document with two or three headings,
+so every live check takes minutes and cents instead of compiling the
+15 000-word style guide in `md/`. Save the dry-run output and one Pi live-smoke
+result (iterations, pages written, `check-okf.sh` outcome) to the scratchpad as
+the reference for later stages. No driver or kit changes.
+*Checkpoint:* offline gate green on the untouched tree (so any later failure is
+ours); sandbox check (pi) and live smoke (pi) pass.
+
+**Stage 0.2 — Fingerprint fix** (Part 0).
+*Checkpoint:* offline gate, including the new hidden-directory fingerprint
+tests. Live: `uv run python -m md2okf.sandbox` reports `created` once (the
+fingerprint definition changed), then `reuse`; edit a comment in the Pi kit's
+`AGENTS.md` → `created`; revert → `created`; again → `reuse`.
+
+**Stage 0.3 — Anchored sdist excludes** (Part 0).
+*Checkpoint:* offline gate. `tar tzf dist/*.tar.gz` shows no repository-root
+`.claude/` or `.cursor/`. Manual probe: an uncommitted
+`kits/md2okf/files/home/.claude/probe` file survives into the wheel built by
+`make dist` (the permanent test arrives with `kits/claude/` in stage 2.6).
+
+*Milestone 0 exit:* merge; release as a patch if wanted. Users get one sandbox
+rebuild.
+
+### Milestone 1 — Pi on the generalised framework
+
+Goal: every Part 1 abstraction exists, with Pi as its only implementation. At
+the end, adding an agent means authoring a kit, a protocol module and one
+registry entry, and Pi behaves as before apart from the listed renames. The live
+smoke (pi) at each stage is the regression guard.
+
+**Stage 1.1 — Rename `kits/md2okf/` → `kits/pi/`** (Part 2). Also the installed
+layout (`kit/` → `kits/pi/`: `_installed_root()` probe and force-include), while
+`kit_dir()` still takes no argument, and every path reference: `Makefile`
+(`check-okf`), `scripts/validate-spec.sh`, `tests/test-mount-state.sh`
+(`HELPER`), `tests/test-sandbox.sh`, `.github/workflows/`, AGENTS.md, README,
+CONTRIBUTING and the kit README. The sandbox is still called `md2okf`.
+*Checkpoint:* offline gate; `rg -n 'kits/md2okf' --glob '!CHANGELOG.md'` finds
+nothing; dry-run diff shows only kit-path changes; sandbox check (pi) — which
+also confirms nothing keys on the kit's `name:` (sbx secrets are keyed by
+service or sandbox, not kit); live smoke (pi).
+
+**Stage 1.2 — `agents.py` with Pi only.** The `Agent` with `name`,
+`compile_args`, `interactive_args`, `compile_prompt` and `protocol` (still the
+`events` module). `MD2OKF_AGENT` resolution in `cli.py`; `compile.py` and
+`cli.py` take the `Agent`; error messages use `agent.name`; `--dry-run` prints
+the agent.
+*Checkpoint:* offline gate plus new tests: `resolve()`, exact Pi argv, Pi's
+prompt byte-identical to today's `COMPILE_PROMPT`, `MD2OKF_AGENT=bogus` exits 2,
+`MD2OKF_AGENT=pi` behaves exactly like unset. Dry-run diff: only the new agent
+line. Live smoke (pi).
+
+**Stage 1.3 — `protocols/` package and authoritative failures** (Part 1,
+"New package" and `compile.py`). Move `events.py` → `protocols/pi.py`, add the
+`Event` record and the failure ordering in `compile.py`, and generalise
+`FakePopen` (any argv head; scripted lines and exit code). The failure-combination
+tests use a stub `Agent` with a stub protocol, so they do not depend on Pi
+having a terminal error event. Before deciding Pi's own `failure` detection,
+look for a terminal error in real Pi output (existing transcripts under
+`sessions/`, or one run with an invalid model id); if there is none, Pi's
+`failure` stays `None`.
+*Checkpoint:* offline gate; the moved `test_events.py` passes unchanged in
+substance; failure-combination tests pass. Dry-run diff: none. Live smoke (pi),
+and `-v` output reads the same as the baseline run.
+
+**Stage 1.4 — Per-agent namespacing** (Part 1, `resources.py`, `workbench.py`,
+`python -m md2okf.sandbox`; Part 3, `Makefile` and `tests/test-sandbox.sh`).
+`sandbox_name(agent)`, `Workbench.default(agent)`, `kit_dir(agent)`,
+`ensure_sandbox(wb, agent)` (still calling the OpenRouter check), the
+maintainer entry point, the required `test-sandbox.sh` argument and the
+Makefile `AGENTS` list. CHANGELOG migration note. It also covers users of a
+custom gateway: the sandbox-scoped `sbx secret set-custom --sandbox md2okf …`
+(README:336, `kits/pi/README.md:66`) must be re-run for `md2okf-pi`.
+*Checkpoint:* offline gate with the parameterised tests. Dry-run diff: sandbox
+`md2okf` → `md2okf-pi`, workbench `…/md2okf/` → `…/md2okf/pi/`. Live, with the
+old `md2okf` sandbox still present: `make test-sandbox AGENT=pi` creates
+`md2okf-pi` and leaves `md2okf` untouched; `make test-sandbox` without `AGENT`
+tests pi; `./tests/test-sandbox.sh` without an argument fails with a usage
+message; live smoke (pi); then follow the migration note (`sbx rm --force
+md2okf`) exactly as a user would.
+
+**Stage 1.5 — Credential lifecycle and per-agent sbx minimum** (Part 1,
+`check_credentials` and sbx version).
+*Checkpoint:* offline gate with the lifecycle tests on the fake sbx: not ready →
+error and marker written → remedy → reuse succeeds; reuse while not ready →
+error, no rebuild; `--shell` warns and opens. Live: sandbox check (pi) via the
+reuse path, now also running the check (note the added latency; it should be
+one `sbx exec`); `uv run md2okf --shell` opens; live smoke (pi). The not-ready
+path is **not** tested live by removing the OpenRouter secret — that would
+disturb shared credential state, and the fake sbx covers it.
+
+**Stage 1.6 — Wrapper and static kit tests, for Pi** (Part 2, "Per-process
+wrapper" and "Instructions and procedures"; Part 3, `tests/test-mount-state.sh`).
+Add `md2okf-agent.sh` and its shim to `kits/pi/`, and move Pi's
+`compile_args`/`interactive_args` onto it. Update `test-mount-state.sh` for the
+three call sites and the wrapper's behavior. Add `tests/test_kits.py`, run over
+every `kits/*/` directory, not only registered agents. Proving the wrapper on
+the known agent first means Milestone 2 does not debug it and Claude together.
+*Checkpoint:* offline gate, including the new `test-shell` cases (success,
+relocation failure, argument forwarding) and `test_kits.py` for pi. Dry-run
+diff: argv now starts with `md2okf-agent`. Sandbox check (pi), whose guest
+script now runs a command through the wrapper and writes a trace through
+`~/.pi/agent/sessions` that the host finds under `sessions/`. Live smoke (pi).
+`uv run md2okf --agent` launches Pi.
+
+*Milestone 1 exit:* `make test-clis` and `make test-web2md` too; compare the
+live smoke (pi) with the stage 0.1 reference (converges in a similar number of
+iterations, `check-okf.sh` passes). Merge; release as a minor version.
+User-visible: the sandbox/workbench rename, and `MD2OKF_AGENT` (accepting `pi`).
+
+### Milestone 2 — Claude
+
+**Stage 2.1 — Spike, no production code.** In a scratch kit outside `kits/` (a
+minimal `extends: claude` plus mounts shaped like the workbench's), created
+exactly the way md2okf creates (`sbx run --detached`, captured output, stdin
+`/dev/null` — `sandbox.py:53-55, 122-137`), answer and record:
+
+- **Detached first-use authentication.** Create *before* provisioning the
+  credential and observe (prompt? failure? success?); provision it on the host
+  (`sbx secret set …`); create again. This order also exercises the
+  not-ready → remedy → ready sequence live, without disturbing an existing
+  credential. **If the detached create cannot complete without a prompt, stop
+  and replan** rather than improvising an attached-create path — that is a
+  second sandbox lifecycle (terminal requirements, subprocess handling, when
+  ownership is recorded), not a small fallback.
+- **Credential probe** — a local, unpaid, non-interactive readiness check.
+- **Exact argv** — every flag in the Part 1 table, confirmed against `--help`
+  and a real headless run that writes a file in a non-git workspace.
+- **Where things land** — the path `agentInstructions` is written to, that the
+  agent loads it with the wiki as its workspace, and the native trace directory.
+- **sbx minimum** — 0.43 or 0.45.
+- **Captured protocol** — a success, a terminal failure (and how it was
+  provoked, for stage 2.5), a malformed line and plain stderr, committed under
+  `tests/fixtures/protocols/claude/`.
+
+*Checkpoint:* each question has a recorded answer, folded back into this plan's
+Part 1 and Part 2 tables. The only code change is the fixtures, so the offline
+gate stays green.
+
+**Stage 2.2 — `protocols/claude.py`**, offline and unregistered.
+*Checkpoint:* offline gate; fixture tests: tool calls counted, `display` in the
+same style as Pi's, the terminal failure fixture yields `failure`, and the
+malformed line and stderr reach the diagnostic tail.
+
+**Stage 2.3 — Author `kits/claude/`** (Part 2): `spec.yaml`, the `CLAUDE.md`
+instructions (the full contract, adapted per the porting audit list), skills,
+check script and wrapper shim. Not registered.
+*Checkpoint:* offline gate — `make validate` picks the kit up through the glob,
+`test_kits.py` passes for claude (producer, no `.pi/` paths, referenced paths
+exist, helpers byte-identical), and a fingerprint test covers `.claude/`. A
+human review of the instruction diff against Pi's: this is the stage to read
+most closely, because it sets the pattern for Codex and Cursor.
+
+**Stage 2.4 — Register for checkout use; first sandbox.** Add `claude` to
+`AGENTS` (argv, prompt, credential probe, sbx minimum, protocol), to the
+Makefile `AGENTS` list, and add `test-sandbox-guest-claude.sh`. No force-include
+or docs yet.
+*Checkpoint:* offline gate plus argv and prompt tests. Dry-run diff for
+`MD2OKF_AGENT=claude`: `md2okf-claude`, `kits/claude`, the exact argv. Sandbox
+check (claude): the toolchain is present, `CLAUDE.md` names producer `claude`,
+the wrapper runs, and a trace written through `~/.claude/projects` appears
+under the host's `sessions/`. `MD2OKF_AGENT=claude uv run md2okf --agent`
+opens Claude; `--shell` opens bash. Live smoke (pi) still passes.
+
+**Stage 2.5 — First real compiles.**
+*Checkpoint:* live smoke (claude). Then the failure case provoked in the spike
+gives a `CompileError` carrying the structured failure, with nothing mirrored
+to `-o` (never provoked by removing the vendor credential). Finally, one run on
+`md/GoogleStyleGuide-abridged.md`, compared with a Pi run of the same document:
+`check-okf.sh` passes, and the page count and structure are comparable. If the
+instructions need tuning, edit and rerun; the automatic rebuild on each edit
+also re-confirms stage 0.2.
+
+**Stage 2.6 — Release Claude.** Force-include `kits/claude`; `test_package.py`
+asserts its hidden files are in the wheel (the permanent test for stage 0.3);
+README (Environment table, credential prerequisite from the spike, sbx
+minimum), `cli.py` epilog, `kits/claude/README.md`, CHANGELOG.
+*Checkpoint:* offline gate; `make test-clis` and `make test-web2md`; an
+installed-wheel check — `MD2OKF_AGENT=claude uvx --from dist/md2okf-*.whl
+md2okf --dry-run tests/fixtures/smoke.md` resolves the kit from the installed
+layout; live smoke (claude) and live smoke (pi).
+
+*Milestone 2 exit:* merge; release.
+
+### Milestone 3 — Codex
+
+The same six stages, with these Codex-specific checkpoint items:
+
+- **3.1 spike:** the `openai` first-use approval is the known risk and the most
+  likely "stop and replan"; confirm that `--skip-git-repo-check` is both
+  needed and sufficient; confirm skills load from `~/.agents/skills` and that
+  `$compile-okf` activates the skill.
+- **3.4 sandbox check:** traces written through `~/.codex/sessions` land in the
+  host's `sessions/`.
+
+*Milestone 3 exit:* the stage 2.6 checkpoint for codex, plus live smoke for
+claude and pi.
+
+### Milestone 4 — Cursor
+
+The same six stages, with these Cursor-specific checkpoint items:
+
+- **4.1 spike:** the instruction-location gate — `agentInstructions` must load
+  from outside the workspace; if it only works with a file in the wiki root,
+  stop and decide. Confirm `--force --trust` suffice headless, and that no MCP
+  or other approval prompt appears with no MCP servers configured.
+- **4.3 authoring:** a single instruction file with the procedures inline;
+  the check script at `~/.local/lib/md2okf/check-okf.sh`; `test_kits.py`
+  asserts that no instruction text tells the agent to write into `.cursor/`.
+- **4.5 compiles:** the live smoke's no-agent-artefacts rule matters most here;
+  check the output for `.cursor/`, `AGENTS.md` and `CLAUDE.md` explicitly.
+
+*Milestone 4 exit:* the stage 2.6 checkpoint for cursor, plus live smoke for
+all four agents.
+
+### Milestone 5 — Deferred items (optional)
+
+Each item under "Deferred" becomes its own stage, gated by the offline gate
+plus the live smoke of every agent it touches.
+
+## Deferred (after all four compile paths are stable)
+
+- **Vendor network-block hooks** for Claude (`PostToolUse` managed settings)
+  and Codex (`requirements.toml`), ported from sbxagent. The sandbox allowlist
+  already enforces egress; the hooks are asymmetric (none for Pi or Cursor)
+  and add failure modes to the compile path.
+- **MCP servers in the new kits** — Context7 and, if ever wanted, GitHub — as an
+  interactive-agent (`--agent`) enhancement. Includes Codex's install-time
+  `config.toml` append and Cursor's `--approve-mcps`.
+- **A shared instruction source** (template plus a sync script with a lint
+  `--check`), once four working, checked-in instruction sets show which text is
+  genuinely common and whether duplication is actually a maintenance problem.
+- **Concurrent compilation across agents** — would need per-agent locks plus
+  output locking for a shared `-o` directory.
