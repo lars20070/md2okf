@@ -83,6 +83,12 @@ and this project adheres to
   the shared OKF authoring contract, the kit's own `generated.by` producer, no
   other agent's config paths, every file the instructions name, and helpers
   that are byte-identical across kits.
+- **The README is shorter; its reference material moved to `docs/`.** How it
+  works, the sandbox's mounts, session state and the repository layout are in
+  `docs/architecture.md`; the environment variables in `docs/configuration.md`;
+  the troubleshooting entries in `docs/troubleshooting.md`. Setting up the
+  OpenRouter key is now part of the Quickstart, and installing sbx has its own
+  section after it.
 
 ### Fixed
 

@@ -56,6 +56,11 @@ including the runtime agent configs. `pdf2md/` is the optional upstream step
 that turns a PDF into Markdown with `marker`; it is manual and not wired into
 the `make` pipeline.
 
+`docs/` holds the user reference pages split out of the README
+(`architecture.md`, `configuration.md`, `troubleshooting.md`). The README is
+also the PyPI long description, so its links into `docs/` are absolute GitHub
+URLs; links between the docs pages stay relative.
+
 `web2md/` is one upstream step: a deterministic scraper that fetches a
 website into a single file under `md/`, driven by `make scrape`. Which site and
 which output filename live in two constants at the top of `web2md/src/web2md.py`
