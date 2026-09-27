@@ -6,8 +6,8 @@
 # before md2okf.agents registers it -- and a new one needs no edit here.
 #
 # `sbx kit validate` is a static schema check: no Docker, no `sbx login`, no
-# network. Whatever schema the installed `sbx` bundles is the schema we check
-# against, so keeping `sbx` current keeps the check current.
+# network. It uses the installed CLI's schema, after checking that CLI against
+# the repository-wide minimum in SBX_VERSION.
 
 set -euo pipefail
 
@@ -21,13 +21,29 @@ if ! command -v sbx >/dev/null 2>&1; then
 	exit 1
 fi
 
+required="$(<"${repo_root}/SBX_VERSION")"
+if [[ ! "${required}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	echo "Error: SBX_VERSION must contain exactly one X.Y.Z version." >&2
+	exit 1
+fi
+
+installed="$(sbx version | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+')" || {
+	echo "Error: could not read a version from 'sbx version'." >&2
+	exit 1
+}
+if [[ "$(printf '%s\n' "${required}" "${installed}" | sort -V | head -n1)" != "${required}" ]]; then
+	echo "Error: sbx ${required} or newer is required; found ${installed}." >&2
+	echo "Please upgrade sbx with Homebrew or APT." >&2
+	exit 1
+fi
+
 status=0
 found=0
 for spec in "${repo_root}"/kits/*/spec.yaml; do
 	[[ -f "${spec}" ]] || continue
 	kit="$(dirname "${spec}")"
 	found=$((found + 1))
-	echo "Validating ${kit} against the current Sandbox Kit schema..."
+	echo "Validating ${kit} with sbx ${installed} (minimum ${required})..."
 	# Keep going after a failure, so one run reports every invalid kit.
 	sbx kit validate "${kit}/" || status=1
 done

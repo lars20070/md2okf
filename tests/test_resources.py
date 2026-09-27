@@ -18,6 +18,7 @@ def test_checkout_fallback_finds_the_spec_and_clis():
     assert resources.spec_md().is_file()
     assert resources.clis_dir().is_dir()
     assert (resources.clis_dir() / "merkleokf" / "pyproject.toml").is_file()
+    assert resources.sbx_version_file().is_file()
 
 
 def test_installed_root_preferred_when_it_carries_the_kits(tmp_path: Path, monkeypatch):
@@ -32,6 +33,7 @@ def test_installed_root_preferred_when_it_carries_the_kits(tmp_path: Path, monke
     assert resources.kit_dir("claude") == fake_root / "kits" / "claude"
     assert resources.spec_md() == fake_root / "SPEC.md"
     assert resources.clis_dir() == fake_root / "clis"
+    assert resources.sbx_version_file() == fake_root / "SBX_VERSION"
 
 
 def test_installed_root_is_none_without_bundled_kits(tmp_path: Path, monkeypatch):

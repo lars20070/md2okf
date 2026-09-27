@@ -21,9 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-# The default floor; an agent whose kit needs a newer sbx raises it for itself
-# (agents.Agent.min_sbx_version).
-MIN_VERSION = (0, 43, 0)
+from md2okf import resources
 
 # This is the plan's own documented fallback (interface-plan.md, "Risks and
 # open items"), not an invented deviation: which `sbx inspect` field (if any)
@@ -74,10 +72,23 @@ def version() -> tuple[int, int, int] | None:
     return (major, minor, patch)
 
 
-def version_at_least(minimum: tuple[int, int, int] = MIN_VERSION) -> bool:
-    """Whether `sbx version` is at least `minimum`."""
-    found = version()
-    return found is not None and found >= minimum
+def minimum_version() -> tuple[int, int, int]:
+    """The repository-wide sbx floor, from the bundled ``SBX_VERSION``.
+
+    Stricter than :func:`version` on purpose: that one searches free-form CLI
+    output, while the pin must be exactly one ``X.Y.Z`` (trailing newlines
+    aside, as bash's ``$(<SBX_VERSION)`` reads it in CI and validate-spec.sh).
+    """
+    try:
+        path = resources.sbx_version_file()
+        text = path.read_text(encoding="utf-8")
+    except (resources.ResourcesError, OSError) as exc:
+        raise SandboxError(f"cannot read the sbx version pin: {exc}") from exc
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text.rstrip("\n"))
+    if not match:
+        raise SandboxError(f"{path} must contain exactly one X.Y.Z version")
+    major, minor, patch = (int(part) for part in match.groups())
+    return (major, minor, patch)
 
 
 def logged_in() -> bool:
@@ -85,10 +96,8 @@ def logged_in() -> bool:
     return _run(["sbx", "ls"]).returncode == 0
 
 
-def preflight(minimum: tuple[int, int, int] = MIN_VERSION) -> None:
+def preflight() -> None:
     """Check the sbx environment before anything that would shell out to it.
-
-    `minimum` is the resolved agent's own floor (Agent.min_sbx_version).
 
     Every other function in this module assumes `sbx` is on PATH: `_run`
     calls `subprocess.run(["sbx", ...])` directly, which raises a bare
@@ -98,8 +107,14 @@ def preflight(minimum: tuple[int, int, int] = MIN_VERSION) -> None:
     """
     if not present():
         raise SandboxError("'sbx' CLI not found in PATH. Install it with: brew install docker/tap/sbx")
-    if not version_at_least(minimum):
-        raise SandboxError(f"sbx must be at least version {'.'.join(str(part) for part in minimum)}")
+    minimum = minimum_version()
+    found = version()
+    if found is None or found < minimum:
+        required = ".".join(str(part) for part in minimum)
+        found_text = ".".join(str(part) for part in found) if found else "an unreadable version"
+        raise SandboxError(
+            f"sbx {required} or newer is required; found {found_text}. Upgrade sbx with Homebrew or APT."
+        )
     if not logged_in():
         raise SandboxError("not logged in to sbx; run `sbx login`")
 
@@ -264,7 +279,7 @@ def _ensure_default_sandbox() -> int:
 
     try:
         agent = agents.from_env()
-        preflight(agent.min_sbx_version)
+        preflight()
     except (agents.UnknownAgentError, SandboxError) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2

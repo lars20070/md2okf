@@ -152,7 +152,6 @@ def test_a_successful_result_renders_as_nothing():
 
 STUB = agents.Agent(
     name="claude",
-    min_sbx_version=(0, 45, 0),
     compile_args=lambda prompt: ["md2okf-agent", "claude", "-p", prompt],
     interactive_args=("md2okf-agent", "claude"),
     compile_prompt=lambda document: f"compile {document}",

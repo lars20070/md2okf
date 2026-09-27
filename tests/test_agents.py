@@ -108,10 +108,6 @@ def test_pi_prompt_ends_with_the_shared_workspace_rule():
     assert agents.PI.compile_prompt(Path("/x.md")).endswith(agents.WORKSPACE_ROOT_RULE)
 
 
-def test_pi_keeps_the_default_sbx_minimum():
-    assert agents.PI.min_sbx_version == sandbox.MIN_VERSION == (0, 43, 0)
-
-
 def test_pi_uses_the_pi_protocol():
     assert agents.PI.protocol is pi_protocol
 
@@ -190,8 +186,7 @@ def test_claude_prompt_names_a_skill_its_kit_installs():
     assert skill.is_file()
 
 
-def test_claude_needs_sbx_0_45_and_parses_claude_output():
-    assert agents.CLAUDE.min_sbx_version == (0, 45, 0)
+def test_claude_parses_claude_output():
     assert agents.CLAUDE.protocol is claude_protocol
 
 
@@ -272,8 +267,7 @@ def test_codex_prompt_activates_a_skill_its_kit_installs():
     assert "name: compile-okf" in skill.read_text(encoding="utf-8")
 
 
-def test_codex_needs_sbx_0_45_and_parses_codex_output():
-    assert agents.CODEX.min_sbx_version == (0, 45, 0)
+def test_codex_parses_codex_output():
     assert agents.CODEX.protocol is codex_protocol
 
 

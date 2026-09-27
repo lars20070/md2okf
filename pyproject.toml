@@ -41,8 +41,8 @@ build-backend = "hatchling.build"
 path = "VERSION"
 pattern = "(?P<version>.+)"
 
-# The wheel carries the driver plus the three assets resources.py expects
-# beside it -- kits/<agent>/, SPEC.md and clis/ -- so an installed md2okf works
+# The wheel carries the driver plus the assets resources.py expects beside it:
+# kits/<agent>/, SPEC.md, SBX_VERSION and clis/. Thus an installed md2okf works
 # with no checkout. One kits/ line per registered agent (agents.AGENTS), added
 # when that agent ships, never before.
 #
@@ -64,6 +64,7 @@ packages = ["src/md2okf"]
 "kits/claude" = "md2okf/kits/claude"
 "kits/codex" = "md2okf/kits/codex"
 "SPEC.md" = "md2okf/SPEC.md"
+"SBX_VERSION" = "md2okf/SBX_VERSION"
 "scripts/inspectmd/pyproject.toml" = "md2okf/clis/inspectmd/pyproject.toml"
 "scripts/inspectmd/src" = "md2okf/clis/inspectmd/src"
 "scripts/inspectokf/pyproject.toml" = "md2okf/clis/inspectokf/pyproject.toml"
@@ -75,12 +76,12 @@ packages = ["src/md2okf"]
 
 # The sdist otherwise keeps hatchling's default selection -- every file the VCS
 # does not ignore, about 1.6 MB. `uv build` builds the wheel from the sdist, so
-# the sdist has to carry kits/, SPEC.md and scripts/<cli>/ under their real
-# paths for the force-include above to resolve; naming an allowlist here would
-# be a footgun for no gain at this size. Subtracting is different: the two
-# agent-tool directories carry vendored third-party skills with licences of
-# their own, and republishing those under this project's name is not something
-# a source distribution should do silently.
+# the sdist has to carry kits/, SPEC.md, SBX_VERSION and scripts/<cli>/ under
+# their real paths for the force-include above to resolve; naming an allowlist
+# here would be a footgun for no gain at this size. Subtracting is different:
+# the two agent-tool directories carry vendored third-party skills with licences
+# of their own, and republishing those under this project's name is not
+# something a source distribution should do silently.
 [tool.hatch.build.targets.sdist]
 # Anchored with a leading slash: a bare ".claude" is a gitignore-style pattern
 # that matches at any depth, and would also strip a kit's own

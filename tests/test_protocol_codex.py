@@ -120,7 +120,6 @@ def test_lifecycle_events_render_as_nothing(event_type):
 
 STUB = agents.Agent(
     name="codex",
-    min_sbx_version=(0, 45, 0),
     compile_args=lambda prompt: ["md2okf-agent", "codex", "exec", "--json", prompt],
     interactive_args=("md2okf-agent", "codex"),
     compile_prompt=lambda document: f"compile {document}",

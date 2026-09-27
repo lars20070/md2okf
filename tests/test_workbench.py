@@ -792,7 +792,6 @@ def test_the_credential_check_is_the_agents_own(tmp_path, fake_sbx):
 
     stub = agents.Agent(
         name="pi",  # reuses the real kit, so only the check differs
-        min_sbx_version=(0, 43, 0),
         compile_args=lambda prompt: ["stub", prompt],
         interactive_args=("stub",),
         compile_prompt=lambda document: str(document),

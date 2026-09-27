@@ -6,8 +6,7 @@ itself, the OpenAI network hosts, the credential and permissive defaults
 (`approval_policy = "never"`, `sandbox_mode = "danger-full-access"`). This kit
 adds only what compiling needs: the OKF toolchain (the linters, `mq`, `okfctl`
 and the four helper CLIs), the md2okf instructions and skills, the transcript
-relocation, and the `md2okf-agent` wrapper every process starts through. It
-needs sbx 0.45.0.
+relocation, and the `md2okf-agent` wrapper every process starts through.
 
 Everything under `files/home/` is copied into the sandbox at `~/`. Config is
 copied in when the kit is built, not mounted, so an edit reaches Codex on the

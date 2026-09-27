@@ -110,9 +110,8 @@ OpenRouter — see [Choosing an agent](#choosing-an-agent).*
 - macOS with [Homebrew](https://brew.sh), or
   Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
   required.
-- [sbx](https://github.com/docker/sbx-releases) 0.43.0 is required, or 0.45.0
-  for Claude Code and Codex. sbx is experimental. A later version may break
-  `md2okf`.
+- [sbx](https://github.com/docker/sbx-releases) 0.45.0 or newer. sbx is
+  experimental; a later version may break `md2okf`.
 - One model credential, for the agent you choose: an
   [OpenRouter](https://openrouter.ai) API key for Pi, the default; a Claude
   subscription or Anthropic API key for Claude Code; a ChatGPT subscription or
@@ -246,11 +245,11 @@ MD2OKF_AGENT=codex md2okf -o wikis/c md/    # Codex, into another wiki
 MD2OKF_AGENT=claude md2okf --agent          # open Claude Code in its sandbox
 ```
 
-| `MD2OKF_AGENT` | Agent | Sandbox | Needs | Set the credential on the host |
-| --- | --- | --- | --- | --- |
-| `pi` (default) | [Pi](https://pi.dev) | `md2okf-pi` | sbx 0.43.0 | an OpenRouter key — see [Set up the OpenRouter key](#set-up-the-openrouter-key) |
-| `claude` | [Claude Code](https://code.claude.com) | `md2okf-claude` | sbx 0.45.0 | `/login` inside a Claude sandbox, such as `sbx run claude` (Claude subscription), or `sbx secret set anthropic` (API key) |
-| `codex` | [Codex](https://github.com/openai/codex) | `md2okf-codex` | sbx 0.45.0 | `sbx secret set openai --oauth` (ChatGPT subscription) or `sbx secret set openai` (API key) |
+| `MD2OKF_AGENT` | Agent | Sandbox | Set the credential on the host |
+| --- | --- | --- | --- |
+| `pi` (default) | [Pi](https://pi.dev) | `md2okf-pi` | an OpenRouter key — see [Set up the OpenRouter key](#set-up-the-openrouter-key) |
+| `claude` | [Claude Code](https://code.claude.com) | `md2okf-claude` | `/login` inside a Claude sandbox, such as `sbx run claude` (Claude subscription), or `sbx secret set anthropic` (API key) |
+| `codex` | [Codex](https://github.com/openai/codex) | `md2okf-codex` | `sbx secret set openai --oauth` (ChatGPT subscription) or `sbx secret set openai` (API key) |
 
 `sbx` keeps every credential outside the virtual machine and hands it to the
 sandbox when the sandbox is **created**. So set it before the first run with

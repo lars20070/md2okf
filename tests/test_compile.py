@@ -534,7 +534,6 @@ class _StubProtocol:
 
 STUB = agents.Agent(
     name="stub",
-    min_sbx_version=(0, 43, 0),
     compile_args=lambda prompt: ["stub-agent", "--headless", prompt],
     interactive_args=("stub-agent",),
     compile_prompt=lambda document: f"compile {document}",
@@ -637,7 +636,6 @@ def test_a_line_the_protocol_hides_stays_out_of_the_failure_message(fake_sbx, tm
 
     agent = agents.Agent(
         name="hider",
-        min_sbx_version=(0, 43, 0),
         compile_args=lambda prompt: ["hider", prompt],
         interactive_args=("hider",),
         compile_prompt=lambda document: str(document),

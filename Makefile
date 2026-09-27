@@ -90,7 +90,7 @@ lint:
 check-okf:
 	kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
-# Validate the sandbox kit spec against the current Sandbox Kit schema.
+# Validate every sandbox kit spec with an sbx version meeting SBX_VERSION.
 validate:
 	./scripts/validate-spec.sh
 

@@ -1,10 +1,10 @@
 """The agent frameworks md2okf can drive, and everything that differs between them.
 
 An :class:`Agent` owns what is specific to one runtime -- its command lines,
-its first-turn prompt, how to tell whether its credential is ready, the sbx
-version its kit needs, and the parser for its event stream -- so the workbench,
-the Ralph loop and the CLI stay agent-neutral. MD2OKF_AGENT picks one; only
-registered agents are accepted, and each registers only once its kit ships.
+its first-turn prompt, how to tell whether its credential is ready, and the
+parser for its event stream -- so the workbench, the Ralph loop and the CLI
+stay agent-neutral. MD2OKF_AGENT picks one; only registered agents are
+accepted, and each registers only once its kit ships.
 """
 
 from __future__ import annotations
@@ -39,9 +39,6 @@ class Agent:
 
     name: str
     """Registry key; also names the kit (kits/<name>), sandbox and workbench."""
-
-    min_sbx_version: tuple[int, int, int]
-    """The oldest sbx this agent's kit is known to work with."""
 
     compile_args: Callable[[str], list[str]]
     """Prompt -> the full in-sandbox argv for one Ralph-loop turn."""
@@ -151,7 +148,6 @@ WRAPPER = "md2okf-agent"
 
 PI = Agent(
     name="pi",
-    min_sbx_version=sandbox.MIN_VERSION,
     compile_args=lambda prompt: [WRAPPER, "pi", "--mode", "json", prompt],
     interactive_args=(WRAPPER, "pi"),
     compile_prompt=_pi_compile_prompt,
@@ -161,9 +157,6 @@ PI = Agent(
 
 CLAUDE = Agent(
     name="claude",
-    # The only version the spike ran on; the kit relies on the claude parent's
-    # behaviour there. See the Claude spike findings in the plan.
-    min_sbx_version=(0, 45, 0),
     # --permission-mode: the parent already defaults to bypassPermissions, but
     # a compile must not depend on a parent default. --strict-mcp-config with
     # no --mcp-config: no MCP servers at all -- neither the parent's gateway
@@ -219,8 +212,6 @@ def _codex_check_credentials(name: str) -> str | None:
 
 CODEX = Agent(
     name="codex",
-    # The only version the Codex spike ran on.
-    min_sbx_version=(0, 45, 0),
     # Neither --skip-git-repo-check nor --dangerously-bypass-... was
     # load-bearing in the spike (the parent's config already allows both), but
     # a compile must not depend on a parent default. The -c override switches

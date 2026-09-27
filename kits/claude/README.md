@@ -6,7 +6,7 @@ Claude Code itself, the Anthropic network hosts and the credential. This kit
 adds only what compiling needs: the OKF toolchain (the linters, `mq`,
 `okfctl` and the four helper CLIs), the md2okf instructions and skills, the
 transcript relocation, and the `md2okf-agent` wrapper every process starts
-through. It needs sbx 0.45.0.
+through.
 
 Everything under `files/home/` is copied into the sandbox at `~/`, so
 `files/home/.claude/skills/` becomes six of Claude Code's skills. Config is

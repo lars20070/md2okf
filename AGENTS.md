@@ -111,7 +111,7 @@ writes `../CLAUDE.md`), Codex from `~/.codex/AGENTS.md` (it ignores files
 outside a git project). Each kit's `README.md` says why. Each agent has its own kit
 (`kits/<agent>/`), sandbox (`md2okf-<agent>`) and workbench
 (`$XDG_STATE_HOME/md2okf/<agent>/`); everything agent-specific — command lines,
-first-turn prompt, credential check, sbx minimum, event-stream parser
+first-turn prompt, credential check, event-stream parser
 (`src/md2okf/protocols/<agent>.py`) — lives on its `Agent`, never in the
 generic modules. An agent is registered only once its kit ships.
 
@@ -124,7 +124,9 @@ the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
 only land in a fresh sandbox — which `md2okf` builds when the kit's hash stops
 matching the running sandbox's, or at once on `--fresh`. The `files/`
 level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
-kit uses the finalized kit-spec v2 grammar and requires sbx 0.43.0 or newer.
+kit uses the finalized kit-spec v2 grammar. Every agent uses the repository-wide
+sbx minimum in `SBX_VERSION`; CI validates the kits with exactly that release,
+while local runs accept newer versions.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
@@ -200,6 +202,11 @@ only `pyproject.toml` and `src/` (`stage_clis`), where a path above the project
 root does not exist. Bump `VERSION`, then run the script; `make lint` fails on
 any project left behind.
 
+`SBX_VERSION` is separate: one plain `X.Y.Z`, the sbx floor the driver and
+`make validate` enforce and the exact release CI installs. Raising it touches
+more than that file; follow the checklist in
+[CONTRIBUTING.md](CONTRIBUTING.md#the-sbx-minimum).
+
 `--shell` and `--agent` are for inspecting the sandbox, not for authoring. They
 do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
 gets the bundled spec, and prior workbench content otherwise remains in place.
@@ -242,12 +249,13 @@ Sandbox Kit specs before considering the task complete:
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks every `kits/*/spec.yaml` against the current Sandbox Kit schema (a
-static schema check — no Docker, login, or network required). The same check runs
-in CI (see `.github/workflows/ci.yml`, job `validate-kit`), so validating locally
-first avoids CI failures. Do not finish a task until it passes. If the `sbx` CLI
-is not installed, install it with `brew install docker/tap/sbx`. If validation
-reports unknown fields, upgrade an older installation with `brew upgrade sbx`.
+This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema (a
+static schema check — no Docker, login, or network required) after enforcing the
+minimum in `SBX_VERSION`. The same check runs in CI (see `.github/workflows/ci.yml`,
+job `validate-kit`), so validating locally first avoids CI failures. Do not
+finish a task until it passes. If the `sbx` CLI is not installed, install it with
+`brew install docker/tap/sbx`; upgrade an older installation through Homebrew or
+APT.
 
 `make validate` only checks the spec statically. If you changed what the sandbox
 installs or what it carries in `kits/pi/files/`, also run `sbx rm --force md2okf-pi &&

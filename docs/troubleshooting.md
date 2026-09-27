@@ -3,9 +3,8 @@
 Known failure messages and what to do about them. For installing and a first
 compile, see [the README](../README.md).
 
-**`sbx` reports unknown fields from a kit's `spec.yaml`.** Your sbx is older
-than the kit needs — 0.43.0 for Pi, 0.45.0 for Claude Code and Codex. Run
-`brew upgrade sbx`.
+**`sbx` reports unknown fields from a kit's `spec.yaml`.** Every agent requires
+sbx 0.45.0 or newer. Upgrade sbx through Homebrew or APT.
 
 **`… inside 'md2okf-<agent>' is not proxy-managed` or `is not logged in`.**
 The agent's credential did not reach its sandbox. Run the commands the message

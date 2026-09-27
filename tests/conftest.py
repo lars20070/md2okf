@@ -95,7 +95,7 @@ class FakeSbx:
 
     calls: list[list[str]] = field(default_factory=list)
     sandboxes: dict[str, _Box] = field(default_factory=dict)
-    version_string: str = "0.43.0"
+    version_string: str = field(default_factory=lambda: ".".join(map(str, sandbox_module.minimum_version())))
     logged_in: bool = True
     run_fail_names: set[str] = field(default_factory=set)
     token_write_fail_names: set[str] = field(default_factory=set)

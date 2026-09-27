@@ -15,8 +15,8 @@ and this project adheres to
   exit 2 before any work starts. It is what runs Claude Code and Codex
   through the same compile pipeline as Pi: everything that
   differs between agents — command lines, first-turn prompt, credential check,
-  minimum sbx version, event-stream parser — now belongs to the agent, not to
-  the driver. `--dry-run` prints the resolved agent.
+  event-stream parser — now belongs to the agent, not to the driver. `--dry-run`
+  prints the resolved agent.
 - **`md2okf-agent`, a wrapper every agent process now starts through.** Each
   compile turn and `md2okf --agent` session runs `md2okf-agent pi …` rather
   than `pi …`. `sbx exec` bypasses the kit's entrypoint, so the wrapper is what
@@ -52,6 +52,9 @@ and this project adheres to
 
 ### Changed
 
+- **Pi now requires sbx 0.45.0 (was 0.43.0).** Every agent shares one floor,
+  `SBX_VERSION`, which is also the exact release CI validates the kits with.
+  The old 0.43.0 floor was never exercised by CI.
 - **One sandbox and one workbench per agent.** The sandbox is now called
   `md2okf-pi` rather than `md2okf`, and the workbench moved from
   `$XDG_STATE_HOME/md2okf/` to `$XDG_STATE_HOME/md2okf/pi/`, so agents can

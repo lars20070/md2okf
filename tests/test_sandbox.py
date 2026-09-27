@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from md2okf import agents, sandbox, workbench
+from md2okf import sandbox, workbench
 
 PI_SANDBOX = workbench.sandbox_name("pi")
 
@@ -33,13 +33,9 @@ def test_fake_sbx_covers_presence_not_only_subprocess(fake_sbx):
     sandbox.preflight()  # must not raise, whatever the host has installed
 
 
-def test_version_parses_and_compares(fake_sbx):
-    fake_sbx.version_string = "0.43.0"
-    assert sandbox.version() == (0, 43, 0)
-    assert sandbox.version_at_least() is True
-
-    fake_sbx.version_string = "0.42.9"
-    assert sandbox.version_at_least() is False
+def test_version_parses(fake_sbx):
+    fake_sbx.version_string = "1.2.3"
+    assert sandbox.version() == (1, 2, 3)
 
 
 def test_version_unparsable_is_none(fake_sbx, monkeypatch):
@@ -49,7 +45,6 @@ def test_version_unparsable_is_none(fake_sbx, monkeypatch):
         lambda *a, **k: __import__("subprocess").CompletedProcess(a[0], 0, "garbage\n", ""),
     )
     assert sandbox.version() is None
-    assert sandbox.version_at_least() is False
 
 
 def test_logged_in_reflects_ls(fake_sbx):
@@ -185,7 +180,6 @@ def test_ensure_default_sandbox_creates_and_reports(fake_sbx, isolated_state, ca
 def test_ensure_default_sandbox_follows_md2okf_agent_to_claude(fake_sbx, isolated_state, capsys, monkeypatch):
     """The maintainer entry point must never create or inspect a different sandbox from the CLI's."""
     monkeypatch.setenv("MD2OKF_AGENT", "claude")
-    fake_sbx.version_string = "0.45.0"
     assert sandbox._ensure_default_sandbox() == 0
     assert capsys.readouterr().out == "md2okf.sandbox: sandbox 'md2okf-claude' created\n"
     assert sandbox.exists("md2okf-claude")
@@ -202,21 +196,11 @@ def test_ensure_default_sandbox_refuses_an_unknown_agent_before_touching_sbx(
     assert fake_sbx.calls == []
 
 
-def test_ensure_default_sandbox_uses_the_agents_own_sbx_minimum(fake_sbx, isolated_state, capsys, monkeypatch):
-    newer = agents.Agent(
-        name="pi",
-        min_sbx_version=(0, 45, 0),
-        compile_args=agents.PI.compile_args,
-        interactive_args=agents.PI.interactive_args,
-        compile_prompt=agents.PI.compile_prompt,
-        check_credentials=agents.PI.check_credentials,
-        protocol=agents.PI.protocol,
-    )
-    monkeypatch.setitem(agents.AGENTS, "pi", newer)
-    fake_sbx.version_string = "0.43.0"
+def test_ensure_default_sandbox_uses_the_repository_sbx_minimum(fake_sbx, isolated_state, capsys):
+    fake_sbx.version_string = "0.0.1"
 
     assert sandbox._ensure_default_sandbox() == 2
-    assert "at least version 0.45.0" in capsys.readouterr().err
+    assert "or newer is required" in capsys.readouterr().err
 
 
 def test_ensure_default_sandbox_exits_2_with_the_remedy_when_credentials_are_not_ready(
@@ -297,10 +281,11 @@ def test_python_dash_m_reports_a_failed_sbx_run_as_exit_2(tmp_path):
     fakebin = tmp_path / "bin"
     fakebin.mkdir()
     fake = fakebin / "sbx"
+    minimum = ".".join(map(str, sandbox.minimum_version()))
     fake.write_text(
         "#!/bin/sh\n"
         'case "$1" in\n'
-        '  version) echo "sbx version 0.45.0" ;;\n'
+        f'  version) echo "sbx version {minimum}" ;;\n'
         "  ls) exit 0 ;;\n"
         '  run) echo "boom: run refused" >&2; exit 1 ;;\n'
         "  *) exit 1 ;;\n"
@@ -348,16 +333,35 @@ def test_preflight_raises_on_a_missing_sbx(monkeypatch):
 
 
 def test_preflight_raises_on_an_old_version(fake_sbx):
-    fake_sbx.version_string = "0.10.0"
-    with pytest.raises(sandbox.SandboxError, match="version"):
+    fake_sbx.version_string = "0.0.1"
+    minimum = ".".join(map(str, sandbox.minimum_version()))
+    with pytest.raises(sandbox.SandboxError) as excinfo:
         sandbox.preflight()
+    assert f"sbx {minimum} or newer is required; found 0.0.1" in str(excinfo.value)
 
 
-def test_preflight_checks_the_minimum_it_is_given(fake_sbx):
-    fake_sbx.version_string = "0.44.0"
-    sandbox.preflight()  # the default floor, 0.43.0
-    with pytest.raises(sandbox.SandboxError, match=r"at least version 0\.45\.0"):
-        sandbox.preflight((0, 45, 0))
+def test_preflight_allows_a_newer_version(fake_sbx):
+    major, _minor, _patch = sandbox.minimum_version()
+    fake_sbx.version_string = f"{major + 1}.0.0"
+    sandbox.preflight()
+
+
+@pytest.mark.parametrize("contents", ["1.2.3", "1.2.3\n"])
+def test_minimum_version_reads_the_pin(tmp_path, monkeypatch, contents):
+    pin = tmp_path / "SBX_VERSION"
+    pin.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(sandbox.resources, "sbx_version_file", lambda: pin)
+    assert sandbox.minimum_version() == (1, 2, 3)
+
+
+@pytest.mark.parametrize("contents", ["v1.2.3", "1.2", "1.2.3 extra", None])
+def test_minimum_version_rejects_a_malformed_or_missing_pin(tmp_path, monkeypatch, contents):
+    pin = tmp_path / "SBX_VERSION"
+    if contents is not None:
+        pin.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(sandbox.resources, "sbx_version_file", lambda: pin)
+    with pytest.raises(sandbox.SandboxError, match="sbx version pin|X.Y.Z"):
+        sandbox.minimum_version()
 
 
 def test_preflight_raises_when_not_logged_in(fake_sbx):

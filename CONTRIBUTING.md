@@ -47,10 +47,29 @@ make test-clis && make test-md2okf && make dist` locally means a green build.
 
 Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
 before you call the job done. It checks every kit spec against the schema bundled
-in your `sbx` binary, and needs no Docker, no login and no network. CI runs the
-same check in its `validate-kit` job, so catching a break locally saves a red
-build. The Pi kit requires sbx 0.43.0 or newer, the Claude Code and Codex kits
-0.45.0; `brew upgrade sbx` fixes unknown field errors from an older install.
+in your `sbx` binary, and needs no Docker, no login and no network. It first
+checks your `sbx` against the minimum below; upgrade through Homebrew or APT
+when it reports an older install.
+
+### The sbx minimum
+
+`SBX_VERSION` holds one plain `X.Y.Z`: the single sbx floor for every agent.
+The driver refuses an older `sbx` (the wheel carries the file, so an installed
+`md2okf` enforces the same floor as a checkout), and `make validate` does the
+same. CI's `validate-kit` job installs exactly that release, verified by
+checksum, so the kits are always checked against one known schema. Local
+installations may be newer, and those newer releases are not tested by CI.
+
+To raise the minimum, change all of these together:
+
+1. `SBX_VERSION`.
+2. `expected_sha256` in the `validate-kit` job of `.github/workflows/ci.yml`,
+   the SHA-256 of that release's `DockerSandboxes-linux.tar.gz`.
+3. The Requirements bullet in `README.md`.
+4. The sbx version in `docs/troubleshooting.md`.
+5. A Changed entry in `CHANGELOG.md`.
+
+The test suite reads the floor from `SBX_VERSION`, so it needs no edit.
 
 `make test-sandbox` asks the other question: does each agent's sandbox
 actually have every tool its `kits/<agent>/spec.yaml` installs, the agent

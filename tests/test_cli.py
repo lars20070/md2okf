@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import ExecvpCalled
 
-from md2okf import __version__, agents, cli, resources, sandbox, workbench
+from md2okf import __version__, cli, resources, sandbox, workbench
 
 PI_SANDBOX = workbench.sandbox_name("pi")
 
@@ -148,11 +148,11 @@ def test_sbx_not_present_is_exit_2(tmp_path, capsys, isolated_state, monkeypatch
 
 
 def test_sbx_too_old_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx):
-    fake_sbx.version_string = "0.10.0"
+    fake_sbx.version_string = "0.0.1"
     doc = _md(tmp_path)
     rc = cli.main(["-o", str(tmp_path / "out"), str(doc)])
     assert rc == 2
-    assert "version" in capsys.readouterr().err
+    assert "or newer is required" in capsys.readouterr().err
 
 
 def test_not_logged_in_is_exit_2(tmp_path, capsys, isolated_state, fake_sbx):
@@ -422,22 +422,6 @@ def test_compile_refuses_to_start_when_credentials_are_not_ready(tmp_path, isola
     assert fake_sbx.turn_argvs == []
 
 
-def test_compile_uses_the_agents_own_sbx_minimum(tmp_path, isolated_state, fake_sbx, capsys, monkeypatch):
-    newer = agents.Agent(
-        name="pi",
-        min_sbx_version=(0, 45, 0),
-        compile_args=agents.PI.compile_args,
-        interactive_args=agents.PI.interactive_args,
-        compile_prompt=agents.PI.compile_prompt,
-        check_credentials=agents.PI.check_credentials,
-        protocol=agents.PI.protocol,
-    )
-    monkeypatch.setitem(agents.AGENTS, "pi", newer)
-    fake_sbx.version_string = "0.44.0"
-    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
-    assert "at least version 0.45.0" in capsys.readouterr().err
-
-
 def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, a_tty):
     with pytest.raises(ExecvpCalled):
         cli.main(["--shell"])
@@ -583,7 +567,7 @@ def test_interactive_entry_without_a_tty_touches_no_sandbox(capsys, isolated_sta
 # --- a second agent: Claude ------------------------------------------------------
 #
 # The same command with MD2OKF_AGENT=claude: its own sandbox, kit, workbench,
-# argv, sbx minimum and credential check, and its own protocol parsing a
+# argv, credential check, and its own protocol parsing a
 # stream the Claude spike captured.
 
 CLAUDE_SANDBOX = workbench.sandbox_name("claude")
@@ -592,9 +576,8 @@ CLAUDE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "
 
 @pytest.fixture
 def claude(monkeypatch, fake_sbx):
-    """Select Claude, on an sbx new enough for its kit."""
+    """Select Claude."""
     monkeypatch.setenv("MD2OKF_AGENT", "claude")
-    fake_sbx.version_string = "0.45.0"
     return fake_sbx
 
 
@@ -612,12 +595,6 @@ def test_claude_dry_run_resolves_its_own_sandbox_kit_workbench_and_argv(tmp_path
         "read ~/.claude/skills/compile-okf/SKILL.md"
     ) in out
     assert claude.calls == []
-
-
-def test_claude_refuses_an_sbx_older_than_its_kit_needs(tmp_path, capsys, isolated_state, claude):
-    claude.version_string = "0.44.9"
-    assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
-    assert "at least version 0.45.0" in capsys.readouterr().err
 
 
 def _write_a_claude_page() -> None:
@@ -672,7 +649,6 @@ def test_claude_shell_opens_with_a_warning_when_not_logged_in(isolated_state, cl
 
 def test_agents_keep_separate_sandboxes_and_workbenches(tmp_path, isolated_state, fake_sbx, monkeypatch):
     """Coexistence: a Claude run neither reuses nor disturbs Pi's sandbox."""
-    fake_sbx.version_string = "0.45.0"
     for agent in ("pi", "claude"):
         monkeypatch.setenv("MD2OKF_AGENT", agent)
         assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
@@ -694,7 +670,6 @@ CODEX_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "c
 
 def test_codex_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
     monkeypatch.setenv("MD2OKF_AGENT", "codex")
-    fake_sbx.version_string = "0.45.0"
     lines = ["Reading additional input from stdin..."]
     lines += (CODEX_FIXTURES / "success-write.jsonl").read_text(encoding="utf-8").splitlines()
 
@@ -720,7 +695,6 @@ def test_codex_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_
 
 def test_codex_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
     monkeypatch.setenv("MD2OKF_AGENT", "codex")
-    fake_sbx.version_string = "0.45.0"
     fake_sbx.codex_logged_in = False
     assert cli.main(["-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 2
     assert "sbx secret set openai --oauth" in capsys.readouterr().err

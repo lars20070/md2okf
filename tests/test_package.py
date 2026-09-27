@@ -1,7 +1,7 @@
 """Tests for what the built wheel carries.
 
 An installed md2okf has no checkout to fall back on: resources.py looks for
-kits/<agent>/, SPEC.md and clis/ beside itself, and only the wheel's
+kits/<agent>/, SPEC.md, SBX_VERSION and clis/ beside itself, and only the wheel's
 force-include puts them there. That mapping is easy to get subtly wrong and
 impossible to notice from a checkout, where every lookup finds the real tree
 anyway -- so this builds the wheel for real and reads it back.
@@ -34,6 +34,7 @@ _REQUIRED = (
     "md2okf/kits/pi/files/home/.pi/agent/AGENTS.md",
     "md2okf/kits/pi/files/home/.local/lib/md2okf/mount-state.sh",
     "md2okf/SPEC.md",
+    "md2okf/SBX_VERSION",
     "md2okf/clis/merkleokf/pyproject.toml",
     "md2okf/clis/merkleokf/src/merkleokf/merkle.py",
 )

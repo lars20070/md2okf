@@ -241,7 +241,7 @@ def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser, ag
         return 2
 
     try:
-        sandbox.preflight(agent.min_sbx_version)
+        sandbox.preflight()
     except sandbox.SandboxError as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
@@ -360,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        sandbox.preflight(agent.min_sbx_version)
+        sandbox.preflight()
     except sandbox.SandboxError as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2

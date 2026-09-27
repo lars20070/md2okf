@@ -1,4 +1,4 @@
-"""Locate the sandbox kits, the OKF spec, and the helper CLI sources this package ships.
+"""Locate the sandbox kits, the OKF spec, the sbx version pin, and the helper CLIs this package ships.
 
 Prefers the installed package's own bundled copies (importlib.resources);
 falls back to the checkout's layout so `uv run md2okf` works with no build
@@ -37,7 +37,7 @@ def _installed_root() -> Path | None:
 def _checkout_path(relative: str, what: str) -> Path:
     """The checkout fallback location for `relative`, verified to exist.
 
-    A released wheel carries the kits, the spec and the CLI sources, so
+    A released wheel carries the kits, spec, sbx version and CLI sources, so
     _installed_root finds them and this path is never taken. It is reached
     from a checkout (`uv run md2okf`), and by an install built without those
     assets -- where __file__ resolves under site-packages and a silent
@@ -74,3 +74,9 @@ def clis_dir() -> Path:
     """The four helper CLI projects: the installed ``md2okf/clis``, else ``scripts/``."""
     root = _installed_root()
     return root / "clis" if root is not None else _checkout_path("scripts", "the helper CLI projects")
+
+
+def sbx_version_file() -> Path:
+    """The sbx version pin: the installed ``md2okf/SBX_VERSION``, else the checkout's."""
+    root = _installed_root()
+    return root / "SBX_VERSION" if root is not None else _checkout_path("SBX_VERSION", "the sbx version pin")
