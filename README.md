@@ -37,6 +37,7 @@ flowchart LR
     AGENT["coding agent<br/>(Pi, Claude Code or Codex)"]
     TOOLS["skills<br>/inspect-md<br/>/compile-okf<br/>/inspect-okf<br/>/merkle-okf<br/>/curate-okf<br/>/size-okf"]
     LINT["okfctl linter"]
+    PROXY["credential proxy"]
   end
 
   subgraph OUT[" "]
@@ -57,7 +58,8 @@ flowchart LR
   AGENT -.->|"runs"| LINT
   LINT -.->|"must pass"| OKF
   AGENT ==>|"writes"| OKF
-  AGENT -->|"via sbx proxy"| NET
+  AGENT -->|"calls"| PROXY
+  PROXY -->|"injects key"| NET
   NET -->|"BYOK"| NET1 & NET2
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
@@ -67,7 +69,7 @@ flowchart LR
   classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
   class MD,SPEC,STATE,OKF data
   class KIT,DRV host
-  class TOOLS,LINT helper
+  class TOOLS,LINT,PROXY helper
   class AGENT agent
   class NET,NET1,NET2 ext
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
@@ -82,8 +84,8 @@ only content it may change. Skills and the linter (teal) support it — four of
 them survey the source markdown and wiki, `curate-okf` maintains its nodes and
 indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
-Model calls leave the VM only through the sbx proxy, which injects the
-OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).
+Model calls leave the VM only through the sbx credential proxy (teal), which
+injects the OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).
 The diagram shows Pi, the default. Claude Code and Codex run the same way in
 sandboxes of their own, signed in to their own model providers instead of
 OpenRouter — see [Choosing an agent](#choosing-an-agent).*
