@@ -23,6 +23,12 @@ other instructions.
 <!-- cspell:disable -->
 
 ```mermaid
+---
+config:
+  flowchart:
+    nodeSpacing: 35
+    rankSpacing: 45
+---
 flowchart LR
   subgraph IN[" "]
     direction TB
@@ -35,8 +41,8 @@ flowchart LR
 
   subgraph VM["sbx microVM"]
     AGENT["coding agent<br/>(Pi, Claude Code or Codex)"]
-    TOOLS["skills<br>/inspect-md<br/>/compile-okf<br/>/inspect-okf<br/>/merkle-okf<br/>/curate-okf<br/>/size-okf"]
     LINT["okfctl linter"]
+    TOOLS["skills<br>/inspect-md<br/>/compile-okf<br/>/inspect-okf<br/>/merkle-okf<br/>/curate-okf<br/>/size-okf"]
     PROXY["credential proxy"]
   end
 
@@ -55,10 +61,10 @@ flowchart LR
   STATE ~~~ AGENT
   DRV -->|"sbx exec"| AGENT
   KIT -->|"builds"| VM
-  AGENT -.->|"uses"| TOOLS
   AGENT -.->|"runs"| LINT
   LINT -.->|"must pass"| OKF
   AGENT ==>|"writes"| OKF
+  AGENT -.->|"uses"| TOOLS
   AGENT -->|"calls"| PROXY
   PROXY -->|"injects key"| NET
   PROXY -->|"injects key"| NET3
