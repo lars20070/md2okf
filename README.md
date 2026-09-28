@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lars20070/md2okf/actions/workflows/ci.yml/badge.svg)](https://github.com/lars20070/md2okf/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/lars20070/md2okf?sort=semver)](https://github.com/lars20070/md2okf/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/lars20070/md2okf/blob/master/LICENSE)
 
 Compile Markdown documents into an OKF knowledge base with a coding agent.
 
@@ -100,6 +100,7 @@ injects the API key; OpenRouter routes them to DeepInfra or other providers (gra
 - [Quickstart](#quickstart)
 - [Install sbx](#install-sbx)
 - [Set up the OpenRouter key](#set-up-the-openrouter-key)
+- [Further documentation](#further-documentation)
 - [License](#license)
 
 ## Quickstart
@@ -173,6 +174,15 @@ sbx secret set-custom --sandbox md2okf-pi \
 `md2okf-<agent>`. The `export` only passes the key to the two `sbx` commands:
 `md2okf` reads it from `sbx secret`, never from your shell environment.
 
+## Further documentation
+
+| Guide | Covers |
+| --- | --- |
+| [Usage](https://github.com/lars20070/md2okf/blob/master/docs/usage.md) | What you can compile, reading the output, the wiki's layout, every CLI flag and exit code |
+| [Configuration](https://github.com/lars20070/md2okf/blob/master/docs/configuration.md) | Choosing an agent, credentials for Claude Code and Codex, models and providers |
+| [Architecture](https://github.com/lars20070/md2okf/blob/master/docs/architecture.md) | The run loop, the sandbox's mounts, credentials, session state, the repository layout |
+| [Contributing](https://github.com/lars20070/md2okf/blob/master/CONTRIBUTING.md) | Lint, tests, the helper CLIs, releasing |
+
 ## License
 
-Released under the [MIT License](LICENSE).
+Released under the [MIT License](https://github.com/lars20070/md2okf/blob/master/LICENSE).
