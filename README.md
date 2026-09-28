@@ -6,13 +6,11 @@
 
 Compile Markdown documents into an OKF knowledge base with a coding agent.
 
-Point `md2okf` at a Markdown file or folder and a coding agent — the [Pi coding
-agent](https://pi.dev) by default, or [Claude Code](https://code.claude.com)
-or [Codex](https://github.com/openai/codex) — writes a wiki into the output
+Point `md2okf` at a Markdown file or folder and a coding agent writes a wiki into the output
 directory: a page per topic, an index in every directory, links between them,
 and a log of what each run changed. OKF,
 the [Open Knowledge
-Format](https://github.com/GoogleCloudPlatform/open-knowledge-format),
+Format](https://github.com/GoogleCloudPlatform/open-knowledge-format) by Google,
 is a tree of Markdown files with YAML frontmatter and nothing else — no schema
 registry, no server, nothing to install. The agent takes one source document per
 run and folds it into the wiki already on disk, so documents accumulate rather
@@ -86,17 +84,14 @@ flowchart LR
 ```
 
 <br>*Host tooling (amber) builds the microVM from the kit and drives it with one
-`sbx exec` per source document. Inside, the Pi agent (red) runs the
+`sbx exec` per source document. Inside, the coding agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
 only content it may change. Skills and the linter (teal) support it — four of
 them survey the source markdown and wiki, `curate-okf` maintains its nodes and
 indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx credential proxy (teal), which
-injects the OpenRouter key; OpenRouter routes them to DeepInfra or other providers (gray).
-The diagram shows Pi, the default. Claude Code and Codex run the same way in
-sandboxes of their own, signed in to their own model providers instead of
-OpenRouter — see [Choosing an agent](#choosing-an-agent).*
+injects the API key; OpenRouter routes them to DeepInfra or other providers (gray).*
 
 <!-- cspell:enable -->
 
