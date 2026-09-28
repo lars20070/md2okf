@@ -12,6 +12,10 @@
 
 ## Git
 
+The repository's default branch is `master`. Use `master` for base branches,
+comparisons, and repository links in docs and agent instructions; do not assume
+a `main` branch. Links to other repositories must use their own branch names.
+
 Never run `git commit` or `git push` (including pushing tags) in this repo.
 Stage changes, draft the commit message, and hand it to the user — they run
 the commit and push themselves.

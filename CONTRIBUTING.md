@@ -6,6 +6,9 @@ you only want to compile a wiki, [the README](README.md) is enough.
 
 `AGENTS.md` holds the same ground rules for coding agents working on this repo.
 
+The default branch is `master`. Base pull requests on `master` and use it in
+links to files in this repository.
+
 ## Commands
 
 ```bash
