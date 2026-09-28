@@ -125,6 +125,13 @@ uvx md2okf -v md/ -o okf/
 Alternatively, skip the installation and run the tool directly with `uvx`.
 
 ```bash
+MD2OKF_AGENT=claude md2okf -v md/ -o okf/     # Claude Code
+MD2OKF_AGENT=codex md2okf -v md/ -o okf/      # Codex
+```
+
+Pi is the default agent. To compile with Claude Code or Codex instead, set `MD2OKF_AGENT`; each agent needs its own credential first. See [Choosing an agent](https://github.com/lars20070/md2okf/blob/master/docs/configuration.md#choosing-an-agent) for the sign-in steps.
+
+```bash
 md2okf --shell               # Interactive shell at the wiki root
 md2okf --agent               # Interactive agent session
 ```
