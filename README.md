@@ -97,123 +97,38 @@ injects the API key; OpenRouter routes them to DeepInfra or other providers (gra
 
 ## Contents
 
-- [Requirements](#requirements)
 - [Quickstart](#quickstart)
 - [Install sbx](#install-sbx)
-- [Choosing an agent](#choosing-an-agent)
-- [How it works](#how-it-works)
-- [What lands in okf/](#what-lands-in-okf)
-- [Getting Markdown in](#getting-markdown-in)
-- [Environment](#environment)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
-- [Getting help](#getting-help)
+- [Set up the OpenRouter key](#set-up-the-openrouter-key)
 - [License](#license)
-
-## Requirements
-
-- macOS with [Homebrew](https://brew.sh), or
-  Linux with [KVM](https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine). Docker Desktop is not
-  required.
-- [sbx](https://github.com/docker/sbx-releases) 0.45.0 or newer. sbx is
-  experimental; a later version may break `md2okf`.
-- One model credential, for the agent you choose: an
-  [OpenRouter](https://openrouter.ai) API key for Pi, the default; a Claude
-  subscription or Anthropic API key for Claude Code; a ChatGPT subscription or
-  OpenAI API key for Codex. See [Choosing an agent](#choosing-an-agent).
-- [uv](https://docs.astral.sh/uv/), which installs and runs `md2okf`.
-- `git`. `make` and `jq` are needed only for the developer tasks in
-  [the contributing guide](CONTRIBUTING.md), not for compiling.
-- [okfctl](https://github.com/cwest/okfctl), only for the host-side `make
-  check-okf`: `brew install cwest/tap/okfctl`. The sandbox installs its own
-  pinned copy, so a compile does not need it.
-- `tree`, only for the host-side `inspectokf` from `make install-clis`:
-  `brew install tree`. The sandbox installs its own copy, so a compile does not
-  need it.
 
 ## Quickstart
 
-This needs `sbx` installed and signed in; see [details below](#install-sbx).
-
-Hand sbx your agent's credential once — for Pi, the default, that is the
-OpenRouter key, set up below; for the others, see
-[Choosing an agent](#choosing-an-agent).
-
-### Set up the OpenRouter key
-
-`sbx` keeps the key out of the virtual machine. It holds the real string on the
-host and swaps it into requests at its proxy, so inside the sandbox
-`$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
+`md2okf` requires both [`sbx`](#install-sbx) (for the sandbox) and [`uv`](https://docs.astral.sh/uv/getting-started/installation) (for the installation of the tool). For the default Pi agent an [OpenRouter API key](#set-up-the-openrouter-key) is required as well.
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-...
-echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
+uv tool install md2okf       # Install from PyPI
+md2okf --version
 
-# And again as a custom secret, to work around a known sbx issue:
-# https://github.com/docker/sbx-releases/issues/25
-sbx secret set-custom --sandbox md2okf-pi \
-  --host openrouter.ai \
-  --env OPENROUTER_API_KEY \
-  --value "$OPENROUTER_API_KEY"
+md2okf -v my-document.md     # The wiki lands in ./okf
+md2okf -v md/ -o okf/
 ```
 
-`md2okf-pi` is the name of the sandbox Pi runs in: every agent gets its own,
-called `md2okf-<agent>`. The command reads the key from `sbx secret`, never from your shell environment, and
-refuses to start if it is not proxy-managed. To point the
-agent at a different provider, see [the kit guide](kits/pi/README.md).
-
-### Install and compile
-
-Install the command and compile:
+Install the tool with `uv` from [PyPI](https://pypi.org/project/md2okf/). No cloning of the repo is required. Point the tool to a single markdown file or a folder of markdown files and compile the OKF wiki. The first run creates the sandbox. Later runs attach to it directly. The `-v` argument enters verbose mode. Leave it out to compile the wiki silently.
 
 ```bash
-uv tool install md2okf                  # Install from PyPI
-md2okf my-document.md                   # The wiki lands in ./okf
+uvx md2okf -v my-document.md
+uvx md2okf -v md/ -o okf/
 ```
 
-`uvx md2okf …` runs it without installing anything;
-`uv tool install git+https://github.com/lars20070/md2okf` installs the latest
-commit, and `uv tool install .` a clone you have edited. The command takes files
-or folders, and `-o` chooses the output:
+Alternatively, you can skip the install step and run the tool directly with `uvx`.
 
 ```bash
-md2okf -o wikis/handbook docs/handbook/   # Every *.md in that folder
-md2okf -n 20 long-document.md             # Raise the iteration cap
-md2okf --dry-run md/                      # Resolve and print, run nothing
+md2okf --shell               # Interactive shell at the wiki root
+md2okf --agent               # Interactive agent session
 ```
 
-Two flags open the sandbox instead of compiling, building or refreshing it
-first, so there is nothing to set up beforehand:
-
-```bash
-md2okf --shell                            # Interactive shell at the wiki root
-md2okf --agent                            # Interactive agent session
-```
-
-Both are for inspecting the sandbox rather than authoring in it — see
-[Inspecting the sandbox](https://github.com/lars20070/md2okf/blob/master/docs/architecture.md#inspecting-the-sandbox)
-for what they leave in place.
-
-Session state defaults to `~/.local/state/md2okf/<agent>` — one folder per
-agent; see [Configuration](https://github.com/lars20070/md2okf/blob/master/docs/configuration.md)
-to put it elsewhere.
-
-Each document gets its own agent run, and each run reports the wiki's root hash
-before and after (tool calls and agent prose stream in between):
-
-```text
-Compiling document md/my-document.md (iteration 1)
-7f3c1a9d4e02 -> b481d05c6a17
-Compiling document md/my-document.md (iteration 2)
-b481d05c6a17 -> b481d05c6a17
-```
-
-`-o` defaults to `./okf`, which this repository gitignores, so generated pages
-stay out of the repo. `md/` is tracked and ships with sample documents, so
-`md2okf md/` has something to compile straight away. `md2okf` manages its
-output directory: it creates one that does not exist, adopts one that is empty
-or already an OKF bundle root, and refuses anything else rather than deleting
-what it finds.
+The two flags above enter the sandbox and an interactive agent session respectively. They allow you to inspect the sandbox. The later allows you to instruct the agent to refine and modify the wiki.
 
 ## Install sbx
 
@@ -236,108 +151,26 @@ sudo usermod -aG kvm "$USER" && newgrp kvm
 sbx login
 ```
 
-## Choosing an agent
+## Set up the OpenRouter key
 
-`MD2OKF_AGENT` picks the coding agent that compiles; unset, it is Pi. Each
-agent runs in a sandbox of its own, built from its own kit under `kits/`, with
-its own workbench, so switching back and forth rebuilds nothing — though runs
-still take one lock, so two never compile at once.
+`sbx` keeps the key out of the virtual machine. It holds the real string on
+the host and swaps it into requests at its proxy, so inside the sandbox
+`$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
 
 ```bash
-md2okf md/                                  # Pi, the default
-MD2OKF_AGENT=claude md2okf md/              # Claude Code
-MD2OKF_AGENT=codex md2okf -o wikis/c md/    # Codex, into another wiki
-MD2OKF_AGENT=claude md2okf --agent          # open Claude Code in its sandbox
+export OPENROUTER_API_KEY=sk-or-...
+echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
+
+# And again as a custom secret, to work around a known sbx issue:
+# https://github.com/docker/sbx-releases/issues/25
+sbx secret set-custom --sandbox md2okf-pi \
+  --host openrouter.ai \
+  --env OPENROUTER_API_KEY \
+  --value "$OPENROUTER_API_KEY"
 ```
 
-| `MD2OKF_AGENT` | Agent | Sandbox | Set the credential on the host |
-| --- | --- | --- | --- |
-| `pi` (default) | [Pi](https://pi.dev) | `md2okf-pi` | an OpenRouter key — see [Set up the OpenRouter key](#set-up-the-openrouter-key) |
-| `claude` | [Claude Code](https://code.claude.com) | `md2okf-claude` | `/login` inside a Claude sandbox, such as `sbx run claude` (Claude subscription), or `sbx secret set anthropic` (API key) |
-| `codex` | [Codex](https://github.com/openai/codex) | `md2okf-codex` | `sbx secret set openai --oauth` (ChatGPT subscription) or `sbx secret set openai` (API key) |
-
-`sbx` keeps every credential outside the virtual machine and hands it to the
-sandbox when the sandbox is **created**. So set it before the first run with
-that agent; set or change it later, and remove the sandbox once
-(`sbx rm --force md2okf-<agent>`) so the next run builds one that has it.
-`md2okf` checks the credential before every run and prints the exact commands
-when it is missing.
-
-All three compile the same way, to the same OKF conventions: the same
-`compile-okf` procedure and helper skills, the same gate, the same wiki
-layout. Each signs the pages it writes with its own name in `generated.by` —
-`pi/…`, `claude/…`, `codex/…` — so a wiki written by several agents says which
-wrote what. They differ in the model behind them, so page boundaries and prose
-choices can differ between agents on the same source; the fidelity rule and
-the gate hold for all of them. The kit guides — [Pi](kits/pi/README.md),
-[Claude Code](kits/claude/README.md), [Codex](kits/codex/README.md) — cover
-each agent's configuration.
-
-## How it works
-
-`md2okf` runs on the host and drives the agent inside a microVM, repeatedly,
-until a hash of the output stops moving. The host drives; everything else
-happens inside the sandbox. The workbench, the Ralph loop, what the sandbox can
-reach, where session state lives and the repository layout are covered in
-[How md2okf works](https://github.com/lars20070/md2okf/blob/master/docs/architecture.md).
-
-## What lands in okf/
-
-```text
-okf/
-├── index.md          # root index, the only one carrying frontmatter
-├── log.md            # what each run changed, newest first
-├── <page>.md         # a content page at the wiki root
-└── <topic>/          # one directory per topic, nested as deep as it needs
-    ├── index.md      # a plain link list for this directory
-    └── <page>.md     # a content page within the topic
-```
-
-Content pages carry `type`, `title`, `description` and `tags` in their
-frontmatter. Slugs are kebab-case. Links are bundle-absolute, so
-`/glossary/verb.md` rather than `glossary/verb.md`. The root `index.md` names
-the spec version the agent reads. Pages are updated in place, not duplicated, so
-compiling the same document twice is safe.
-
-## Getting Markdown in
-
-`md/` wants clean, structured Markdown, and a source document is rarely that.
-Two helpers produce it. Both are optional, and neither is part of a compile.
-
-**From a PDF.** `marker` converts one with the help of a language model, either
-a local Ollama model or a cloud model through OpenRouter. Expect to check the
-output, and run the step by hand — see
-[the pdf2md guide](pdf2md/README.md).
-
-**From a website.** `make scrape` walks a documentation site and writes one
-Markdown document into `md/`. No model is involved, so the result is
-deterministic, and the fetched HTML is cached — see
-[the web2md guide](web2md/README.md).
-
-## Environment
-
-`MD2OKF_AGENT`, `OPENROUTER_API_KEY`, `XDG_STATE_HOME` and `SPEC_MD` are
-described in [Configuration](https://github.com/lars20070/md2okf/blob/master/docs/configuration.md);
-`md2okf --help` lists the same four.
-
-## Troubleshooting
-
-Known failure messages and their fixes are collected in
-[Troubleshooting](https://github.com/lars20070/md2okf/blob/master/docs/troubleshooting.md).
-
-## Development
-
-Lint, tests, the sandbox checks, the helper CLIs and the per-subproject layout
-are covered in [the contributing guide](CONTRIBUTING.md). The short version:
-`make lint` checks the source tree, `make validate` checks every sandbox kit spec,
-and CI runs both on every pull request. `uv run md2okf` runs the command from a
-clone without installing it, `make install` puts it on your PATH, and
-`make install-clis` does the same for the four helper CLIs.
-
-## Getting help
-
-Questions, bugs and feature requests belong in [the issue
-tracker](https://github.com/lars20070/md2okf/issues).
+`md2okf-pi` is the name of the sandbox Pi runs in: every agent gets its own,
+called `md2okf-<agent>`. The command reads the key from `sbx secret`, never from your shell environment.
 
 ## License
 
