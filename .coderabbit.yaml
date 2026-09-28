@@ -37,7 +37,7 @@ reviews:
     - "!uv.lock"
     - "!md/**"
     - "!okf/**/*.md"
-    - "!pdf2md/**"
+    - "!extras/pdf2md/**"
     - "!.cursor/mcp.json"
     - "!.cursor/plans/**"
     - "!.claude/plans/**"
@@ -98,7 +98,7 @@ reviews:
       - "DO NOT REVIEW"
       - "WIP"
     drafts: false
-  # The web2md scraper (web2md/src/) and its pytest suite (web2md/tests/) are the
+  # The web2md scraper (extras/web2md/src/) and its pytest suite (extras/web2md/tests/) are the
   # only first-party code here.
   finishing_touches:
     docstrings:
@@ -145,7 +145,7 @@ reviews:
       timeout_ms: 900000
     ruff:
       enabled: true
-      config_file: "web2md/pyproject.toml"
+      config_file: "extras/web2md/pyproject.toml"
 chat:
   art: false
   auto_reply: true

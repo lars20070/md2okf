@@ -93,6 +93,15 @@ and this project adheres to
   OpenRouter key is now part of the Quickstart, and installing sbx has its own
   section after it.
 
+- **`web2md/` and `pdf2md/` moved to `extras/`.** Both are optional,
+  clone-only helpers that prepare Markdown for `md/`, and neither is part of a
+  compile. `make scrape` and `make test-web2md` work as before; run the
+  scraper and marker by hand with `--project extras/web2md` or
+  `--project extras/pdf2md`. The scraper's cache moved to
+  `extras/web2md/cache/`; git does not move an ignored cache, so keep an
+  existing one with `mv web2md/cache extras/web2md/cache`, or `make scrape`
+  fetches the whole site again.
+
 ### Fixed
 
 - **Editing the kit's agent config now rebuilds the sandbox.** The kit

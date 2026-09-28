@@ -15,7 +15,7 @@
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
 MARKDOWNLINT ?= markdownlint-cli2
 RUFF ?= uv tool run ruff@0.16.2
-PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml
+PYTEST ?= uv run --project extras/web2md --group test pytest -c extras/web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
@@ -106,11 +106,11 @@ test: test-shell test-web2md test-clis test-md2okf test-sandbox
 test-shell:
 	./tests/test-mount-state.sh
 
-# Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
+# Unit-test the web2md scraper (extras/web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
-# web2md/pyproject.toml, which also puts web2md/src/ on the import path.
+# extras/web2md/pyproject.toml, which also puts extras/web2md/src/ on the import path.
 test-web2md:
-	$(PYTEST) web2md/tests
+	$(PYTEST) extras/web2md/tests
 
 # Unit-test the four host CLIs (inspectmd, inspectokf, sizeokf, merkleokf).
 # Each has its own project and lockfile — nothing shared. Offline; stdlib-only
@@ -187,4 +187,4 @@ test-sandbox:
 
 # Fetch the website into md/ as one file.
 scrape:
-	uv run --project web2md python web2md/src/web2md.py
+	uv run --project extras/web2md python extras/web2md/src/web2md.py

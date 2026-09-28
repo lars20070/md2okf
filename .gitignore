@@ -18,7 +18,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# web2md HTML fetch cache
+# web2md HTML fetch cache. The old path stays ignored so a clone that
+# predates the move to extras/ cannot commit its leftover cache by accident.
+extras/web2md/cache/
 web2md/cache/
 
 # md input folder

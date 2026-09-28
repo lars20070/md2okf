@@ -197,12 +197,12 @@ optional, need a clone of the repository, and run separately from `md2okf`.
 **From a PDF.** `pdf2md` converts a PDF with `marker`, helped by a language
 model: a local Ollama model or a cloud model through OpenRouter. The step is
 manual; check its output before compiling. See
-[the pdf2md guide](../pdf2md/README.md).
+[the pdf2md guide](../extras/pdf2md/README.md).
 
 **From a website.** `make scrape` runs `web2md`, which walks a documentation
 site and writes it into one Markdown file in `md/`. No language model is
 involved, so the result is deterministic, and the fetched pages are cached.
-See [the web2md guide](../web2md/README.md).
+See [the web2md guide](../extras/web2md/README.md).
 
 ## Inspecting the sandbox
 

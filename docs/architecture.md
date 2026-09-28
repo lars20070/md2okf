@@ -178,5 +178,5 @@ looking around, not for editing the wiki:
 | `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against, vendored verbatim under Apache-2.0; see [NOTICE-OKF-SPEC.md](../NOTICE-OKF-SPEC.md) |
 | `AGENTS.md` | instructions for coding agents working *on this repository*, not for the agents `md2okf` drives |
 | `CONTRIBUTING.md` | how to develop, test and release `md2okf` |
-| `pdf2md/` | optional: converts a PDF into Markdown for `md/` |
-| `web2md/` | optional: scrapes a documentation site into one Markdown file in `md/` |
+| `extras/pdf2md/` | optional: converts a PDF into Markdown for `md/` |
+| `extras/web2md/` | optional: scrapes a documentation site into one Markdown file in `md/` |

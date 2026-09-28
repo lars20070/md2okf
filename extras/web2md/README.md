@@ -38,26 +38,31 @@ this book, not the site in general.
 | `tests/` | the pytest suite (see below) |
 | `cache/` | fetched HTML, gitignored; reused unless you pass `--refresh` |
 
+The project lived at `web2md/` before it moved to `extras/`. Git does not move
+an ignored cache, so keep an existing one with
+`mv web2md/cache extras/web2md/cache`; otherwise the next scrape fetches the
+whole site again.
+
 This is the only first-party Python in the repo, and its own uv project:
-`web2md/pyproject.toml` holds the scraper's dependencies, the pytest config and
+`extras/web2md/pyproject.toml` holds the scraper's dependencies, the pytest config and
 the only `[tool.ruff]` in the repo, with a `uv.lock` of its own. Nothing is
 shared with `pdf2md` — the heavy `marker` stack cannot reach this project.
 There is still no `[build-system]` and no installable package: `make scrape`
 runs the module by path, and pytest imports it through `pythonpath = ["src"]`,
-relative to `web2md/pyproject.toml`.
+relative to `extras/web2md/pyproject.toml`.
 
 ## Fetch and convert
 
 ```bash
 # Install scraper deps (its own project, so no marker-pdf stack in sight)
-uv sync --project web2md
+uv sync --project extras/web2md
 
-# Fetch (or reuse web2md/cache/) and write md/*.md
+# Fetch (or reuse extras/web2md/cache/) and write md/*.md
 make scrape
 
 # Or call the module directly:
-uv run --project web2md python web2md/src/web2md.py
-uv run --project web2md python web2md/src/web2md.py --refresh
+uv run --project extras/web2md python extras/web2md/src/web2md.py
+uv run --project extras/web2md python extras/web2md/src/web2md.py --refresh
 ```
 
 ## Tests
@@ -67,12 +72,12 @@ make test-web2md   # the whole suite
 
 # The same, directly. -c points pytest at this project's config, whose
 # testpaths and pythonpath are relative to it.
-uv run --project web2md --group test pytest -c web2md/pyproject.toml
+uv run --project extras/web2md --group test pytest -c extras/web2md/pyproject.toml
 ```
 
 The suite is offline: HTTP is served by `httpx.MockTransport`, so no test opens
 a socket, and the only files written go to pytest's `tmp_path`. It never touches
-`web2md/cache/`. It covers the pure helpers (slugs, anchors, link rewriting, the
+`extras/web2md/cache/`. It covers the pure helpers (slugs, anchors, link rewriting, the
 Markdown converter, assembly, and every `validate_output` error branch), the
 constants above and what is derived from them, the fetch retry and caching
 logic, and one end-to-end `run()` over a synthetic 72-page site. CI runs it in

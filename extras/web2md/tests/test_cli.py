@@ -8,17 +8,19 @@ import pytest
 
 import web2md
 
-# <repo>/web2md/src/web2md.py -> <repo>
-REPO_ROOT = Path(web2md.__file__).resolve().parents[2]
+# <repo>/extras/web2md/src/web2md.py -> <repo>
+REPO_ROOT = Path(web2md.__file__).resolve().parents[3]
 
 
 def test_default_cache_sits_beside_the_src_directory() -> None:
-    # Guards the move into web2md/src/: a ROOT off by one level would silently
-    # relocate the cache to web2md/src/cache/.
-    assert web2md.DEFAULT_CACHE == REPO_ROOT / "web2md" / "cache"
+    # Guards the move into extras/web2md/src/: a ROOT off by one level would
+    # silently relocate the cache to extras/web2md/src/cache/.
+    assert web2md.DEFAULT_CACHE == REPO_ROOT / "extras" / "web2md" / "cache"
 
 
 def test_default_output_goes_to_the_repo_level_md_directory() -> None:
+    # Guards the move into extras/: output must still land in the repo's md/,
+    # not in extras/md/.
     assert web2md.DEFAULT_OUTPUT == REPO_ROOT / "md" / web2md.OUTPUT_FILE
 
 

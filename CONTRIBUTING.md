@@ -132,11 +132,11 @@ Python tooling is thin. The repository root *is* a project — it holds the
 `md2okf` command itself, because the tool is named after the repository and a
 root `pyproject.toml` is what makes `uv tool install git+https://…` work with no
 registry, and what lets the package read `VERSION` as its version source.
-Everything else stays independent: `pdf2md/`, `web2md/`, `scripts/inspectmd/`,
+Everything else stays independent: `extras/pdf2md/`, `extras/web2md/`, `scripts/inspectmd/`,
 `scripts/inspectokf/`, `scripts/sizeokf/`, and `scripts/merkleokf/` are separate
 uv projects, each with its own `pyproject.toml` and (where needed) `uv.lock`,
 and nothing shared between them.
-`pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
+`extras/pdf2md/` exists only to give `marker` a pinned venv; `extras/web2md/` owns the
 scraper's dependencies and its pytest/ruff config; the four `scripts/` projects
 are installable stdlib-only CLIs with their own ruff and pytest. So the heavy
 dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,

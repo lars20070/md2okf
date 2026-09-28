@@ -69,10 +69,12 @@ WORD_LIST_TERM_TOLERANCE = 30
 SIZE_MIN = 0.4 * 1024 * 1024
 SIZE_MAX = 1.2 * 1024 * 1024
 
-# web2md/ — the module itself lives one level down, in web2md/src/.
+# extras/web2md/ — the module itself lives one level down, in extras/web2md/src/.
 ROOT = Path(__file__).resolve().parents[1]
+# The repository root, two levels above extras/web2md/: md/ lives there.
+REPO_ROOT = ROOT.parents[1]
 DEFAULT_CACHE = ROOT / "cache"
-DEFAULT_OUTPUT = ROOT.parent / "md" / OUTPUT_FILE
+DEFAULT_OUTPUT = REPO_ROOT / "md" / OUTPUT_FILE
 
 _SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]")
 _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((#[^)]+)\)")

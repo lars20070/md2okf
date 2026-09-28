@@ -58,29 +58,29 @@ this repository the defaults are `md/` in and `okf/` out: `md/` is tracked;
 
 `SPEC.md` at the repo root is the OKF revision the wiki is built against — the
 agent reads it at the start of every run, and it outranks any instruction file,
-including the runtime agent configs. `pdf2md/` is the optional upstream step
+including the runtime agent configs. `extras/pdf2md/` is the optional upstream step
 that turns a PDF into Markdown with `marker`; it is manual and not wired into
 the `make` pipeline.
 
 `docs/` holds the user reference pages split out of the README
-(`architecture.md`, `configuration.md`, `troubleshooting.md`). The README is
+(`architecture.md`, `configuration.md`, `usage.md`). The README is
 also the PyPI long description, so its links into `docs/` are absolute GitHub
 URLs; links between the docs pages stay relative.
 
-`web2md/` is one upstream step: a deterministic scraper that fetches a
+`extras/web2md/` is one upstream step: a deterministic scraper that fetches a
 website into a single file under `md/`, driven by `make scrape`. Which site and
-which output filename live in two constants at the top of `web2md/src/web2md.py`
-(`SOURCE_URL`, `OUTPUT_FILE`). Module in `web2md/src/`, pytest suite in
-`web2md/tests/`, gitignored HTML cache in `web2md/cache/`. There is no
+which output filename live in two constants at the top of `extras/web2md/src/web2md.py`
+(`SOURCE_URL`, `OUTPUT_FILE`). Module in `extras/web2md/src/`, pytest suite in
+`extras/web2md/tests/`, gitignored HTML cache in `extras/web2md/cache/`. There is no
 `[build-system]`: the module is run by path and pytest imports it via
-`pythonpath` in `web2md/pyproject.toml`. Run `make test-web2md` after touching
+`pythonpath` in `extras/web2md/pyproject.toml`. Run `make test-web2md` after touching
 either directory; the suite is offline and needs no network.
 
 `scripts/inspectmd/` is a third independent uv project: an installable CLI that prints a
 Markdown heading map (line ranges, word counts, kebab-case slugs). The sandbox
 exposes the same `inspectmd` command via a `setup.files` shim. Own
-`pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `web2md/` or
-`pdf2md/`.
+`pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `extras/web2md/` or
+`extras/pdf2md/`.
 
 `scripts/inspectokf/` is a fourth independent uv project: an installable CLI that prints
 a wiki directory tree by wrapping `tree` (default path `okf/`, unlimited depth

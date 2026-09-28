@@ -11,21 +11,21 @@ produce a file for `md/`, which `md2okf` then compiles.
 
 ## PDF to Markdown conversion
 
-`pdf2md` is its own uv project: `pdf2md/pyproject.toml` pins `marker` and
+`pdf2md` is its own uv project: `extras/pdf2md/pyproject.toml` pins `marker` and
 nothing else, so the commands below run in a venv of their own
-(`pdf2md/.venv`), separate from `web2md` and from anything at the repo root.
+(`extras/pdf2md/.venv`), separate from `web2md` and from anything at the repo root.
 Run them from the repo root — `pdf/` and `md/` are relative to it.
 
 ```bash
 # Build the venv (uv run does it for you on first use, but this is the
 # explicit, and slow, step: marker pulls in torch)
-uv sync --project pdf2md
+uv sync --project extras/pdf2md
 
-uv run --project pdf2md marker --help
+uv run --project extras/pdf2md marker --help
 
 # Using a local Ollama model
 ollama pull gemma4:31b-mlx
-uv run --project pdf2md marker pdf/ \
+uv run --project extras/pdf2md marker pdf/ \
   --output_dir md/ \
   --output_format markdown \
   --disable_image_extraction \
@@ -37,7 +37,7 @@ uv run --project pdf2md marker pdf/ \
   # --page_range 0-30
 
 # Using a cloud OpenRouter model
-uv run --project pdf2md marker_single pdf/example.pdf \
+uv run --project extras/pdf2md marker_single pdf/example.pdf \
   --output_dir md/ \
   --output_format markdown \
   --disable_image_extraction \
