@@ -44,8 +44,7 @@ flowchart LR
     direction TB
     OKF@{ shape: docs, label: "okf/<br/>the wiki"}
     NET("OpenRouter hub")
-    ANTHROPIC("Anthropic")
-    OPENAI("OpenAI")
+    NET3("Anthropic, OpenAI")
   end
   NET1("DeepInfra")
   NET2("...")
@@ -62,8 +61,7 @@ flowchart LR
   AGENT ==>|"writes"| OKF
   AGENT -->|"calls"| PROXY
   PROXY -->|"injects key"| NET
-  PROXY -->|"injects key"| ANTHROPIC
-  PROXY -->|"injects key"| OPENAI
+  PROXY -->|"injects key"| NET3
   NET -->|"BYOK"| NET1 & NET2
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
@@ -75,7 +73,7 @@ flowchart LR
   class KIT,DRV host
   class TOOLS,LINT,PROXY helper
   class AGENT agent
-  class NET,ANTHROPIC,OPENAI,NET1,NET2 ext
+  class NET,NET3,NET1,NET2 ext
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style IN fill:none,stroke:none
   style OUT fill:none,stroke:none
