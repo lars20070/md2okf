@@ -1,19 +1,29 @@
 # Configuration
 
-The environment variables `md2okf` reads. For installing and a first compile,
-see [the README](../README.md).
+What `md2okf` reads from your environment, and what it doesn't read at all.
+For installing and a first compile, see [the README](../README.md).
 
-## Environment
+## Environment variables
 
-Four variables are worth knowing about, and only the first three are yours to
-set. `md2okf --help` lists the same four.
+Three variables matter, and only the first two are read by `md2okf` itself.
+`md2okf --help` lists the same three.
 
-| Variable | What it does |
-| --- | --- |
-| `MD2OKF_AGENT` | Optional. The agent that compiles: `pi`, the default (unset or empty means `pi`), `claude` for Claude Code, or `codex` for Codex — see [Choosing an agent](../README.md#choosing-an-agent). An unknown value is refused with exit 2 before anything runs. |
-| `OPENROUTER_API_KEY` | Required for `pi`. `md2okf` takes the key from `sbx secret` and refuses to start unless it is proxy-managed — see [Set up the OpenRouter key](../README.md#set-up-the-openrouter-key). |
-| `XDG_STATE_HOME` | Optional. Where session state and the run workbench live. Absolute paths only — a relative value counts as unset — and the default is `~/.local/state`. Changing it once a sandbox exists takes one manual step; see [Session state](architecture.md#session-state). |
-| `SPEC_MD` | Optional. The spec the frontmatter guard reads, which defaults to the sibling of the bundle root. Needed when checking a wiki outside this repository: `SPEC_MD=/path/to/SPEC.md check-okf.sh /some/wiki`. |
+| Variable | Read by | What it does |
+| --- | --- | --- |
+| `MD2OKF_AGENT` | the host driver | Which agent compiles: `pi` (default, also what an unset or empty value means), `claude`, or `codex`. An unrecognized value is refused with exit 2 before anything runs. See [Setup](setup.md#choose-an-agent-and-set-its-credential). |
+| `XDG_STATE_HOME` | the host driver | Where session state and the run workbench live. Must be an absolute path — a relative value counts as unset — and defaults to `~/.local/state`. See [Architecture](architecture.md#session-state). |
+| `OPENROUTER_API_KEY` | never — checked inside the sandbox only | `md2okf` never reads this from your shell. It's stored with `sbx secret` on the host and checked inside the sandbox before every run. See [Set up the OpenRouter key](setup.md#set-up-the-openrouter-key). |
 
-Everything else the sandbox uses is set by `md2okf` itself: `MD2OKF_STATE_DIR`
-and `WORKDIR` are injected at creation, and nothing reads them from your shell.
+`MD2OKF_STATE_DIR` and `WORKDIR` are set by `md2okf` itself when it builds
+the sandbox. Nothing reads them from your shell; they aren't yours to set.
+
+## No `--model` flag, no config file
+
+`md2okf` takes no `--model` flag and reads no configuration file of its
+own. That doesn't mean the agents it drives have no configuration — each
+one does, inside its own kit.
+
+The OKF specification cannot be changed either. `md2okf` always compiles
+against its own `SPEC.md`, and the checks the agent runs always compare
+the wiki against that same file. See [Setup](setup.md#no---model-flag-no-config-file)
+and the kit guides it links to.

@@ -96,7 +96,7 @@ md2okf --shell   # interactive shell at the wiki root
 md2okf --agent   # interactive agent session in the same sandbox
 ```
 
-Only `--fresh` combines with either; `-o`, `--spec`, `-n`, `-q`, `-v`,
+Only `--fresh` combines with either; `-o`, `-n`, `-q`, `-v`,
 `--dry-run` and input paths are refused rather than ignored — though a value
 that equals the default (`-o okf`) is indistinguishable from not passing it,
 and goes through. Both also need a terminal on stdin, and say so before
@@ -104,9 +104,9 @@ building anything. The flag is `--agent` rather than `--pi` so that swapping
 the agent framework later would not change a published interface.
 
 **For looking, not for authoring.** You land in the workbench's `work/okf`,
-holding whatever the last compile left. No compile run is restaged: helper CLIs
-are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
-documents and spec otherwise remain. Nothing written to `work/okf` survives
+holding whatever the last compile left. No compile run is restaged: the helper
+CLIs and the bundled `work/SPEC.md` are restaged, and prior staged documents
+otherwise remain. Nothing written to `work/okf` survives
 the next compile, but that compile cannot start underneath an active session:
 the interactive command holds the workbench lock until it exits. The agent's transcripts
 persist under `sessions/`. Entry is likewise refused while a compile holds the
@@ -234,11 +234,15 @@ Lint findings split two ways. `broken-link`, `orphan`, `type-hygiene`,
 `missing-xref` and `coverage-gap` are printed as advice, because they are
 judgment calls and the gate runs unattended inside the compile loop.
 
-The guard reads the expected `okf_version` from `SPEC.md`, looked up as the
-sibling of the bundle — `./SPEC.md` beside `./okf` on the host, the
-`../SPEC.md` mount in the sandbox. A bundle copied elsewhere to try something
-out has no sibling spec and the guard exits `2`; set `SPEC_MD` to point at the
-real file rather than reading it as a broken gate.
+The guard reads the expected `okf_version` from md2okf's own `SPEC.md`, never
+from a spec beside the bundle it checks. On the host the script sits in the kit
+tree, `kits/<agent>/files/`, and reads the `SPEC.md` beside that `kits/`
+directory: the repository root, or the packaged copy in an installed md2okf.
+In the sandbox, where no kit tree exists, it reads the read-only `../SPEC.md`
+mount beside the workspace, which md2okf stages from that same file. Nothing
+else is searched, and a missing spec exits `2`. There is no override, so a
+bundle copied elsewhere to try something out is checked in place, against the
+same spec.
 
 The sandbox installs okfctl at a pinned version; on the host it comes from
 Homebrew, so the two can drift — `okfctl version` says which. The check sits

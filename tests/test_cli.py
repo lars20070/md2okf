@@ -30,11 +30,13 @@ def test_version(capsys):
 # --- usage errors, decided before any work starts --------------------------
 
 
-def test_missing_spec_file_is_exit_2(tmp_path, capsys, isolated_state):
+def test_spec_flag_no_longer_exists(tmp_path, capsys, isolated_state):
+    """md2okf always compiles against its own SPEC.md; there is no override."""
     doc = _md(tmp_path)
-    rc = cli.main(["--spec", str(tmp_path / "nope.md"), "-o", str(tmp_path / "out"), str(doc)])
-    assert rc == 2
-    assert "spec" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["--spec", str(tmp_path / "other.md"), "-o", str(tmp_path / "out"), str(doc)])
+    assert excinfo.value.code == 2
+    assert "unrecognized arguments: --spec" in capsys.readouterr().err
 
 
 def test_non_adoptable_output_is_exit_2(tmp_path, capsys, isolated_state):
@@ -536,7 +538,7 @@ def test_shell_rejects_positional_paths(tmp_path, capsys, isolated_state, fake_s
 
 
 def test_shell_rejects_compile_only_options(capsys, isolated_state, fake_sbx):
-    for option in (["-o", "wikis/x"], ["--spec", "S.md"], ["-n", "3"], ["-q"], ["-v"], ["--dry-run"]):
+    for option in (["-o", "wikis/x"], ["-n", "3"], ["-q"], ["-v"], ["--dry-run"]):
         rc = cli.main(["--shell", *option])
         assert rc == 2, option
         assert "has no meaning with --shell" in capsys.readouterr().err, option

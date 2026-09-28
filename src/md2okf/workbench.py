@@ -345,7 +345,6 @@ def stage_clis(clis_root: Path, work_scripts: Path) -> None:
 
 def rewrite_spec(work_spec: Path, spec_source: Path) -> None:
     """Rewrite work_spec's content in place -- truncate and write, never rename over it."""
-    reject_if_unsafe(spec_source, what="--spec")
     work_spec.write_bytes(spec_source.read_bytes())
 
 
@@ -375,22 +374,21 @@ def restage(
     *,
     inputs: Iterable[tuple[str, Path | bytes]],
     clis_dir: Path,
-    spec_source: Path,
     output_dir: Path,
 ) -> None:
     """Refill the workbench's children for one run.
 
     Never replaces the five mount root objects (see Workbench.ensure_roots);
     only their contents change, which is why one sandbox can serve any number
-    of runs against different inputs and outputs. Any OSError along the way
-    (disk full, a permission error) becomes a WorkbenchError, so a caller
-    that only catches WorkbenchError still gets a clean failure rather than
-    a bare traceback.
+    of runs against different inputs and outputs. The spec is not staged
+    here: stage_tooling() owns it, and every run reaches that first, through
+    ensure_sandbox(). Any OSError along the way (disk full, a permission
+    error) becomes a WorkbenchError, so a caller that only catches
+    WorkbenchError still gets a clean failure rather than a bare traceback.
     """
     try:
         stage_inputs(wb.work_md, inputs)
         stage_clis(clis_dir, wb.work_scripts)
-        rewrite_spec(wb.work_spec, spec_source)
         mirror_in(wb.work_okf, output_dir)
     except OSError as exc:
         raise WorkbenchError(f"staging the workbench failed: {exc}") from exc
@@ -556,7 +554,7 @@ def _clear_ownership_marker(wb: Workbench) -> None:
 
 
 def stage_tooling(wb: Workbench) -> None:
-    """Stage the helper CLI projects, and floor the spec mount.
+    """Stage the helper CLI projects and the bundled OKF spec.
 
     Deliberately not part of restage(): this content does not vary per run.
     It is the packaged CLI sources, identical for every invocation, whereas
@@ -569,26 +567,22 @@ def stage_tooling(wb: Workbench) -> None:
     this part of "the sandbox is usable", which is why ensure_sandbox() does
     it for every caller rather than leaving each one to remember.
 
-    work/SPEC.md is split between the two: restage() owns its per-run content
-    (--spec, or the bundled default), and this owns its *floor*. ensure_roots()
+    work/SPEC.md is always the bundled spec, rewritten here on every call:
+    it is the one file outranking every instruction the agent has. ensure_roots()
     can only create it empty, because sbx cannot mount a path that does not
-    exist, and --shell/--agent stage nothing -- so on a workbench that has
-    never compiled, an interactive session was handed a 0-byte spec. That is
-    the one file outranking every instruction the agent has, and an agent that
-    reads it empty writes a wiki declaring `okf_version: ""`. Filled only when
-    empty, never overwritten: after a compile with --spec, the session that
-    follows still sees the spec its wiki was actually built against.
+    exist, and --shell/--agent stage nothing else -- an agent that reads an
+    empty spec writes a wiki declaring `okf_version: ""`. Rewriting it every
+    time also replaces whatever an older release staged there. It is rewritten
+    in place, never renamed over, because the bind mount resolves the inode.
 
     Any OSError here becomes a WorkbenchError, for restage()'s reason: an
     unreadable packaged spec, or a workbench that cannot be written, is a
     diagnostic and an exit code, never a traceback. resources.spec_md() does
-    not verify the installed case (nor do kit_dir/clis_dir), and the existence
-    check the compile path gets from _resolve_inputs does not run here.
+    not verify the installed case (nor do kit_dir/clis_dir).
     """
     try:
         stage_clis(resources.clis_dir(), wb.work_scripts)
-        if wb.work_spec.stat().st_size == 0:
-            rewrite_spec(wb.work_spec, resources.spec_md())
+        rewrite_spec(wb.work_spec, resources.spec_md())
     except OSError as exc:
         raise WorkbenchError(f"staging the sandbox tooling failed: {exc}") from exc
 

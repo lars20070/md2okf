@@ -25,7 +25,6 @@ LOCK_HELD_MESSAGE = "md2okf: another md2okf run is using the sandbox; try again 
 # with it would mislead more than saying no does.
 _COMPILE_ONLY_OPTIONS = (
     ("output", "-o"),
-    ("spec", "--spec"),
     ("n", "-n"),
     ("quiet", "-q"),
     ("verbose", "-v"),
@@ -39,7 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Compile Markdown into an OKF wiki with a coding agent (Pi by default).",
         # Held to 79 columns so it renders in a standard terminal; the epilog is
-        # printed verbatim. These are the only four variables a user of the
+        # printed verbatim. These are the only three variables a user of the
         # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
         epilog=f"""\
 Environment:
@@ -51,15 +50,12 @@ Environment:
   XDG_STATE_HOME      session state and the run workbench. Absolute paths
                       only; a relative value counts as unset.
                       (default: ~/.local/state)
-  SPEC_MD             spec the frontmatter guard reads when checking a wiki
-                      outside this repository
 """,
     )
     parser.add_argument(
         "paths", nargs="*", metavar="FILE|DIR", help="Markdown files or folders; '-' or none means stdin"
     )
     parser.add_argument("-o", "--output", default="okf", metavar="DIR", help="wiki output directory (default: ./okf)")
-    parser.add_argument("--spec", metavar="FILE", help="OKF spec file (default: the bundled SPEC.md)")
     parser.add_argument(
         "-n",
         type=int,
@@ -87,16 +83,12 @@ Environment:
 
 def _resolve_inputs(
     args: argparse.Namespace, agent: agents.Agent
-) -> tuple[list[compile_mod.Document], Path, Path, workbench.Workbench] | int:
+) -> tuple[list[compile_mod.Document], Path, workbench.Workbench] | int:
     """Everything decided before any work starts. Returns exit code 2 on failure."""
     try:
         if args.n < 1:
             raise compile_mod.UsageError(f"-n must be at least 1 (got {args.n})")
         documents = compile_mod.resolve_documents(args.paths)
-        spec_path = Path(args.spec) if args.spec else resources.spec_md()
-        workbench.reject_if_unsafe(spec_path, what="--spec")
-        if not spec_path.is_file():
-            raise compile_mod.UsageError(f"--spec is not a file: {spec_path}")
 
         output_dir = Path(args.output)
         if not workbench.is_adoptable_output(output_dir):
@@ -106,24 +98,23 @@ def _resolve_inputs(
 
         wb = workbench.Workbench.default(agent.name)
         overlap_paths = [Path(raw) for raw in args.paths if raw != "-"]
-        overlap_paths += [spec_path, output_dir, wb.root]
+        overlap_paths += [resources.spec_md(), output_dir, wb.root]
         workbench.check_no_overlap(overlap_paths)
     except (compile_mod.UsageError, workbench.WorkbenchError, resources.ResourcesError) as exc:
         print(f"md2okf: {exc}", file=sys.stderr)
         return 2
-    return documents, spec_path, output_dir, wb
+    return documents, output_dir, wb
 
 
 def _print_dry_run(
     agent: agents.Agent,
     documents: list[compile_mod.Document],
-    spec_path: Path,
     output_dir: Path,
     wb: workbench.Workbench,
 ) -> None:
     print("md2okf --dry-run: resolving only -- no sandbox will be created, nothing paid will run.")
     print(f"  agent:  {agent.name}")
-    print(f"  spec:   {spec_path}")
+    print(f"  spec:   {resources.spec_md()}")
     print(f"  output: {output_dir}")
     print("  documents:")
     for doc in documents:
@@ -272,7 +263,6 @@ def _run(
     args: argparse.Namespace,
     agent: agents.Agent,
     documents: list[compile_mod.Document],
-    spec_path: Path,
     output_dir: Path,
     wb: workbench.Workbench,
 ) -> int:
@@ -293,7 +283,6 @@ def _run(
             wb,
             inputs=compile_mod.stage_items(documents),
             clis_dir=clis_dir,
-            spec_source=spec_path,
             output_dir=output_dir,
         )
     except workbench.WorkbenchError as exc:
@@ -349,11 +338,11 @@ def main(argv: list[str] | None = None) -> int:
     resolved = _resolve_inputs(args, agent)
     if isinstance(resolved, int):
         return resolved
-    documents, spec_path, output_dir, wb = resolved
+    documents, output_dir, wb = resolved
 
     if args.dry_run:
         try:
-            _print_dry_run(agent, documents, spec_path, output_dir, wb)
+            _print_dry_run(agent, documents, output_dir, wb)
         except resources.ResourcesError as exc:
             print(f"md2okf: {exc}", file=sys.stderr)
             return 2
@@ -367,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         with workbench.lock():
-            return _run(args, agent, documents, spec_path, output_dir, wb)
+            return _run(args, agent, documents, output_dir, wb)
     except workbench.LockHeld:
         print(LOCK_HELD_MESSAGE, file=sys.stderr)
         return 2

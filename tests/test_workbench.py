@@ -400,25 +400,19 @@ def test_restaging_for_a_second_run_removes_the_first_runs_pages(tmp_path):
     wb.ensure_roots()
     clis_dir = tmp_path / "clis"
     clis_dir.mkdir()
-    spec_source = tmp_path / "SPEC.md"
-    spec_source.write_text("spec", encoding="utf-8")
 
     alpha_out = tmp_path / "wikis" / "alpha"
     alpha_out.mkdir(parents=True)
     (alpha_out / "alpha.md").write_text("alpha page", encoding="utf-8")
     (tmp_path / "a.md").write_text("a", encoding="utf-8")
 
-    workbench.restage(
-        wb, inputs=[("a.md", tmp_path / "a.md")], clis_dir=clis_dir, spec_source=spec_source, output_dir=alpha_out
-    )
+    workbench.restage(wb, inputs=[("a.md", tmp_path / "a.md")], clis_dir=clis_dir, output_dir=alpha_out)
     assert (wb.work_okf / "alpha.md").exists()
 
     beta_out = tmp_path / "wikis" / "beta"
     beta_out.mkdir(parents=True)
     (beta_out / "beta.md").write_text("beta page", encoding="utf-8")
-    workbench.restage(
-        wb, inputs=[("b.md", tmp_path / "a.md")], clis_dir=clis_dir, spec_source=spec_source, output_dir=beta_out
-    )
+    workbench.restage(wb, inputs=[("b.md", tmp_path / "a.md")], clis_dir=clis_dir, output_dir=beta_out)
 
     assert not (wb.work_okf / "alpha.md").exists()
     assert (wb.work_okf / "beta.md").exists()
@@ -460,7 +454,6 @@ def test_restage_wraps_a_raw_oserror_as_a_workbencherror(tmp_path, monkeypatch):
             wb,
             inputs=[],
             clis_dir=tmp_path / "clis",
-            spec_source=tmp_path / "SPEC.md",
             output_dir=tmp_path / "out",
         )
 
@@ -709,15 +702,17 @@ def test_stage_tooling_fills_the_empty_spec_placeholder(tmp_path):
     assert wb.work_spec.stat().st_ino == inode_before
 
 
-def test_stage_tooling_leaves_an_already_staged_spec_alone(tmp_path):
-    """A compile's --spec survives the --shell/--agent that follows it."""
+def test_stage_tooling_replaces_a_stale_spec_in_place(tmp_path):
+    """The workbench always carries the bundled spec, whatever an older release left there."""
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
     wb.work_spec.write_text("# Custom spec\n\n**Version 0.3**\n", encoding="utf-8")
+    inode_before = wb.work_spec.stat().st_ino
 
     workbench.stage_tooling(wb)
 
-    assert wb.work_spec.read_text(encoding="utf-8") == "# Custom spec\n\n**Version 0.3**\n"
+    assert wb.work_spec.read_bytes() == resources.spec_md().read_bytes()
+    assert wb.work_spec.stat().st_ino == inode_before
 
 
 def test_stage_tooling_converts_an_unreadable_spec_to_workbench_error(tmp_path, monkeypatch):

@@ -152,9 +152,9 @@ can prove it owns. Remove the sandbox yourself with
 `md2okf --agent` opens an interactive session with the agent. Both are for
 looking around, not for editing the wiki:
 
-- They do not stage a new run. They refresh the helper CLIs and fill in the
-  bundled spec if `work/SPEC.md` is empty; the rest of the workbench stays as
-  the last compile left it.
+- They do not stage a new run. They restage the helper CLIs and the bundled
+  `work/SPEC.md`; the rest of the workbench stays as the last compile left
+  it.
 - Nothing is copied back to your `-o` directory, and the next compile replaces
   `work/okf`, so changes made in either session are lost. Transcripts are kept.
 - The session holds the lock until you exit, so any other `md2okf` run, with

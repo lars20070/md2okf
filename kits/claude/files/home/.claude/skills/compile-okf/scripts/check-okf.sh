@@ -13,12 +13,11 @@ set -uo pipefail
 #   1  findings
 #   2  usage or runtime error (bad path, or a required tool is missing)
 #
-# The guard reads the expected okf_version from SPEC.md, which it looks up as the
-# SIBLING of the bundle: `./SPEC.md` for a bundle at `./okf` on the host, and the
-# `../SPEC.md` mount when the workspace IS the bundle in the sandbox. A bundle
-# copied somewhere else — `cp -r okf /tmp/okf-check`, say, to try a negative case
-# — has no sibling spec and exits 2. That is the lookup working, not a broken
-# gate: point SPEC_MD at the real file.
+# The guard reads the expected okf_version from md2okf's own SPEC.md, never from
+# a spec beside the bundle: the repository's (or the packaged copy) on the host,
+# and the read-only `../SPEC.md` mount md2okf stages from it in the sandbox. So a
+# bundle copied somewhere else — `cp -r okf /tmp/okf-check`, say, to try a
+# negative case — is checked in place, against that same spec.
 #
 # What blocks and what only advises:
 #   BLOCK   okfctl validate            OKF spec floor (a non-empty `type`)

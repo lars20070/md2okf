@@ -37,7 +37,7 @@ produces. To install `md2okf` and `sbx` and set up a credential, see
   `b/notes.md`, because both would be staged as `notes.md`;
 - two paths overlap — the same path given twice, one input inside another,
   or the output directory inside an input folder or the other way round. The
-  same rule covers `--spec` and `md2okf`'s own workbench. For example,
+  same rule covers `md2okf`'s own workbench. For example,
   `md2okf .` fails, because the default output directory, `okf/`, lies
   inside `.`;
 - an input does not exist, or is a symbolic link or a special file;
@@ -52,14 +52,10 @@ md2okf a.md b.md                             # several files, in that order
 md2okf -o wikis/handbook docs/handbook/      # a custom output directory
 md2okf -n 20 long-document.md                # raise the iteration cap
 md2okf --fresh notes.md                      # force a sandbox rebuild first
-md2okf --spec my-spec.md notes.md            # compile against a different spec
 ```
 
-`--spec` sets the OKF specification the agent compiles against; by default it
-is the `SPEC.md` bundled with `md2okf`. Don't confuse it with `SPEC_MD`, an
-environment variable that `md2okf --help` also lists. `SPEC_MD` only tells the
-wiki-checking script, `check-okf.sh`, where to find the specification;
-`md2okf` itself never reads it.
+The agent always compiles against the OKF specification bundled with
+`md2okf`, its own `SPEC.md`; there is no option to use another.
 
 ## Reading the output
 
@@ -216,9 +212,8 @@ md2okf --agent                            # interactive session with the agent
 ```
 
 Both are for looking around, not for editing the wiki. They do not stage a
-new run: they refresh the helper CLIs, fill in the bundled spec if the
-workbench has none, and otherwise leave the workbench as the last compile
-left it. Nothing is copied back to your output directory, and the next
+new run: they restage the helper CLIs and the bundled spec, and otherwise
+leave the workbench as the last compile left it. Nothing is copied back to your output directory, and the next
 compile replaces the sandbox's copy of the wiki, so any changes you make are
 lost. `--shell` opens even when the agent's credential check fails, and
 prints the fix as a warning; `--agent` refuses to start.
@@ -232,7 +227,6 @@ See [Architecture](architecture.md#inspecting-the-sandbox) for details, and
 | --- | --- | --- |
 | `FILE\|DIR` (positional) | stdin | Markdown files or folders to compile; `-` means standard input |
 | `-o`, `--output DIR` | `okf` | the wiki's output directory |
-| `--spec FILE` | the bundled `SPEC.md` | the OKF specification to compile against |
 | `-n N` | `10` | the maximum number of iterations per document |
 | `--fresh` | off | rebuild the sandbox even if it could be reused |
 | `--dry-run` | off | check the inputs and print what would run; creates no sandbox, checks no credential, costs nothing |

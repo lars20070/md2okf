@@ -15,11 +15,15 @@ Exit codes:
   2  usage or runtime error (bad path, or SPEC.md could not be found)
 
 SPEC.md is read to learn which okf_version the root index must declare, so the
-check moves with the spec instead of hard-coding a number. It is looked up as
-the sibling of the bundle directory, which is one rule that covers both layouts:
-on the host the bundle is `./okf` and the spec is `./SPEC.md`; in the sandbox the
-workspace IS the bundle and the spec is the read-only `../SPEC.md` mount. Set
-SPEC_MD to override.
+check moves with the spec instead of hard-coding a number. It is always md2okf's
+own SPEC.md, never one found beside the wiki being checked, and there is no
+override. On the host, this script sits in md2okf's kit tree,
+kits/<agent>/files/, and the spec is the SPEC.md beside that kits/ directory:
+the repository root in a checkout, the packaged copy in an installed md2okf. In
+the sandbox, where the kit's files are copied into the home directory, it is the
+read-only mount beside the workspace, `$WORKDIR/../SPEC.md`, which md2okf
+stages from that same file. Nothing else is searched: a missing spec is an
+error, not a reason to look further up.
 
 Deliberately dependency-free: the sandbox installs a bare python3, so PyYAML is
 not available and the frontmatter is parsed directly. The parser understands the
@@ -138,15 +142,37 @@ def parse_frontmatter(text: str) -> dict | None:
     return data
 
 
-def spec_version(bundle: Path) -> str:
-    """The okf_version the root index must declare, read from SPEC.md."""
-    override = os.environ.get("SPEC_MD")
-    spec = Path(override) if override else bundle.resolve().parent / "SPEC.md"
+def find_spec() -> Path:
+    """md2okf's own SPEC.md, at the one place each supported layout keeps it.
+
+    Inside the kit tree (the host) the spec is beside kits/, and WORKDIR is
+    never consulted. Outside it (the sandbox) the spec is beside the
+    workspace, and no ancestor of this script is: the home directory holds
+    nothing md2okf staged. The innermost kits/<agent>/files/ match wins, so a
+    checkout that itself lives under some other kits/ tree still resolves to
+    its own spec.
+    """
+    parts = Path(__file__).resolve().parts
+    for index in range(len(parts) - 3, -1, -1):
+        if parts[index] == "kits" and parts[index + 2] == "files":
+            spec = Path(*parts[:index]) / "SPEC.md"
+            break
+    else:
+        workdir = os.environ.get("WORKDIR")
+        if not workdir:
+            sys.exit(
+                "Error: cannot find md2okf's SPEC.md: this guard is not in md2okf's "
+                "kit tree, and no sandbox workspace ($WORKDIR) is set."
+            )
+        spec = Path(workdir).parent / "SPEC.md"
     if not spec.is_file():
-        sys.exit(
-            f"Error: SPEC.md not found at {spec}. It is looked up as the sibling "
-            "of the bundle; set SPEC_MD to override."
-        )
+        sys.exit(f"Error: cannot find md2okf's SPEC.md at {spec}.")
+    return spec
+
+
+def spec_version() -> str:
+    """The okf_version the root index must declare, read from md2okf's SPEC.md."""
+    spec = find_spec()
     match = SPEC_VERSION.search(spec.read_text(encoding="utf-8"))
     if not match:
         sys.exit(f"Error: no '**Version X.Y**' line in {spec}.")
@@ -223,7 +249,7 @@ def check_root_index(bundle: Path, findings: list[str]) -> None:
             "index declares the spec version (§12)"
         )
         return
-    want = spec_version(bundle)
+    want = spec_version()
     got = str(data.get("okf_version", "")).strip()
     if got != want:
         findings.append(

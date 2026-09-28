@@ -214,8 +214,8 @@ more than that file; follow the checklist in
 [CONTRIBUTING.md](CONTRIBUTING.md#the-sbx-minimum).
 
 `--shell` and `--agent` are for inspecting the sandbox, not for authoring. They
-do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
-gets the bundled spec, and prior workbench content otherwise remains in place.
+do not restage a compile run: the helper CLIs and the bundled `work/SPEC.md` are
+restaged, and prior workbench content otherwise remains in place.
 The next compile replaces `work/okf`; the agent's transcripts persist under `sessions/`.
 The command holds the workbench lock until the session exits, so a concurrent
 compile or `--fresh` invocation is refused. Only `--fresh` combines with them —

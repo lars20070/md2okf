@@ -105,6 +105,20 @@ and this project adheres to
   meant for the repository's own tool directories (`.claude`, `.cursor`) was
   unanchored, so it matched at any depth. It is now anchored to the root.
 
+### Removed
+
+- **`--spec` and `SPEC_MD`.** `md2okf`, every sandbox and the gate now always
+  use md2okf's own `SPEC.md`. The kits' instructions, the frontmatter guard and
+  the pinned okfctl all target OKF v0.2, so another spec could only say the same
+  thing or contradict them. The workbench's `SPEC.md` is rewritten with the
+  bundled spec before every run and session, replacing anything a `--spec` run
+  left there. The frontmatter guard no longer reads a spec found beside the
+  wiki it checks, nor any other file of that name: on the host it uses the one
+  beside md2okf's `kits/` directory (the repository's, or the packaged copy), in
+  the sandbox the read-only mount beside the workspace, and a missing spec is an
+  error. A copied wiki is therefore checked in place, against the same spec.
+  Drop `--spec` from any script that passed it; it is now an unknown option.
+
 ### Upgrading
 
 The old `md2okf` sandbox and workbench are not reused. Remove the sandbox with
