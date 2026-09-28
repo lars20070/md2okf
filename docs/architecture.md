@@ -1,112 +1,182 @@
 # How md2okf works
 
-The run loop, the sandbox's view of your files, where session state lives, and
-the repository layout. For installing and a first compile, see
+How `md2okf` drives an agent inside a sandbox, what that sandbox can see, and
+where its state lives. To install `md2okf` and compile a first wiki, see
 [the README](../README.md).
+
+## Contents
+
+- [The run loop](#the-run-loop)
+- [What the sandbox can reach](#what-the-sandbox-can-reach)
+- [Credentials stay on the host](#credentials-stay-on-the-host)
+- [Session state](#session-state)
+- [Inspecting the sandbox](#inspecting-the-sandbox)
+- [Repository layout](#repository-layout)
 
 ## The run loop
 
-`md2okf` runs on the host and drives the agent inside a microVM, repeatedly,
-until a hash of the output stops moving. The host drives; everything else
-happens inside the sandbox.
+`md2okf` runs on your machine, the host, and drives a coding agent inside a
+microVM: a small virtual machine that `sbx` creates. The host coordinates;
+the agent does all its work inside the microVM.
 
-One sandbox per agent serves every run with that agent — `md2okf-pi`,
-`md2okf-claude`, `md2okf-codex`. Rather than mounting your folders — sbx fixes
-a sandbox's mounts when it is created, so a second `-o` would mean either a
-rebuild or writing into the first wiki — the command stages each run through a
-fixed workbench under `$XDG_STATE_HOME/md2okf/<agent>/work`: your inputs are
-copied in, the target wiki is mirrored in before the run and back out after
-every iteration, and the mount paths never change. The sandbox is rebuilt only
-when the kit it was built from changes, when the configuration no longer
-matches, or on `--fresh`.
+Each agent has one sandbox, which every run with that agent reuses:
+`md2okf-pi`, `md2okf-claude` or `md2okf-codex`. `sbx` fixes a sandbox's mounts
+when it creates the sandbox, so mounting your own folders would mean
+rebuilding the sandbox for every new `-o`, or writing into the first wiki.
+Instead, `md2okf` stages each run through a fixed *workbench* under
+`$XDG_STATE_HOME/md2okf/<agent>/`:
 
-It runs the agent once per document, re-running the same document (a *Ralph
-loop*) until `merkleokf --nolog -L 0` reports an unchanged wiki root hash.
-`merkleokf` prints a Merkle hash tree, one hash per file and per directory, so a
-change to any page moves the root hash and an unchanged root means the run added
-nothing — which on a first pass is the idempotent re-run, not a failure. The
-loop is capped by `-n` (default 10). The agent's only writable content output is
-`okf/`, the [okfctl](https://github.com/cwest/okfctl) check must pass before it
-finishes, and `SPEC.md` outranks every instruction file. Each run streams
-tool names and assistant text as it goes, and the agent writes its transcript
-through its native path into persistent host state.
+1. It copies your input documents into the workbench.
+2. It copies the existing wiki from the `-o` directory into the workbench, so
+   new documents extend that wiki rather than start a new one.
+3. It runs the agent on each document in turn.
+4. After every completed agent turn, it copies the wiki back to the `-o`
+   directory, which then matches the workbench exactly: pages the agent
+   deleted are deleted there too.
 
-## Inspecting the sandbox
+Because the mount paths never change, one sandbox serves any input and output
+folder. `md2okf` rebuilds a sandbox only when the kit it was built from, the
+`sbx` version or the mount paths change, when a quick check inside the VM
+fails, or when you pass `--fresh`.
 
-`md2okf --shell` and `md2okf --agent` are for inspecting the sandbox rather
-than authoring in it. They do not
-restage a compile run: helper CLIs are refreshed, an empty spec mount gets the
-bundled spec, and prior workbench content otherwise remains. The next compile
-replaces `work/okf`; the agent's transcripts persist. The workbench lock remains held
-until the session exits, so a concurrent compile or `--fresh` invocation is
-refused. Only `--fresh` combines with them.
+For each document, `md2okf` runs the agent repeatedly — a *Ralph loop* — until
+the wiki stops changing. After each turn it hashes the wiki with
+`merkleokf --nolog -L 0`, inside the sandbox. `merkleokf` builds a Merkle hash
+tree, with one hash per Markdown file and per directory, so a change to any
+page changes the root hash. `--nolog` leaves out the wiki's top-level
+`log.md`, so a turn that only adds a log entry does not count as a change.
+When the root hash is the same after a turn as before it, the document is
+done. That includes a first turn that changes nothing: the document was
+already in the wiki.
+
+The loop stops with an error when the document needs more than `-n` turns
+(default 10), when a turn fails, when a turn makes no tool calls, or when the
+wiki is still empty at the end. An error stops the whole run, so later
+documents are not compiled. Since `md2okf` copies the wiki back only after a
+completed turn, an interrupted run leaves the `-o` directory as it was after
+the last completed turn.
+
+The agent can write only to the wiki and to its own transcripts. Its
+instructions tell it to read `SPEC.md` first, which outranks every other
+instruction, and to pass the [okfctl](https://github.com/cwest/okfctl) checks
+before it stops. `md2okf` itself never runs `okfctl`. A stable hash means only
+that the agent stopped changing the wiki, not that the wiki is complete or
+correct.
+
+A default run prints two progress lines per turn: the document and turn
+number, then the root hash before and after. `-v` also streams the agent's tool
+calls and messages. Either way, the agent writes a full transcript (see
+[Session state](#session-state)).
 
 ## What the sandbox can reach
 
-The sandbox does not get the repository, and it does not get your folders
-either. It gets five named mounts, all of them inside the workbench, and
-nothing else of yours is visible inside the microVM — not `.git`, not the
-`Makefile`, not the kit that built it:
+The sandbox gets neither your repository nor your own folders. `sbx` mounts
+five paths into it, all inside the workbench. Nothing else from your machine
+is visible inside the microVM: not `.git`, not the `Makefile`, not the kit
+directory. (The kit's configuration is copied into the sandbox when it is
+built; the kit directory itself is never mounted.)
 
-| Mount | Access | Why |
+Paths are relative to the workbench, `$XDG_STATE_HOME/md2okf/<agent>/`:
+
+| Mount | Access | Contents |
 | --- | --- | --- |
 | `work/okf` | read-write | the wiki, and the agent's working directory |
-| `work/md` | read-only | the staged source documents, read as data and never modified |
-| `work/scripts` | read-only | the four helper CLI projects the agent runs |
-| `work/SPEC.md` | read-only | the specification that outranks every instruction |
-| `$XDG_STATE_HOME/md2okf/<agent>/sessions` | read-write | the agent's persistent transcripts |
+| `work/md` | read-only | the staged source documents |
+| `work/scripts` | read-only | the source of the four helper CLIs the agent runs |
+| `work/SPEC.md` | read-only | the OKF specification, which outranks every other instruction |
+| `sessions` | read-write | the agent's transcripts |
 
-Every one of them is under `$XDG_STATE_HOME/md2okf/<agent>`, so the agent never sees a
-path of yours: it works on the staged copies, and the driver mirrors the wiki
-back out. The state *root* is deliberately not mounted — it also holds the
-host-side ownership marker — and no read-write mount is an ancestor of a
-read-only one, so `work/md` and `work/SPEC.md` stay read-only even against root
-in the guest. The mount list lives in one place,
-[`src/md2okf/workbench.py`](../src/md2okf/workbench.py); `sbx inspect md2okf-<agent>` shows
-what a running sandbox actually got. Because `work/okf` is the primary mount it
-is also the working directory inside the VM, which is why the agent addresses
-its siblings as `../md/`, `../scripts/` and `../SPEC.md`.
+The agent therefore never sees one of your paths: it edits the staged wiki in
+`work/okf`, and `md2okf` copies the result to your `-o` directory. The
+workbench root itself is not mounted, because it also holds the record that
+proves the sandbox belongs to `md2okf` (see [Session state](#session-state)).
+No read-write mount contains a read-only one, so `work/md` and `work/SPEC.md`
+stay read-only even to root inside the VM.
+
+The mounts are defined in one place,
+[`src/md2okf/workbench.py`](../src/md2okf/workbench.py). To see what a running
+sandbox actually received, run `sbx inspect md2okf-<agent>`. `work/okf` is the
+primary mount, so it is also the agent's working directory inside the VM. That
+is why the agent refers to the other mounts as `../md/`, `../scripts/` and
+`../SPEC.md`.
+
+## Credentials stay on the host
+
+`sbx` keeps model credentials out of the microVM. Its host-side proxy adds them
+to outgoing requests, so, in the words of
+[Docker's security documentation](https://docs.docker.com/ai/sandboxes/security/),
+"credential values never enter the VM". With Pi you can see this directly:
+inside the sandbox, `$OPENROUTER_API_KEY` reads `proxy-managed`, not your key.
+Claude Code and Codex sign in differently, but `sbx` treats their credentials
+the same way.
+
+`sbx` gives a sandbox its credential only when it creates the sandbox. After
+you set or change a credential, remove the sandbox with
+`sbx rm --force md2okf-<agent>`, so that the next run builds one that has it.
 
 ## Session state
 
-Each agent writes transcripts through its own native path — Pi to
-`~/.pi/agent/sessions`, Claude Code to `~/.claude/projects`, Codex to
-`~/.codex/sessions`. Inside the sandbox that directory is bind-mounted onto the
-host's `$XDG_STATE_HOME/md2okf/<agent>/sessions`, so transcripts survive
-`sbx rm` and keep the agent's native layout. All md2okf clones using the same
-state home intentionally share this directory; each agent's own layout
-separates their working directories.
+Each agent writes transcripts to its usual place inside the sandbox: Pi to
+`~/.pi/agent/sessions`, Claude Code to `~/.claude/projects` and Codex to
+`~/.codex/sessions`. That directory is bind-mounted onto
+`$XDG_STATE_HOME/md2okf/<agent>/sessions` on the host, so transcripts survive
+`sbx rm` and keep the agent's own layout.
 
-State location follows this precedence: an exported absolute `XDG_STATE_HOME`,
-then `~/.local/state`. XDG requires an absolute path, so a relative value counts
-as unset. Paths containing spaces are supported.
+Transcripts are kept apart per agent, not per project. Each agent has one
+workbench and one sessions directory for all your projects, so compiling two
+different repositories with the same agent writes to the same place. Every
+`md2okf` installation or clone that uses the same state home shares it too.
 
-The state location and the mounts are fixed when a sandbox is created. `md2okf`
-records what it built — the sandbox's identity and the configuration
-fingerprint — *under that state root*, and reuses the sandbox only when the
-recorded identity, the fingerprint and a cheap in-VM probe all agree. Edit the
-kit, or change anything else the fingerprint covers, and the next run rebuilds
-by itself.
+`md2okf` finds the state home as follows: an exported `XDG_STATE_HOME` if it is
+an absolute path, otherwise `~/.local/state`. The XDG specification requires
+an absolute path, so a relative value counts as unset. Paths containing
+spaces work.
 
-Changing `XDG_STATE_HOME` is the exception, because it moves the record out of
-view: the new state root has no marker, so a sandbox still named
-`md2okf-<agent>` cannot be proved to be ours. `md2okf` stops with exit 2 rather
-than deleting something it may not own, and `--fresh` does not override that —
-it recreates a sandbox we *can* prove is ours. Run
-`sbx rm --force md2okf-<agent>` yourself, then use the new state home.
+The state home and the mounts are fixed when a sandbox is created. `md2okf`
+records what it built — the sandbox's identity and a fingerprint of its
+configuration — in the workbench root. It reuses the sandbox only when both
+match and a quick check inside the VM succeeds. The fingerprint covers the
+kit's files, the `sbx` version and the mount paths, so editing the kit or
+upgrading `sbx` rebuilds the sandbox on the next run.
+
+Changing `XDG_STATE_HOME` is the exception. The new state home holds no
+record, so `md2okf` cannot prove that the existing `md2okf-<agent>` sandbox is
+its own. It stops with exit code 2 rather than delete a sandbox it may not
+own. `--fresh` does not change that: it only rebuilds a sandbox that `md2okf`
+can prove it owns. Remove the sandbox yourself with
+`sbx rm --force md2okf-<agent>`, then run again.
+
+## Inspecting the sandbox
+
+`md2okf --shell` opens a shell in the sandbox, in the wiki directory.
+`md2okf --agent` opens an interactive session with the agent. Both are for
+looking around, not for editing the wiki:
+
+- They do not stage a new run. They refresh the helper CLIs and fill in the
+  bundled spec if `work/SPEC.md` is empty; the rest of the workbench stays as
+  the last compile left it.
+- Nothing is copied back to your `-o` directory, and the next compile replaces
+  `work/okf`, so changes made in either session are lost. Transcripts are kept.
+- The session holds the lock until you exit, so any other `md2okf` run, with
+  any agent, is refused until then.
+- Only `--fresh` can be combined with them, and both need a terminal.
+- `--shell` opens even when the agent's credential check fails, and prints the
+  fix as a warning; `--agent` refuses to start.
 
 ## Repository layout
 
-| Path | Description |
+| Path | Contents |
 | --- | --- |
-| `md/` | source documents, one agent run each |
-| `okf/` | the generated wiki, `-o`'s default |
-| `src/md2okf/` | the `md2okf` command: workbench, sbx seam, Ralph loop |
-| `Makefile` | the developer tasks — lint, validate, tests, installs |
-| `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus repository chores |
-| `kits/<agent>/` | what the driver runs: one Docker Sandbox kit per agent (`pi`, `claude`, `codex`) and the config it carries |
-| `docs/` | reference pages split out of the README: this page, [configuration](configuration.md), [troubleshooting](troubleshooting.md) |
-| `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against — vendored verbatim, Apache-2.0, see [NOTICE-OKF-SPEC.md](../NOTICE-OKF-SPEC.md) |
-| `AGENTS.md` | instructions for coding agents working *on this repo*, not for the agents md2okf drives |
-| `pdf2md/` | optional: converts a PDF into `md` |
-| `web2md/` | optional: scrapes a documentation site into `md` |
+| `md/` | the source documents compiled in this repository |
+| `okf/` | the generated wiki, and the default for `-o`; not tracked by git |
+| `src/md2okf/` | the `md2okf` command: the CLI, the agent definitions, the workbench, the calls to `sbx` and the Ralph loop |
+| `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus scripts for repository chores |
+| `kits/<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): the sandbox definition and the configuration it copies in |
+| `tests/` | the driver's pytest suite and the shell tests for the sandbox |
+| `Makefile` | developer tasks: lint, validate, tests and installs |
+| `docs/` | reference pages: this page and [usage](usage.md) |
+| `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against, vendored verbatim under Apache-2.0; see [NOTICE-OKF-SPEC.md](../NOTICE-OKF-SPEC.md) |
+| `AGENTS.md` | instructions for coding agents working *on this repository*, not for the agents `md2okf` drives |
+| `CONTRIBUTING.md` | how to develop, test and release `md2okf` |
+| `pdf2md/` | optional: converts a PDF into Markdown for `md/` |
+| `web2md/` | optional: scrapes a documentation site into one Markdown file in `md/` |
