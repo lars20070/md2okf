@@ -104,7 +104,7 @@ injects the API key; OpenRouter routes them to DeepInfra or other providers (gra
 
 ## Quickstart
 
-`md2okf` requires both [`sbx`](#install-sbx) (for the sandbox) and [`uv`](https://docs.astral.sh/uv/getting-started/installation) (for the installation of the tool). For the default Pi agent an [OpenRouter API key](#set-up-the-openrouter-key) is required as well.
+`md2okf` needs [`sbx`](#install-sbx), which runs the sandbox, and [`uv`](https://docs.astral.sh/uv/getting-started/installation), which installs the tool. Pi, the default agent, also needs an [OpenRouter API key](#set-up-the-openrouter-key).
 
 ```bash
 uv tool install md2okf       # Install from PyPI
@@ -114,25 +114,25 @@ md2okf -v my-document.md     # The wiki lands in ./okf
 md2okf -v md/ -o okf/
 ```
 
-Install the tool with `uv` from [PyPI](https://pypi.org/project/md2okf/). No cloning of the repo is required. Point the tool to a single markdown file or a folder of markdown files and compile the OKF wiki. The first run creates the sandbox. Later runs attach to it directly. The `-v` argument enters verbose mode. Leave it out to compile the wiki silently.
+`uv` installs the tool from [PyPI](https://pypi.org/project/md2okf/), so there is no need to clone the repository. Point `md2okf` at a single Markdown file or a folder of Markdown files, and it compiles them into an OKF wiki. The first run builds the sandbox; later runs reuse it. `-v` turns on verbose mode, which also shows the agent's tool calls and messages. Leave it out for a quieter run that prints only progress.
 
 ```bash
 uvx md2okf -v my-document.md
 uvx md2okf -v md/ -o okf/
 ```
 
-Alternatively, you can skip the install step and run the tool directly with `uvx`.
+Alternatively, skip the installation and run the tool directly with `uvx`.
 
 ```bash
 md2okf --shell               # Interactive shell at the wiki root
 md2okf --agent               # Interactive agent session
 ```
 
-The two flags above enter the sandbox and an interactive agent session respectively. They allow you to inspect the sandbox. The later allows you to instruct the agent to refine and modify the wiki.
+The first flag opens a shell inside the sandbox, at the wiki root; the second opens an interactive session with the agent. Both are for inspecting the sandbox. Changes made in either session stay in the sandbox's working copy: they are not copied to `okf/`, and the next compile replaces them.
 
 ## Install sbx
 
-Install the sandbox CLI and sign in.
+Install the `sbx` command-line tool and sign in.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
 
@@ -153,9 +153,9 @@ sbx login
 
 ## Set up the OpenRouter key
 
-`sbx` keeps the key out of the virtual machine. It holds the real string on
-the host and swaps it into requests at its proxy, so inside the sandbox
-`$OPENROUTER_API_KEY` reads `proxy-managed`. Set it twice:
+`sbx` keeps the key out of the virtual machine. It holds the real key on the
+host and swaps it into requests at its proxy, so inside the sandbox
+`$OPENROUTER_API_KEY` reads `proxy-managed`. Store the key with `sbx` twice:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
@@ -169,8 +169,9 @@ sbx secret set-custom --sandbox md2okf-pi \
   --value "$OPENROUTER_API_KEY"
 ```
 
-`md2okf-pi` is the name of the sandbox Pi runs in: every agent gets its own,
-called `md2okf-<agent>`. The command reads the key from `sbx secret`, never from your shell environment.
+`md2okf-pi` is the sandbox Pi runs in; each agent gets its own, called
+`md2okf-<agent>`. The `export` only passes the key to the two `sbx` commands:
+`md2okf` reads it from `sbx secret`, never from your shell environment.
 
 ## License
 
