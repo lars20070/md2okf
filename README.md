@@ -28,14 +28,14 @@ flowchart LR
     direction TB
     SPEC@{ shape: doc, label: "okf spec<br>SPEC.md"}
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
-    STATE["session traces<br/>~/.local/state/md2okf/pi/sessions"]
+    STATE["session traces<br/>~/.local/state/md2okf/*/sessions"]
     DRV["host driver<br>md2okf -o okf/ md/"]
-    KIT["kits/pi/spec.yaml<br/>kits/pi/files/"]
+    KIT["kits/*/spec.yaml<br/>kits/*/files/"]
   end
 
   subgraph VM["sbx microVM"]
-    PI["Pi agent with<br/>/compile-okf skill"]
-    TOOLS["skills<br>/inspect-md<br/>/inspect-okf<br/>/size-okf<br/>/merkle-okf<br/>/curate-okf"]
+    AGENT["coding agent<br/>(Pi, Claude Code or Codex)"]
+    TOOLS["skills<br>/inspect-md<br/>/compile-okf<br/>/inspect-okf<br/>/merkle-okf<br/>/curate-okf<br/>/size-okf"]
     LINT["okfctl linter"]
   end
 
@@ -47,17 +47,17 @@ flowchart LR
   NET1("DeepInfra")
   NET2("...")
 
-  SPEC -.->|"outranks all"| PI
-  MD ==>|"read by"| PI
+  SPEC -.->|"outranks all"| AGENT
+  MD ==>|"read by"| AGENT
   STATE -.->|"mounts"| VM
-  STATE ~~~ PI
-  DRV -->|"sbx exec"| PI
+  STATE ~~~ AGENT
+  DRV -->|"sbx exec"| AGENT
   KIT -->|"builds"| VM
-  PI -.->|"uses"| TOOLS
-  PI -.->|"runs"| LINT
+  AGENT -.->|"uses"| TOOLS
+  AGENT -.->|"runs"| LINT
   LINT -.->|"must pass"| OKF
-  PI ==>|"writes"| OKF
-  PI -->|"via sbx proxy"| NET
+  AGENT ==>|"writes"| OKF
+  AGENT -->|"via sbx proxy"| NET
   NET -->|"BYOK"| NET1 & NET2
 
   classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
@@ -68,7 +68,7 @@ flowchart LR
   class MD,SPEC,STATE,OKF data
   class KIT,DRV host
   class TOOLS,LINT helper
-  class PI agent
+  class AGENT agent
   class NET,NET1,NET2 ext
   style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
   style IN fill:none,stroke:none
