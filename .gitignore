@@ -3,6 +3,7 @@
 
 # Agents
 .claude/settings.local.json
+.claude/skills/read-claude-code-session-traces/*
 
 # Nothing reads a .env any more -- the driver takes XDG_STATE_HOME from the
 # environment -- but developers upgrading from the shell path still have one,
@@ -17,7 +18,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# web2md HTML fetch cache
+# web2md HTML fetch cache. The old path stays ignored so a clone that
+# predates the move to extras/ cannot commit its leftover cache by accident.
+extras/web2md/cache/
 web2md/cache/
 
 # md input folder

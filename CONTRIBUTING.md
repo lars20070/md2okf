@@ -6,13 +6,16 @@ you only want to compile a wiki, [the README](README.md) is enough.
 
 `AGENTS.md` holds the same ground rules for coding agents working on this repo.
 
+The default branch is `master`. Base pull requests on `master` and use it in
+links to files in this repository.
+
 ## Commands
 
 ```bash
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
                          # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
                          # subproject (scripts/sync-versions.sh --check)
-make validate            # check kits/md2okf/spec.yaml against the Sandbox Kit schema
+make validate            # check every kits/*/spec.yaml against the Sandbox Kit schema
 make test-shell          # host test for the guest's session bind helper
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
@@ -45,33 +48,54 @@ make test-clis && make test-md2okf && make dist` locally means a green build.
 
 ## Validate the kit spec before you finish
 
-Touch anything under `kits/md2okf/` or `scripts/*.sh` and run `make validate`
-before you call the job done. It checks the kit spec against the schema bundled
-in your `sbx` binary, and needs no Docker, no login and no network. CI runs the
-same check in its `validate-kit` job, so catching a break locally saves a red
-build. The current kit requires sbx 0.43.0 or newer; `brew upgrade sbx` fixes
-unknown field errors from an older install.
+Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
+before you call the job done. It checks every kit spec against the schema bundled
+in your `sbx` binary, and needs no Docker, no login and no network. It first
+checks your `sbx` against the minimum below; upgrade through Homebrew or APT
+when it reports an older install.
 
-`make test-sandbox` asks the other question: does the sandbox actually have
-every tool `kits/md2okf/spec.yaml` installs, the agent config copied in from
-`kits/md2okf/files/`, and a proxy-managed key? It needs an `sbx login` session.
+### The sbx minimum
+
+`SBX_VERSION` holds one plain `X.Y.Z`: the single sbx floor for every agent.
+The driver refuses an older `sbx` (the wheel carries the file, so an installed
+`md2okf` enforces the same floor as a checkout), and `make validate` does the
+same. CI's `validate-kit` job installs exactly that release, verified by
+checksum, so the kits are always checked against one known schema. Local
+installations may be newer, and those newer releases are not tested by CI.
+
+To raise the minimum, change all of these together:
+
+1. `SBX_VERSION`.
+2. `expected_sha256` in the `validate-kit` job of `.github/workflows/ci.yml`,
+   the SHA-256 of that release's `DockerSandboxes-linux.tar.gz`.
+3. The sbx version in the "Install sbx" section of `README.md`.
+4. A Changed entry in `CHANGELOG.md`.
+
+The test suite reads the floor from `SBX_VERSION`, so it needs no edit.
+
+`make test-sandbox` asks the other question: does each agent's sandbox
+actually have every tool its `kits/<agent>/spec.yaml` installs, the agent
+config copied in from `kits/<agent>/files/`, and a ready credential? It needs
+an `sbx login` session, and each agent's credential (see the README's
+"Choosing an agent").
 Like the scripts below it reuses the sandbox — fast, and nothing a compile left
 behind is lost — and only builds one if none exists. That also means it tests
-the sandbox you have, which may be older than your last `kits/md2okf/` edit. To
-check the current kit from scratch, throw the sandbox away first with
-`sbx rm --force md2okf`; building the next one takes minutes.
+the sandbox you have, which may be older than your last `kits/<agent>/` edit.
+To check the current kit from scratch, throw the sandbox away first with
+`sbx rm --force md2okf-<agent>`; building the next one takes minutes. It checks every
+registered agent in turn; `make test-sandbox AGENT=pi` checks one.
 
 ## Working inside the sandbox
 
 Two flags open the sandbox, building or refreshing it first when none exists or
-the running one no longer matches `kits/md2okf/`:
+the running one no longer matches its `kits/<agent>/`:
 
 ```bash
 md2okf --shell   # interactive shell at the wiki root
 md2okf --agent   # interactive agent session in the same sandbox
 ```
 
-Only `--fresh` combines with either; `-o`, `--spec`, `-n`, `-q`, `-v`,
+Only `--fresh` combines with either; `-o`, `-n`, `-q`, `-v`,
 `--dry-run` and input paths are refused rather than ignored — though a value
 that equals the default (`-o okf`) is indistinguishable from not passing it,
 and goes through. Both also need a terminal on stdin, and say so before
@@ -79,11 +103,11 @@ building anything. The flag is `--agent` rather than `--pi` so that swapping
 the agent framework later would not change a published interface.
 
 **For looking, not for authoring.** You land in the workbench's `work/okf`,
-holding whatever the last compile left. No compile run is restaged: helper CLIs
-are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
-documents and spec otherwise remain. Nothing written to `work/okf` survives
+holding whatever the last compile left. No compile run is restaged: the helper
+CLIs and the bundled `work/SPEC.md` are restaged, and prior staged documents
+otherwise remain. Nothing written to `work/okf` survives
 the next compile, but that compile cannot start underneath an active session:
-the interactive command holds the workbench lock until it exits. Pi transcripts
+the interactive command holds the workbench lock until it exits. The agent's transcripts
 persist under `sessions/`. Entry is likewise refused while a compile holds the
 lock.
 
@@ -91,14 +115,14 @@ The raw one-liners remain the fallback — for a machine without the driver on
 PATH, or a flag these do not pass through:
 
 ```bash
-sbx exec -it md2okf -- bash
-sbx exec md2okf -- pi --list-models deepseek
+sbx exec -it md2okf-pi -- bash
+sbx exec md2okf-pi -- pi --list-models deepseek
 ```
 
 Once a sandbox exists, this should print `proxy-managed` rather than your key:
 
 ```bash
-sbx exec md2okf -- sh -lc 'echo "$OPENROUTER_API_KEY"'
+sbx exec md2okf-pi -- sh -lc 'echo "$OPENROUTER_API_KEY"'
 ```
 
 ## Python layout
@@ -107,11 +131,11 @@ Python tooling is thin. The repository root *is* a project — it holds the
 `md2okf` command itself, because the tool is named after the repository and a
 root `pyproject.toml` is what makes `uv tool install git+https://…` work with no
 registry, and what lets the package read `VERSION` as its version source.
-Everything else stays independent: `pdf2md/`, `web2md/`, `scripts/inspectmd/`,
+Everything else stays independent: `extras/pdf2md/`, `extras/web2md/`, `scripts/inspectmd/`,
 `scripts/inspectokf/`, `scripts/sizeokf/`, and `scripts/merkleokf/` are separate
 uv projects, each with its own `pyproject.toml` and (where needed) `uv.lock`,
 and nothing shared between them.
-`pdf2md/` exists only to give `marker` a pinned venv; `web2md/` owns the
+`extras/pdf2md/` exists only to give `marker` a pinned venv; `extras/web2md/` owns the
 scraper's dependencies and its pytest/ruff config; the four `scripts/` projects
 are installable stdlib-only CLIs with their own ruff and pytest. So the heavy
 dependencies (marker-pdf, torch) cannot reach the lint or test jobs at all,
@@ -157,7 +181,9 @@ strips frontmatter: `merkleokf` answers "did this change", `sizeokf` answers
 
 ## How the agent knows what to do
 
-The instructions come in two parts. `kits/md2okf/files/home/.pi/agent/AGENTS.md`
+The instructions come in two parts, shown here for Pi; the Claude Code and
+Codex kits carry the same two parts, ported, in the places their agents read
+them (see each kit's `README.md`). `kits/pi/files/home/.pi/agent/AGENTS.md`
 holds what every task must respect: the OKF conventions, the directories the
 agent may write to, and the rule that `SPEC.md` outranks both. Each task's
 procedure lives in a skill of its own. Task skill today: `compile-okf`. Tool
@@ -168,19 +194,24 @@ new task gets a new directory rather than more rules in `AGENTS.md`.
 
 A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` and
 `description`, then the instructions, plus any scripts it needs. Pi picks skills
-up from `~/.pi/agent/skills/`.
+up from `~/.pi/agent/skills/`, Claude Code from `~/.claude/skills/`, Codex from
+`~/.agents/skills/`. A change to a skill or to the shared contract belongs in
+every kit: `tests/test_kits.py` checks each kit for the shared rules, its own
+`generated.by` producer, and byte-identical helper and gate scripts.
 
-The kit is `kits/md2okf/`, and the config it carries lives in
-`kits/md2okf/files/home/.pi/agent/`. That config is copied into the sandbox when
+The kit is `kits/pi/`, and the config it carries lives in
+`kits/pi/files/home/.pi/agent/`. That config is copied into the sandbox when
 the kit is built, not mounted, so an edit reaches Pi on the next fresh sandbox —
 which `md2okf` builds by itself once the kit's hash no longer matches what the
 running one was built from, or immediately on `--fresh`.
-[The kit guide](kits/md2okf/README.md) covers the model and provider settings.
+[The kit guide](kits/pi/README.md) covers the model and provider settings.
 
 `tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which asks the
 driver for a sandbox and then calls `sbx`, and the POSIX `sh` script it runs
-inside the VM), plus `test-mount-state.sh` for the guest-side bind helper. The
-driver's own suite is pytest, under the same `tests/` directory.
+inside the VM), plus `test-mount-state.sh` for the guest-side bind helper and
+the `md2okf-agent` wrapper every agent process starts through. The driver's own
+suite is pytest, under the same `tests/` directory; `test_kits.py` in it checks
+every kit's instructions statically.
 
 ## Checking the wiki
 
@@ -188,7 +219,7 @@ driver's own suite is pytest, under the same `tests/` directory.
 against its own curation health, and it owns the reserved `index.md` files: the
 agent runs `okfctl index build` rather than writing link lists by hand.
 
-The gate is `kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
+The gate is `kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
 one script with two call sites — the agent runs it before it finishes, and
 `make check-okf` runs the same file on the host. It combines five checks:
 `okfctl validate` for the spec floor, a `frontmatter-guard.py` for the
@@ -202,11 +233,15 @@ Lint findings split two ways. `broken-link`, `orphan`, `type-hygiene`,
 `missing-xref` and `coverage-gap` are printed as advice, because they are
 judgment calls and the gate runs unattended inside the compile loop.
 
-The guard reads the expected `okf_version` from `SPEC.md`, looked up as the
-sibling of the bundle — `./SPEC.md` beside `./okf` on the host, the
-`../SPEC.md` mount in the sandbox. A bundle copied elsewhere to try something
-out has no sibling spec and the guard exits `2`; set `SPEC_MD` to point at the
-real file rather than reading it as a broken gate.
+The guard reads the expected `okf_version` from md2okf's own `SPEC.md`, never
+from a spec beside the bundle it checks. On the host the script sits in the kit
+tree, `kits/<agent>/files/`, and reads the `SPEC.md` beside that `kits/`
+directory: the repository root, or the packaged copy in an installed md2okf.
+In the sandbox, where no kit tree exists, it reads the read-only `../SPEC.md`
+mount beside the workspace, which md2okf stages from that same file. Nothing
+else is searched, and a missing spec exits `2`. There is no override, so a
+bundle copied elsewhere to try something out is checked in place, against the
+same spec.
 
 The sandbox installs okfctl at a pinned version; on the host it comes from
 Homebrew, so the two can drift — `okfctl version` says which. The check sits

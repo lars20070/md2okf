@@ -6,6 +6,146 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-09-28
+
+### Added
+
+- **`MD2OKF_AGENT` selects the agent framework.** `pi` is the default (unset or
+  empty means `pi`); anything unregistered is refused with
+  exit 2 before any work starts. It is what runs Claude Code and Codex
+  through the same compile pipeline as Pi: everything that
+  differs between agents — command lines, first-turn prompt, credential check,
+  event-stream parser — now belongs to the agent, not to the driver. `--dry-run`
+  prints the resolved agent.
+- **`md2okf-agent`, a wrapper every agent process now starts through.** Each
+  compile turn and `md2okf --agent` session runs `md2okf-agent pi …` rather
+  than `pi …`. `sbx exec` bypasses the kit's entrypoint, so the wrapper is what
+  guarantees, per process, that the agent's traces are bind-mounted onto
+  host-backed state before it starts — and it refuses to start the agent when
+  they are not. The script is shared by every kit; each kit's shim names its
+  own trace directory.
+- **Credential remedies now end by rebuilding the sandbox**
+  (`sbx rm --force md2okf-<agent>`): sbx injects a credential only when a
+  sandbox is created, so fixing the secret alone left the old sandbox unready.
+- **`MD2OKF_AGENT=claude`: Claude Code**, through its own kit (`kits/claude/`,
+  on sbx's built-in `claude` parent) and sandbox (`md2okf-claude`). It logs in
+  with the host's `anthropic` secret — a `/login` inside a Claude sandbox
+  (`sbx run claude`) for a subscription, or `sbx secret set anthropic` for an
+  API key — and needs sbx 0.45.0. Compile turns run
+  `claude -p --output-format stream-json` with no MCP servers
+  (`--strict-mcp-config`), and a `result` event reporting `is_error` fails the
+  turn. Verified live: the sandbox checks pass, and a compile of
+  `tests/fixtures/smoke.md` converges and passes the gate. See
+  `kits/claude/README.md`.
+- **`MD2OKF_AGENT=codex`: Codex**, through its own kit (`kits/codex/`, on sbx's
+  built-in `codex` parent) and sandbox (`md2okf-codex`). It logs in with the
+  host's `openai` secret — `sbx secret set openai --oauth` for a ChatGPT
+  subscription, or an API key — and needs sbx 0.45.0. The OKF contract ships
+  as Codex's global `~/.codex/AGENTS.md`, because Codex does not read
+  instructions from outside a git project. Compile turns run
+  `codex exec --json` with the parent's MCP gateway switched off, and
+  `turn.failed` fails the turn. Verified live: a compile of
+  `tests/fixtures/smoke.md` converges and passes the gate. See
+  `kits/codex/README.md`.
+- **`tests/fixtures/smoke.md`**, a short document for cheap live smoke runs:
+  `uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md`.
+- **`.env.example`** with the three variables `md2okf --help` lists. Nothing
+  loads it automatically; export it with `set -a; . ./.env; set +a`.
+
+### Changed
+
+- **Pi now requires sbx 0.45.0 (was 0.43.0).** Every agent shares one floor,
+  `SBX_VERSION`, which is also the exact release CI validates the kits with.
+  The old 0.43.0 floor was never exercised by CI.
+- **One sandbox and one workbench per agent.** The sandbox is now called
+  `md2okf-pi` rather than `md2okf`, and the workbench moved from
+  `$XDG_STATE_HOME/md2okf/` to `$XDG_STATE_HOME/md2okf/pi/`, so agents can
+  coexist side by side. They still never compile at the same time: one lock
+  serialises every run.
+- **The kit moved from `kits/md2okf/` to `kits/pi/`** (and inside the wheel from
+  `md2okf/kit/` to `md2okf/kits/pi/`); its `name:` is now `pi`.
+- **The credential check also runs when a sandbox is reused**, not only when
+  one is created. Before, a sandbox whose key stopped being proxy-managed was
+  reused silently. `md2okf --shell` now opens even when the check fails, with
+  the remedy printed as a warning; a compile and `--agent` still refuse.
+- **A failure the agent reports in its own event stream fails the turn** even
+  when the process exits 0, and is named in the error. Claude Code's and Codex's
+  parsers report such failures; Pi's reports none, so Pi runs behave as before.
+- **A failed turn's message keeps lines that were cut short.** The diagnostic
+  tail used to drop every line starting with `{`, including a truncated JSON
+  line that may be the only clue. Now only whole JSON objects — the agent's own
+  protocol events — and lines the agent's parser knows to be noise (Codex's
+  stdin notice) are left out.
+- **`make test-sandbox` checks every registered agent**, or one with
+  `AGENT=pi`; `tests/test-sandbox.sh` now requires the agent as its argument,
+  and the guest checks live in `tests/test-sandbox-guest-pi.sh`. It now also
+  checks from the host that a trace written through the agent's native path
+  reached the workbench's `sessions/`, and runs the wrapper through a plain
+  `sbx exec`, exactly as the driver does.
+- **`make validate` checks every `kits/*/spec.yaml`**, not just Pi's, so a kit
+  being authored is validated before it is ever registered.
+- **`tests/test_kit.py` is now `tests/test_kits.py`** and runs over every kit:
+  the shared OKF authoring contract, the kit's own `generated.by` producer, no
+  other agent's config paths, every file the instructions name, and helpers
+  that are byte-identical across kits.
+- **The README is shorter; its reference material moved to `docs/`.** The
+  README keeps a Quickstart (including how to switch agents), installing sbx
+  and setting up the OpenRouter key, and links the rest from a "Further
+  documentation" table. `docs/usage.md` covers what you can compile, reading
+  the output, the wiki's layout, and every CLI flag and exit code;
+  `docs/configuration.md` choosing an agent, credentials for Claude Code and
+  Codex, and models and providers; `docs/architecture.md` the run loop, the
+  sandbox's mounts, credentials, session state and the repository layout.
+- **`md2okf --help` names all three agents** and how each signs in, explains
+  every option in plain words, and lists the exit codes.
+- **`web2md/` and `pdf2md/` moved to `extras/`.** Both are optional,
+  clone-only helpers that prepare Markdown for `md/`, and neither is part of a
+  compile. `make scrape` and `make test-web2md` work as before; run the
+  scraper and marker by hand with `--project extras/web2md` or
+  `--project extras/pdf2md`. The scraper's cache moved to
+  `extras/web2md/cache/`; git does not move an ignored cache, so keep an
+  existing one with `mv web2md/cache extras/web2md/cache`, or `make scrape`
+  fetches the whole site again.
+
+### Fixed
+
+- **Editing the kit's agent config now rebuilds the sandbox.** The kit
+  fingerprint skipped every path containing a dot-directory, which left only
+  `README.md` and `spec.yaml` in the hash: edits to `AGENTS.md`, the skills,
+  `settings.json` or `mount-state.sh` never triggered a rebuild, and a stale
+  sandbox was reused. Only host clutter (`.DS_Store`, `._*` AppleDouble files,
+  `__pycache__`) is skipped now. Expect one rebuild on upgrade.
+- **The sdist no longer strips a kit's `.claude` directory.** The exclusion
+  meant for the repository's own tool directories (`.claude`, `.cursor`) was
+  unanchored, so it matched at any depth. It is now anchored to the root.
+
+### Removed
+
+- **`--spec` and `SPEC_MD`.** `md2okf`, every sandbox and the gate now always
+  use md2okf's own `SPEC.md`. The kits' instructions, the frontmatter guard and
+  the pinned okfctl all target OKF v0.2, so another spec could only say the same
+  thing or contradict them. The workbench's `SPEC.md` is rewritten with the
+  bundled spec before every run and session, replacing anything a `--spec` run
+  left there. The frontmatter guard no longer reads a spec found beside the
+  wiki it checks, nor any other file of that name: on the host it uses the one
+  beside md2okf's `kits/` directory (the repository's, or the packaged copy), in
+  the sandbox the read-only mount beside the workspace, and a missing spec is an
+  error. A copied wiki is therefore checked in place, against the same spec.
+  Drop `--spec` from any script that passed it; it is now an unknown option.
+
+### Upgrading
+
+The old `md2okf` sandbox and workbench are not reused. Remove the sandbox with
+`sbx rm --force md2okf`. In `$XDG_STATE_HOME/md2okf/` (by default
+`~/.local/state/md2okf/`), everything except the new `pi/` folder is left over
+and can be deleted: `work/`, `sandbox-fingerprint`, `sandbox-identity`, and
+`sessions/` — which holds your old Pi transcripts, so move it to
+`pi/sessions/` first if you want to keep them. If you set the OpenRouter key
+with `sbx secret set-custom --sandbox md2okf …`, run it again with
+`--sandbox md2okf-pi`.
+
 ## [0.2.1] - 2026-09-21
 
 ### Added

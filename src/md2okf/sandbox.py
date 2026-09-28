@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-MIN_VERSION = (0, 43, 0)
+from md2okf import resources
 
 # This is the plan's own documented fallback (interface-plan.md, "Risks and
 # open items"), not an invented deviation: which `sbx inspect` field (if any)
@@ -72,10 +72,23 @@ def version() -> tuple[int, int, int] | None:
     return (major, minor, patch)
 
 
-def version_at_least(minimum: tuple[int, int, int] = MIN_VERSION) -> bool:
-    """Whether `sbx version` is at least `minimum`."""
-    found = version()
-    return found is not None and found >= minimum
+def minimum_version() -> tuple[int, int, int]:
+    """The repository-wide sbx floor, from the bundled ``SBX_VERSION``.
+
+    Stricter than :func:`version` on purpose: that one searches free-form CLI
+    output, while the pin must be exactly one ``X.Y.Z`` (trailing newlines
+    aside, as bash's ``$(<SBX_VERSION)`` reads it in CI and validate-spec.sh).
+    """
+    try:
+        path = resources.sbx_version_file()
+        text = path.read_text(encoding="utf-8")
+    except (resources.ResourcesError, OSError) as exc:
+        raise SandboxError(f"cannot read the sbx version pin: {exc}") from exc
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text.rstrip("\n"))
+    if not match:
+        raise SandboxError(f"{path} must contain exactly one X.Y.Z version")
+    major, minor, patch = (int(part) for part in match.groups())
+    return (major, minor, patch)
 
 
 def logged_in() -> bool:
@@ -94,9 +107,14 @@ def preflight() -> None:
     """
     if not present():
         raise SandboxError("'sbx' CLI not found in PATH. Install it with: brew install docker/tap/sbx")
-    if not version_at_least():
-        minimum = ".".join(str(part) for part in MIN_VERSION)
-        raise SandboxError(f"sbx must be at least version {minimum}")
+    minimum = minimum_version()
+    found = version()
+    if found is None or found < minimum:
+        required = ".".join(str(part) for part in minimum)
+        found_text = ".".join(str(part) for part in found) if found else "an unreadable version"
+        raise SandboxError(
+            f"sbx {required} or newer is required; found {found_text}. Upgrade sbx with Homebrew or APT."
+        )
     if not logged_in():
         raise SandboxError("not logged in to sbx; run `sbx login`")
 
@@ -205,7 +223,7 @@ class Exec:
         """Best-effort local cleanup, safe to call on an already-finished run.
 
         Stops the local `sbx exec` conduit so an interrupted run does not
-        leave one behind. Deliberately *only* the local side: `pi` runs
+        leave one behind. Deliberately *only* the local side: the agent runs
         inside the VM and killing the conduit does not reap it, and remote
         process reaping is out of scope (see the plan's deferred items).
         """
@@ -246,42 +264,57 @@ def exec_interactive(name: str, argv: list[str]) -> NoReturn:
 
 
 def _ensure_default_sandbox() -> int:
-    """`python -m md2okf.sandbox`: ensure the md2okf sandbox exists (maintainers).
+    """`python -m md2okf.sandbox`: ensure the MD2OKF_AGENT sandbox exists (maintainers).
 
-    Imports workbench lazily: workbench imports this module at its own top
-    level, and by the time this function runs (only from the `__main__`
-    guard below) that import has already completed, so the late import here
-    just retrieves it from sys.modules rather than re-entering it.
+    Resolves the agent exactly as the md2okf command does, so
+    tests/test-sandbox.sh can never create or inspect a different sandbox
+    from the one a compile would use.
+
+    Imports agents and workbench lazily: both import this module at their own
+    top level, and by the time this function runs (only from the `__main__`
+    guard below) those imports have already completed, so the late imports
+    here just retrieve them from sys.modules rather than re-entering them.
     """
-    from md2okf import workbench
+    from md2okf import agents, resources, workbench
 
     try:
+        agent = agents.from_env()
         preflight()
-    except SandboxError as exc:
+    except (agents.UnknownAgentError, SandboxError) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2
 
-    wb = workbench.Workbench.default()
+    wb = workbench.Workbench.default(agent.name)
     try:
         # Same lock a real compile run takes: this helper touches the same
         # sandbox, so it must not race a concurrent `md2okf` invocation.
         with workbench.lock():
             wb.ensure_roots()
-            state = workbench.ensure_sandbox(wb)
+            state = workbench.ensure_sandbox(wb, agent)
     except workbench.LockHeld:
         print("md2okf.sandbox: another md2okf run is using the sandbox; try again later", file=sys.stderr)
         return 2
     except (
-        workbench.UnsafeLockFile,
-        workbench.UnownedSandboxError,
-        workbench.KeyNotProxyManagedError,
+        # The base rather than a list of subclasses (UnsafeLockFile,
+        # UnownedSandboxError, CredentialNotReadyError): ensure_sandbox also
+        # stages the tooling, and a staging failure arrives as a plain
+        # WorkbenchError -- the same reasoning as cli._ensure_sandbox.
+        workbench.WorkbenchError,
+        resources.ResourcesError,
         SandboxError,
     ) as exc:
         print(f"md2okf.sandbox: {exc}", file=sys.stderr)
         return 2
-    print(f"md2okf.sandbox: sandbox {workbench.SANDBOX_NAME!r} {state}")
+    print(f"md2okf.sandbox: sandbox {workbench.sandbox_name(agent.name)!r} {state}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(_ensure_default_sandbox())
+    # Under `python -m` this file runs as __main__, a second copy of
+    # md2okf.sandbox with its own SandboxError class -- not the one workbench
+    # (importing md2okf.sandbox) raises, so a failed `sbx run` escaped every
+    # except clause as a traceback. Run the canonical module's function so
+    # the classes it catches are the classes that are raised.
+    from md2okf import sandbox as _canonical
+
+    raise SystemExit(_canonical._ensure_default_sandbox())

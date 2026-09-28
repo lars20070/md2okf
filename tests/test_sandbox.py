@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from md2okf import sandbox, workbench
+
+PI_SANDBOX = workbench.sandbox_name("pi")
 
 
 def test_present_reflects_path(monkeypatch):
@@ -29,13 +33,9 @@ def test_fake_sbx_covers_presence_not_only_subprocess(fake_sbx):
     sandbox.preflight()  # must not raise, whatever the host has installed
 
 
-def test_version_parses_and_compares(fake_sbx):
-    fake_sbx.version_string = "0.43.0"
-    assert sandbox.version() == (0, 43, 0)
-    assert sandbox.version_at_least() is True
-
-    fake_sbx.version_string = "0.42.9"
-    assert sandbox.version_at_least() is False
+def test_version_parses(fake_sbx):
+    fake_sbx.version_string = "1.2.3"
+    assert sandbox.version() == (1, 2, 3)
 
 
 def test_version_unparsable_is_none(fake_sbx, monkeypatch):
@@ -45,7 +45,6 @@ def test_version_unparsable_is_none(fake_sbx, monkeypatch):
         lambda *a, **k: __import__("subprocess").CompletedProcess(a[0], 0, "garbage\n", ""),
     )
     assert sandbox.version() is None
-    assert sandbox.version_at_least() is False
 
 
 def test_logged_in_reflects_ls(fake_sbx):
@@ -150,7 +149,7 @@ def test_exec_capture_runs_through_the_seam(fake_sbx):
 
 def test_exec_stream_yields_lines_then_returncode(fake_sbx):
     sandbox.create("md2okf", Path("/kit"), [], {})
-    fake_sbx.queue_pi(['{"type": "message_end"}', '{"type": "tool_execution_start"}'], returncode=0)
+    fake_sbx.queue_turn(['{"type": "message_end"}', '{"type": "tool_execution_start"}'], returncode=0)
     stream = sandbox.exec_stream("md2okf", ["pi", "--mode", "json", "compile it"])
     lines = list(stream)
     assert lines == ['{"type": "message_end"}', '{"type": "tool_execution_start"}']
@@ -159,7 +158,7 @@ def test_exec_stream_yields_lines_then_returncode(fake_sbx):
 
 def test_exec_stream_propagates_nonzero_returncode(fake_sbx):
     sandbox.create("md2okf", Path("/kit"), [], {})
-    fake_sbx.queue_pi(["oops"], returncode=1)
+    fake_sbx.queue_turn(["oops"], returncode=1)
     stream = sandbox.exec_stream("md2okf", ["pi", "--mode", "json", "compile it"])
     list(stream)
     assert stream.returncode == 1
@@ -168,9 +167,50 @@ def test_exec_stream_propagates_nonzero_returncode(fake_sbx):
 # --- python -m md2okf.sandbox (maintainers) ---------------------------------
 
 
-def test_ensure_default_sandbox_creates_and_reports(fake_sbx, isolated_state, capsys):
+@pytest.mark.parametrize("env_value", [None, "pi"])
+def test_ensure_default_sandbox_creates_and_reports(fake_sbx, isolated_state, capsys, monkeypatch, env_value):
+    if env_value is not None:
+        monkeypatch.setenv("MD2OKF_AGENT", env_value)
     assert sandbox._ensure_default_sandbox() == 0
-    assert "created" in capsys.readouterr().out
+    assert capsys.readouterr().out == f"md2okf.sandbox: sandbox {PI_SANDBOX!r} created\n"
+    assert sandbox.exists(PI_SANDBOX)
+    assert workbench.Workbench.default("pi").fingerprint_path.is_file()
+
+
+def test_ensure_default_sandbox_follows_md2okf_agent_to_claude(fake_sbx, isolated_state, capsys, monkeypatch):
+    """The maintainer entry point must never create or inspect a different sandbox from the CLI's."""
+    monkeypatch.setenv("MD2OKF_AGENT", "claude")
+    assert sandbox._ensure_default_sandbox() == 0
+    assert capsys.readouterr().out == "md2okf.sandbox: sandbox 'md2okf-claude' created\n"
+    assert sandbox.exists("md2okf-claude")
+    assert not sandbox.exists(PI_SANDBOX)
+    assert workbench.Workbench.default("claude").fingerprint_path.is_file()
+
+
+def test_ensure_default_sandbox_refuses_an_unknown_agent_before_touching_sbx(
+    fake_sbx, isolated_state, capsys, monkeypatch
+):
+    monkeypatch.setenv("MD2OKF_AGENT", "bogus")
+    assert sandbox._ensure_default_sandbox() == 2
+    assert "valid: claude, codex, pi" in capsys.readouterr().err
+    assert fake_sbx.calls == []
+
+
+def test_ensure_default_sandbox_uses_the_repository_sbx_minimum(fake_sbx, isolated_state, capsys):
+    fake_sbx.version_string = "0.0.1"
+
+    assert sandbox._ensure_default_sandbox() == 2
+    assert "or newer is required" in capsys.readouterr().err
+
+
+def test_ensure_default_sandbox_exits_2_with_the_remedy_when_credentials_are_not_ready(
+    fake_sbx, isolated_state, capsys
+):
+    fake_sbx.openrouter_key = "sk-literal-value"
+    assert sandbox._ensure_default_sandbox() == 2
+    assert "sbx secret set openrouter" in capsys.readouterr().err
+    # Created and recorded as ours all the same, so fixing the secret is enough.
+    assert workbench.read_ownership_marker(workbench.Workbench.default("pi")) is not None
 
 
 def test_ensure_default_sandbox_stages_the_helper_clis(fake_sbx, isolated_state):
@@ -184,7 +224,7 @@ def test_ensure_default_sandbox_stages_the_helper_clis(fake_sbx, isolated_state)
     only a real sandbox running a real shim showed it.
     """
     assert sandbox._ensure_default_sandbox() == 0
-    work_scripts = workbench.Workbench.default().work_scripts
+    work_scripts = workbench.Workbench.default("pi").work_scripts
     for cli_name in ("inspectmd", "inspectokf", "sizeokf", "merkleokf"):
         assert (work_scripts / cli_name / "pyproject.toml").is_file()
         assert (work_scripts / cli_name / "src").is_dir()
@@ -225,9 +265,54 @@ def test_ensure_default_sandbox_exits_2_on_an_unusable_lock_file(
 
 
 def test_ensure_default_sandbox_exits_2_on_an_unowned_sandbox(fake_sbx, isolated_state, capsys):
-    fake_sbx.register("md2okf")
+    fake_sbx.register(PI_SANDBOX)
     assert sandbox._ensure_default_sandbox() == 2
     assert "sbx rm --force" in capsys.readouterr().err
+
+
+def test_python_dash_m_reports_a_failed_sbx_run_as_exit_2(tmp_path):
+    """Regression: `python -m md2okf.sandbox` crashed with a traceback when `sbx run` failed.
+
+    Run with -m, the module is __main__ -- a second copy of md2okf.sandbox
+    whose SandboxError is not the class workbench raises -- so nothing caught
+    it. Only a real `python -m` shows this: every in-process test imports the
+    one canonical module. A stand-in `sbx` on PATH keeps it offline.
+    """
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    fake = fakebin / "sbx"
+    minimum = ".".join(map(str, sandbox.minimum_version()))
+    fake.write_text(
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        f'  version) echo "sbx version {minimum}" ;;\n'
+        "  ls) exit 0 ;;\n"
+        '  run) echo "boom: run refused" >&2; exit 1 ;;\n'
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{fakebin}{os.pathsep}{os.environ.get('PATH', '')}",
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        "XDG_STATE_HOME": str(tmp_path / "xdg"),
+    }
+    env.pop("MD2OKF_AGENT", None)
+
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "md2okf.sandbox"],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2, result.stderr
+    assert "Traceback" not in result.stderr
+    assert "sbx run failed for 'md2okf-pi': boom: run refused" in result.stderr
 
 
 def test_ensure_default_sandbox_exits_2_when_sbx_is_missing(isolated_state, capsys, monkeypatch):
@@ -248,9 +333,35 @@ def test_preflight_raises_on_a_missing_sbx(monkeypatch):
 
 
 def test_preflight_raises_on_an_old_version(fake_sbx):
-    fake_sbx.version_string = "0.10.0"
-    with pytest.raises(sandbox.SandboxError, match="version"):
+    fake_sbx.version_string = "0.0.1"
+    minimum = ".".join(map(str, sandbox.minimum_version()))
+    with pytest.raises(sandbox.SandboxError) as excinfo:
         sandbox.preflight()
+    assert f"sbx {minimum} or newer is required; found 0.0.1" in str(excinfo.value)
+
+
+def test_preflight_allows_a_newer_version(fake_sbx):
+    major, _minor, _patch = sandbox.minimum_version()
+    fake_sbx.version_string = f"{major + 1}.0.0"
+    sandbox.preflight()
+
+
+@pytest.mark.parametrize("contents", ["1.2.3", "1.2.3\n"])
+def test_minimum_version_reads_the_pin(tmp_path, monkeypatch, contents):
+    pin = tmp_path / "SBX_VERSION"
+    pin.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(sandbox.resources, "sbx_version_file", lambda: pin)
+    assert sandbox.minimum_version() == (1, 2, 3)
+
+
+@pytest.mark.parametrize("contents", ["v1.2.3", "1.2", "1.2.3 extra", None])
+def test_minimum_version_rejects_a_malformed_or_missing_pin(tmp_path, monkeypatch, contents):
+    pin = tmp_path / "SBX_VERSION"
+    if contents is not None:
+        pin.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(sandbox.resources, "sbx_version_file", lambda: pin)
+    with pytest.raises(sandbox.SandboxError, match="sbx version pin|X.Y.Z"):
+        sandbox.minimum_version()
 
 
 def test_preflight_raises_when_not_logged_in(fake_sbx):

@@ -1,13 +1,13 @@
 # md2okf — developer task runner.
 #
-# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/md2okf/, which
+# Pi runs in one runtime: the Docker Sandbox (sbx) kit under kits/pi/, which
 # owns the only copy of the agent config (see AGENTS.md).
 #
 # Tool overrides (defaults suit local dev; CI overrides only MARKDOWNLINT):
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (kits/md2okf/spec.yaml).
+#                 project; the pin matches the sandbox (kits/pi/spec.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
@@ -15,7 +15,7 @@
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
 MARKDOWNLINT ?= markdownlint-cli2
 RUFF ?= uv tool run ruff@0.16.2
-PYTEST ?= uv run --project web2md --group test pytest -c web2md/pyproject.toml
+PYTEST ?= uv run --project extras/web2md --group test pytest -c extras/web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
 
@@ -88,9 +88,9 @@ lint:
 # generated output and gitignored — this is a host-side developer command,
 # not part of the source-tree lint or CI.
 check-okf:
-	kits/md2okf/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
+	kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
-# Validate the sandbox kit spec against the current Sandbox Kit schema.
+# Validate every sandbox kit spec with an sbx version meeting SBX_VERSION.
 validate:
 	./scripts/validate-spec.sh
 
@@ -106,11 +106,11 @@ test: test-shell test-web2md test-clis test-md2okf test-sandbox
 test-shell:
 	./tests/test-mount-state.sh
 
-# Unit-test the web2md scraper (web2md/tests/). Offline: HTTP is mocked with
+# Unit-test the web2md scraper (extras/web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
-# web2md/pyproject.toml, which also puts web2md/src/ on the import path.
+# extras/web2md/pyproject.toml, which also puts extras/web2md/src/ on the import path.
 test-web2md:
-	$(PYTEST) web2md/tests
+	$(PYTEST) extras/web2md/tests
 
 # Unit-test the four host CLIs (inspectmd, inspectokf, sizeokf, merkleokf).
 # Each has its own project and lockfile — nothing shared. Offline; stdlib-only
@@ -174,11 +174,17 @@ dist:
 	uv tool run --from "$$tmp"/out/md2okf-*.whl md2okf --dry-run -o wiki doc/
 	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
 
-# Check that the sandbox delivers the toolchain, agent config and proxy-managed
-# key that kits/md2okf/spec.yaml promises.
+# Check that each agent's sandbox delivers the toolchain, agent config and
+# credential that kits/<agent>/spec.yaml promises. AGENTS lists the registered
+# agents (md2okf.agents.AGENTS); `make test-sandbox AGENT=pi` checks just one.
+# The agent is always passed explicitly: test-sandbox.sh has no default, so
+# nothing silently falls back to Pi.
+AGENTS ?= pi claude codex
 test-sandbox:
-	./tests/test-sandbox.sh
+	@for agent in $(or $(AGENT),$(AGENTS)); do \
+		./tests/test-sandbox.sh "$$agent" || exit 1; \
+	done
 
 # Fetch the website into md/ as one file.
 scrape:
-	uv run --project web2md python web2md/src/web2md.py
+	uv run --project extras/web2md python extras/web2md/src/web2md.py

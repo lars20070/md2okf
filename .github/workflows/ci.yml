@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -42,10 +42,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
       - name: Install uv
@@ -66,10 +66,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
       - name: Install uv
@@ -89,10 +89,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
       - name: Install uv
@@ -111,10 +111,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
       - name: Install uv
@@ -137,10 +137,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
       - name: Install uv
@@ -151,34 +151,42 @@ jobs:
       - name: Build and smoke-test the distribution
         run: make dist
 
-  # Validate kits/md2okf/spec.yaml against the current Sandbox Kit schema.
+  # Validate every kits/*/spec.yaml against the schema in the pinned sbx CLI.
   # Static check — no Docker or login; only the CLI download needs the network.
   validate-kit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          # No git operations after checkout, so don't leave the job token in
-          # .git/config where a later third-party step could read it.
+          # No git operations after checkout, so don't leave the job token on
+          # disk where a later third-party step could read it.
           persist-credentials: false
 
-      # Install the latest sbx CLI. "latest" is intentional: the schema is
-      # bundled in the binary, so this surfaces schema drift as soon as it ships.
-      # Install steps mirror docker/sbx-kits-contrib .github/workflows/tck.yml.
+      # Install exactly SBX_VERSION, verified by checksum, so CI checks the kits
+      # against one known bundled schema. The trade-off: newer sbx releases,
+      # which Homebrew users run, are not tested here. When SBX_VERSION is
+      # raised, update expected_sha256 to the new archive's checksum as well.
       - name: Install sbx CLI
         run: |
           set -euo pipefail
+          sbx_version="$(<SBX_VERSION)"
+          archive=/tmp/DockerSandboxes-linux.tar.gz
+          expected_sha256=77f3c36e63a60a034fa53b5a9e49c20c52c350a91b380ebd96281460a5270341
           curl -fsSL \
-            "https://github.com/docker/sbx-releases/releases/latest/download/DockerSandboxes-linux.tar.gz" \
-            -o /tmp/DockerSandboxes-linux.tar.gz
-          tar xzf /tmp/DockerSandboxes-linux.tar.gz -C /tmp
+            "https://github.com/docker/sbx-releases/releases/download/v${sbx_version}/DockerSandboxes-linux.tar.gz" \
+            -o "${archive}"
+          echo "${expected_sha256}  ${archive}" | sha256sum --check -
+          tar xzf "${archive}" -C /tmp
           sudo PREFIX="${HOME}/.docker/sbx" /tmp/docker-sbx/install.sh
           echo "${HOME}/.docker/sbx/bin" >> "$GITHUB_PATH"
 
-      - name: Verify sbx
-        run: sbx version
+      - name: Verify pinned sbx
+        run: |
+          expected="$(<SBX_VERSION)"
+          actual="$(sbx version | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          test "${actual}" = "${expected}"
 
-      - name: Validate Pi kit spec
+      - name: Validate kit specs
         run: make validate

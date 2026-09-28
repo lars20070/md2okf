@@ -8,7 +8,7 @@
     "SPEC.md",
     "CLAUDE.md",
     "uv.lock",
-    "web2md/tests/**",
+    "extras/web2md/tests/**",
     "scripts/inspectmd/tests/**",
     "scripts/inspectokf/tests/**",
     "scripts/sizeokf/tests/**",
@@ -17,6 +17,7 @@
   ],
   "words": [
     "okf",
+    "mktemp",
     "frontmatter",
     "deepseek",
     "litellm",

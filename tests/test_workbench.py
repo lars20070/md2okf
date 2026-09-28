@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from md2okf import resources, sandbox, workbench
+from md2okf import agents, resources, sandbox, workbench
+
+PI = agents.PI
+PI_SANDBOX = workbench.sandbox_name(PI.name)
 
 # --- state_home() precedence -------------------------------------------------
 
@@ -29,6 +32,23 @@ def test_state_home_relative_value_counts_as_unset(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_STATE_HOME", "relative/path")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     assert workbench.state_home() == tmp_path / ".local" / "state"
+
+
+# --- per-agent names ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("agent", ["pi", "claude", "codex"])
+def test_each_agent_gets_its_own_sandbox_and_workbench(monkeypatch, tmp_path, agent):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    assert workbench.sandbox_name(agent) == f"md2okf-{agent}"
+    assert workbench.Workbench.default(agent).root == tmp_path / "xdg" / "md2okf" / agent
+
+
+def test_agent_workbenches_do_not_overlap(monkeypatch, tmp_path):
+    """Siblings, never nested: one agent's restage must not touch another's mounts."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    roots = [workbench.Workbench.default(agent).root for agent in ("pi", "claude")]
+    workbench.check_no_overlap(roots)
 
 
 # --- the lock ------------------------------------------------------------
@@ -380,25 +400,19 @@ def test_restaging_for_a_second_run_removes_the_first_runs_pages(tmp_path):
     wb.ensure_roots()
     clis_dir = tmp_path / "clis"
     clis_dir.mkdir()
-    spec_source = tmp_path / "SPEC.md"
-    spec_source.write_text("spec", encoding="utf-8")
 
     alpha_out = tmp_path / "wikis" / "alpha"
     alpha_out.mkdir(parents=True)
     (alpha_out / "alpha.md").write_text("alpha page", encoding="utf-8")
     (tmp_path / "a.md").write_text("a", encoding="utf-8")
 
-    workbench.restage(
-        wb, inputs=[("a.md", tmp_path / "a.md")], clis_dir=clis_dir, spec_source=spec_source, output_dir=alpha_out
-    )
+    workbench.restage(wb, inputs=[("a.md", tmp_path / "a.md")], clis_dir=clis_dir, output_dir=alpha_out)
     assert (wb.work_okf / "alpha.md").exists()
 
     beta_out = tmp_path / "wikis" / "beta"
     beta_out.mkdir(parents=True)
     (beta_out / "beta.md").write_text("beta page", encoding="utf-8")
-    workbench.restage(
-        wb, inputs=[("b.md", tmp_path / "a.md")], clis_dir=clis_dir, spec_source=spec_source, output_dir=beta_out
-    )
+    workbench.restage(wb, inputs=[("b.md", tmp_path / "a.md")], clis_dir=clis_dir, output_dir=beta_out)
 
     assert not (wb.work_okf / "alpha.md").exists()
     assert (wb.work_okf / "beta.md").exists()
@@ -440,7 +454,6 @@ def test_restage_wraps_a_raw_oserror_as_a_workbencherror(tmp_path, monkeypatch):
             wb,
             inputs=[],
             clis_dir=tmp_path / "clis",
-            spec_source=tmp_path / "SPEC.md",
             output_dir=tmp_path / "out",
         )
 
@@ -529,7 +542,7 @@ def test_fingerprint_is_stable_for_the_same_inputs(tmp_path):
     assert a == b
 
 
-def test_fingerprint_ignores_dotfiles_and_pycache(tmp_path):
+def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
     """Regression: editor droppings and bytecode must not move the fingerprint."""
     kit_dir = tmp_path / "kit"
     kit_dir.mkdir()
@@ -538,11 +551,44 @@ def test_fingerprint_ignores_dotfiles_and_pycache(tmp_path):
     before = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
 
     (kit_dir / ".DS_Store").write_bytes(b"\x00finder noise")
+    (kit_dir / "._spec.yaml").write_bytes(b"\x00appledouble sidecar")
+    (kit_dir / "files" / "home" / ".pi").mkdir(parents=True)
+    (kit_dir / "files" / "home" / ".pi" / ".DS_Store").write_bytes(b"\x00nested finder noise")
     (kit_dir / "scripts" / "__pycache__").mkdir(parents=True)
     (kit_dir / "scripts" / "__pycache__" / "guard.cpython-312.pyc").write_bytes(b"bytecode")
 
     after = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
     assert before == after
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "files/home/.pi/agent/AGENTS.md",
+        "files/home/.pi/agent/skills/compile-okf/SKILL.md",
+        "files/home/.local/lib/md2okf/mount-state.sh",
+        "files/home/.claude/skills/compile-okf/SKILL.md",
+        "files/home/.agents/skills/compile-okf/SKILL.md",
+        "files/home/.codex/config.toml",
+    ],
+)
+def test_fingerprint_changes_when_a_hidden_kit_file_changes(tmp_path, relative):
+    """Regression: every dotted path used to be skipped as noise.
+
+    That left only README.md and spec.yaml in the hash, so an edited
+    AGENTS.md, skill or helper script never triggered a sandbox rebuild.
+    """
+    kit_dir = tmp_path / "kit"
+    target = kit_dir / relative
+    target.parent.mkdir(parents=True)
+    (kit_dir / "spec.yaml").write_text("kit", encoding="utf-8")
+    target.write_text("v1", encoding="utf-8")
+    mounts = [sandbox.Mount(tmp_path / "work_okf")]
+    before = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
+
+    target.write_text("v2", encoding="utf-8")
+    after = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
+    assert before != after
 
 
 def test_fingerprint_changes_when_the_kit_changes(tmp_path):
@@ -639,7 +685,7 @@ def test_resolve_sandbox_state_fresh_does_not_widen_deletion_authority(tmp_path,
 def test_ensure_sandbox_creates_and_writes_the_marker(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    assert workbench.ensure_sandbox(wb) == "created"
+    assert workbench.ensure_sandbox(wb, PI) == "created"
     assert workbench.read_ownership_marker(wb) is not None
 
 
@@ -656,15 +702,17 @@ def test_stage_tooling_fills_the_empty_spec_placeholder(tmp_path):
     assert wb.work_spec.stat().st_ino == inode_before
 
 
-def test_stage_tooling_leaves_an_already_staged_spec_alone(tmp_path):
-    """A compile's --spec survives the --shell/--agent that follows it."""
+def test_stage_tooling_replaces_a_stale_spec_in_place(tmp_path):
+    """The workbench always carries the bundled spec, whatever an older release left there."""
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
     wb.work_spec.write_text("# Custom spec\n\n**Version 0.3**\n", encoding="utf-8")
+    inode_before = wb.work_spec.stat().st_ino
 
     workbench.stage_tooling(wb)
 
-    assert wb.work_spec.read_text(encoding="utf-8") == "# Custom spec\n\n**Version 0.3**\n"
+    assert wb.work_spec.read_bytes() == resources.spec_md().read_bytes()
+    assert wb.work_spec.stat().st_ino == inode_before
 
 
 def test_stage_tooling_converts_an_unreadable_spec_to_workbench_error(tmp_path, monkeypatch):
@@ -679,14 +727,14 @@ def test_stage_tooling_converts_an_unreadable_spec_to_workbench_error(tmp_path, 
 def test_ensure_sandbox_reuses_a_previously_created_one(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    workbench.ensure_sandbox(wb)
+    workbench.ensure_sandbox(wb, PI)
     run_calls_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
-    assert workbench.ensure_sandbox(wb) == "reuse"
+    assert workbench.ensure_sandbox(wb, PI) == "reuse"
     run_calls_after = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
     assert run_calls_after == run_calls_before
 
 
-def test_ensure_sandbox_writes_marker_even_when_the_key_check_fails(tmp_path, fake_sbx):
+def test_ensure_sandbox_writes_marker_even_when_the_credential_check_fails(tmp_path, fake_sbx):
     """Regression.
 
     A sandbox we really did create must be recognised as ours on the next
@@ -697,29 +745,63 @@ def test_ensure_sandbox_writes_marker_even_when_the_key_check_fails(tmp_path, fa
     wb.ensure_roots()
     fake_sbx.openrouter_key = "sk-literal-value"
 
-    with pytest.raises(workbench.KeyNotProxyManagedError):
-        workbench.ensure_sandbox(wb)
+    with pytest.raises(workbench.CredentialNotReadyError):
+        workbench.ensure_sandbox(wb, PI)
 
     assert workbench.read_ownership_marker(wb) is not None
 
     # Fixing the secret and running again must reuse, not demand a manual
     # `sbx rm --force` first.
     fake_sbx.openrouter_key = "proxy-managed"
-    fingerprint_value = workbench.fingerprint(resources.kit_dir(), sandbox.version(), wb.mounts())
-    assert workbench.resolve_sandbox_state(wb, workbench.SANDBOX_NAME, fingerprint_value) == "reuse"
+    assert workbench.ensure_sandbox(wb, PI) == "reuse"
 
 
-def test_key_not_proxy_managed_error_names_the_openrouter_commands():
-    """Regression.
+def test_credentials_are_checked_on_reuse_too(tmp_path, fake_sbx):
+    """Regression: the check used to run only after a create.
 
-    This used to tell the user to run a GitHub secret command for an
-    OpenRouter key problem -- the wrong provider entirely.
+    A sandbox whose credential broke after it was created was reused with no
+    word of why every compile then failed. Reuse must check, and must not
+    rebuild a sandbox a secret change will fix.
     """
-    message = str(workbench.KeyNotProxyManagedError("md2okf"))
-    assert "sbx secret set openrouter" in message
-    assert "sbx secret set-custom" in message
-    assert "openrouter.ai" in message
-    assert "github" not in message.lower()
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    assert workbench.ensure_sandbox(wb, PI) == "created"
+    runs_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
+
+    fake_sbx.openrouter_key = "sk-literal-value"
+    with pytest.raises(workbench.CredentialNotReadyError) as excinfo:
+        workbench.ensure_sandbox(wb, PI)
+
+    assert excinfo.value.name == PI_SANDBOX
+    assert len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]) == runs_before
+    assert workbench.read_ownership_marker(wb) is not None
+
+
+def test_the_credential_check_is_the_agents_own(tmp_path, fake_sbx):
+    """ensure_sandbox has no OpenRouter branch: it runs whatever the agent says, with the agent's sandbox."""
+    seen: list[str] = []
+
+    def check(name: str) -> str | None:
+        seen.append(name)
+        return "set the stub key: stub login"
+
+    stub = agents.Agent(
+        name="pi",  # reuses the real kit, so only the check differs
+        compile_args=lambda prompt: ["stub", prompt],
+        interactive_args=("stub",),
+        compile_prompt=lambda document: str(document),
+        check_credentials=check,
+        protocol=PI.protocol,
+    )
+    wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
+    wb.ensure_roots()
+    fake_sbx.openrouter_key = "sk-literal-value"  # would fail Pi's check; must not be consulted
+
+    with pytest.raises(workbench.CredentialNotReadyError, match="stub login"):
+        workbench.ensure_sandbox(wb, stub)
+
+    assert seen == [PI_SANDBOX]
+    assert not [c for c in fake_sbx.calls if c[-2:] == ["-lc", 'echo "$OPENROUTER_API_KEY"']]
 
 
 def test_ensure_sandbox_clears_markers_when_a_recreation_fails(tmp_path, fake_sbx):
@@ -732,12 +814,12 @@ def test_ensure_sandbox_clears_markers_when_a_recreation_fails(tmp_path, fake_sb
     """
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    assert workbench.ensure_sandbox(wb) == "created"
+    assert workbench.ensure_sandbox(wb, PI) == "created"
     assert workbench.read_ownership_marker(wb) is not None
 
-    fake_sbx.run_fail_names.add(workbench.SANDBOX_NAME)
+    fake_sbx.run_fail_names.add(PI_SANDBOX)
     with pytest.raises(sandbox.SandboxError):
-        workbench.ensure_sandbox(wb, fresh=True)
+        workbench.ensure_sandbox(wb, PI, fresh=True)
 
     assert workbench.read_ownership_marker(wb) is None
     assert not wb.fingerprint_path.exists()
@@ -756,7 +838,7 @@ def test_ensure_sandbox_stages_tooling_for_every_caller(tmp_path, fake_sbx):
     wb.ensure_roots()
     assert list(wb.work_scripts.iterdir()) == []
 
-    workbench.ensure_sandbox(wb)
+    workbench.ensure_sandbox(wb, PI)
 
     assert (wb.work_scripts / "merkleokf" / "pyproject.toml").is_file()
 
@@ -765,11 +847,11 @@ def test_ensure_sandbox_restages_tooling_when_reusing(tmp_path, fake_sbx):
     """A reused sandbox whose staged tooling was wiped must get it back."""
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    workbench.ensure_sandbox(wb)
+    workbench.ensure_sandbox(wb, PI)
 
     for child in wb.work_scripts.iterdir():
         shutil.rmtree(child)
     assert list(wb.work_scripts.iterdir()) == []
 
-    assert workbench.ensure_sandbox(wb) == "reuse"
+    assert workbench.ensure_sandbox(wb, PI) == "reuse"
     assert (wb.work_scripts / "merkleokf" / "pyproject.toml").is_file()
