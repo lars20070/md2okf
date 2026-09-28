@@ -36,48 +36,66 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="md2okf",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="Compile Markdown into an OKF wiki with a coding agent (Pi by default).",
+        description="""\
+Compile Markdown into an OKF wiki with a coding agent: Pi (the default),
+Claude Code or Codex, each running in its own sbx sandbox.""",
         # Held to 79 columns so it renders in a standard terminal; the epilog is
         # printed verbatim. These are the only three variables a user of the
-        # command can set -- MD2OKF_STATE_DIR and WORKDIR are ours to inject.
-        epilog=f"""\
+        # command can set -- md2okf injects MD2OKF_STATE_DIR, and sbx sets
+        # WORKDIR. tests/test_cli.py checks every registered agent is named here.
+        epilog="""\
 Environment:
-  MD2OKF_AGENT        agent framework to run: {", ".join(sorted(agents.AGENTS))}. Each agent
-                      has its own sandbox (md2okf-<agent>) and workbench.
-                      (default: {agents.DEFAULT_AGENT})
-  OPENROUTER_API_KEY  required for pi, but read from `sbx secret`, never from
-                      this environment
-  XDG_STATE_HOME      session state and the run workbench. Absolute paths
-                      only; a relative value counts as unset.
-                      (default: ~/.local/state)
+  MD2OKF_AGENT        the agent that compiles: pi (Pi, the default), claude
+                      (Claude Code) or codex (Codex). Each has its own
+                      sandbox, md2okf-<agent>.
+  OPENROUTER_API_KEY  Pi's key. Store it with `sbx secret`; md2okf never reads
+                      it from your shell. Claude Code and Codex sign in with
+                      `sbx secret set anthropic` or `sbx secret set openai`.
+  XDG_STATE_HOME      where session state and the workbench live; must be an
+                      absolute path (default: ~/.local/state)
+
+Exit status: 0 every document compiled, 1 the run failed,
+2 refused before any work started.
 """,
     )
     parser.add_argument(
-        "paths", nargs="*", metavar="FILE|DIR", help="Markdown files or folders; '-' or none means stdin"
+        "paths",
+        nargs="*",
+        metavar="FILE|DIR",
+        help="Markdown files, or folders whose *.md files are compiled (subfolders are not searched); "
+        "'-' or none reads stdin",
     )
-    parser.add_argument("-o", "--output", default="okf", metavar="DIR", help="wiki output directory (default: ./okf)")
+    parser.add_argument(
+        "-o", "--output", default="okf", metavar="DIR", help="output directory for the wiki (default: ./okf)"
+    )
     parser.add_argument(
         "-n",
         type=int,
         default=compile_mod.DEFAULT_MAX_ITERATIONS,
         metavar="N",
-        help="max Ralph loop iterations per document (default: 10)",
+        help="maximum iterations per document (default: 10)",
     )
-    parser.add_argument("--fresh", action="store_true", help="recreate the sandbox even if it could be reused")
-    parser.add_argument("--dry-run", action="store_true", help="resolve and print what would run; do nothing paid")
+    parser.add_argument("--fresh", action="store_true", help="rebuild the sandbox even if it could be reused")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="check the inputs and print what would run; creates no sandbox and costs nothing",
+    )
     interactive = parser.add_mutually_exclusive_group()
     interactive.add_argument(
         "--shell", action="store_true", help="open an interactive shell in the sandbox"
     )
     interactive.add_argument(
-        "--agent", action="store_true", help="open an interactive agent session in the sandbox"
+        "--agent", action="store_true", help="open an interactive session with the chosen agent"
     )
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
-        "-q", "--quiet", action="store_true", help="suppress progress and TSV rows (fatal errors still print)"
+        "-q", "--quiet", action="store_true", help="print only fatal errors, no progress or summary lines"
     )
-    verbosity.add_argument("-v", "--verbose", action="store_true", help="also show the agent's tool calls and prose")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    verbosity.add_argument("-v", "--verbose", action="store_true", help="also show the agent's tool calls and messages")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}", help="print the version and exit"
+    )
     return parser
 
 

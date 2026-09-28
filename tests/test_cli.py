@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from pathlib import Path
 
 import pytest
 from conftest import ExecvpCalled
 
-from md2okf import __version__, cli, resources, sandbox, workbench
+from md2okf import __version__, agents, cli, resources, sandbox, workbench
 
 PI_SANDBOX = workbench.sandbox_name("pi")
 
@@ -138,7 +139,17 @@ def test_explicit_pi_behaves_exactly_like_unset(tmp_path, capsys, isolated_state
 def test_the_epilog_documents_md2okf_agent(capsys):
     with pytest.raises(SystemExit):
         cli.main(["--help"])
-    assert "MD2OKF_AGENT" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "MD2OKF_AGENT" in out
+    assert "Exit status:" in out
+
+
+@pytest.mark.parametrize("name", sorted(agents.AGENTS))
+def test_the_help_names_every_registered_agent(name, capsys):
+    """The epilog spells the agents out by hand, so a newly registered one must be added there too."""
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    assert re.search(rf"\b{name}\b", capsys.readouterr().out.split("Environment:")[1])
 
 
 def test_sbx_not_present_is_exit_2(tmp_path, capsys, isolated_state, monkeypatch):
