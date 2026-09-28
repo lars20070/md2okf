@@ -89,7 +89,7 @@ registered agent in turn; `make test-sandbox AGENT=pi` checks one.
 ## Working inside the sandbox
 
 Two flags open the sandbox, building or refreshing it first when none exists or
-the running one no longer matches `kits/pi/`:
+the running one no longer matches its `kits/<agent>/`:
 
 ```bash
 md2okf --shell   # interactive shell at the wiki root
@@ -108,7 +108,7 @@ holding whatever the last compile left. No compile run is restaged: helper CLIs
 are refreshed, an empty `work/SPEC.md` gets the bundled spec, and prior staged
 documents and spec otherwise remain. Nothing written to `work/okf` survives
 the next compile, but that compile cannot start underneath an active session:
-the interactive command holds the workbench lock until it exits. Pi transcripts
+the interactive command holds the workbench lock until it exits. The agent's transcripts
 persist under `sessions/`. Entry is likewise refused while a compile holds the
 lock.
 

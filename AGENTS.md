@@ -46,11 +46,13 @@ platform needs no cleanup: uv detects the dangling interpreter and rebuilds it.
 
 ## Repository map
 
-md2okf compiles Markdown into an OKF wiki with the Pi coding agent: one Pi run
+md2okf compiles Markdown into an OKF wiki with a coding agent -- Pi by
+default, or Claude Code or Codex, picked by `MD2OKF_AGENT`: one agent run
 per source document, folded into the wiki. The `md2okf` command is the host
 driver, at the repository root (`pyproject.toml`, `src/md2okf/`); it takes any
 files or folders and writes to any `-o` directory, staging both through a fixed
-workbench under `$XDG_STATE_HOME/md2okf` so one sandbox serves every run. In
+workbench per agent under `$XDG_STATE_HOME/md2okf/<agent>`, so one sandbox per
+agent serves every run with that agent. In
 this repository the defaults are `md/` in and `okf/` out: `md/` is tracked;
 `okf/` is gitignored in full — the wiki is generated output.
 
@@ -214,7 +216,7 @@ more than that file; follow the checklist in
 `--shell` and `--agent` are for inspecting the sandbox, not for authoring. They
 do not restage a compile run: helper CLIs are refreshed, an empty `work/SPEC.md`
 gets the bundled spec, and prior workbench content otherwise remains in place.
-The next compile replaces `work/okf`; Pi transcripts persist under `sessions/`.
+The next compile replaces `work/okf`; the agent's transcripts persist under `sessions/`.
 The command holds the workbench lock until the session exits, so a concurrent
 compile or `--fresh` invocation is refused. Only `--fresh` combines with them —
 every other compile option is refused rather than ignored, unless its value
