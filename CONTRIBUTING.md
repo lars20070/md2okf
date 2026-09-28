@@ -68,9 +68,8 @@ To raise the minimum, change all of these together:
 1. `SBX_VERSION`.
 2. `expected_sha256` in the `validate-kit` job of `.github/workflows/ci.yml`,
    the SHA-256 of that release's `DockerSandboxes-linux.tar.gz`.
-3. The Requirements bullet in `README.md`.
-4. The sbx version in `docs/troubleshooting.md`.
-5. A Changed entry in `CHANGELOG.md`.
+3. The sbx version in the "Install sbx" section of `README.md`.
+4. A Changed entry in `CHANGELOG.md`.
 
 The test suite reads the floor from `SBX_VERSION`, so it needs no edit.
 

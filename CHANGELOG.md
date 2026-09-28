@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
 ### Added
 
 - **`MD2OKF_AGENT` selects the agent framework.** `pi` is the default (unset or
@@ -49,6 +51,8 @@ and this project adheres to
   `kits/codex/README.md`.
 - **`tests/fixtures/smoke.md`**, a short document for cheap live smoke runs:
   `uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md`.
+- **`.env.example`** with the three variables `md2okf --help` lists. Nothing
+  loads it automatically; export it with `set -a; . ./.env; set +a`.
 
 ### Changed
 
@@ -67,8 +71,8 @@ and this project adheres to
   reused silently. `md2okf --shell` now opens even when the check fails, with
   the remedy printed as a warning; a compile and `--agent` still refuse.
 - **A failure the agent reports in its own event stream fails the turn** even
-  when the process exits 0, and is named in the error. Pi's parser reports none
-  yet, so Pi runs behave as before; the rule is in place for the agents to come.
+  when the process exits 0, and is named in the error. Claude Code's and Codex's
+  parsers report such failures; Pi's reports none, so Pi runs behave as before.
 - **A failed turn's message keeps lines that were cut short.** The diagnostic
   tail used to drop every line starting with `{`, including a truncated JSON
   line that may be the only clue. Now only whole JSON objects — the agent's own
@@ -86,13 +90,16 @@ and this project adheres to
   the shared OKF authoring contract, the kit's own `generated.by` producer, no
   other agent's config paths, every file the instructions name, and helpers
   that are byte-identical across kits.
-- **The README is shorter; its reference material moved to `docs/`.** How it
-  works, the sandbox's mounts, session state and the repository layout are in
-  `docs/architecture.md`; the environment variables in `docs/configuration.md`;
-  the troubleshooting entries in `docs/troubleshooting.md`. Setting up the
-  OpenRouter key is now part of the Quickstart, and installing sbx has its own
-  section after it.
-
+- **The README is shorter; its reference material moved to `docs/`.** The
+  README keeps a Quickstart (including how to switch agents), installing sbx
+  and setting up the OpenRouter key, and links the rest from a "Further
+  documentation" table. `docs/usage.md` covers what you can compile, reading
+  the output, the wiki's layout, and every CLI flag and exit code;
+  `docs/configuration.md` choosing an agent, credentials for Claude Code and
+  Codex, and models and providers; `docs/architecture.md` the run loop, the
+  sandbox's mounts, credentials, session state and the repository layout.
+- **`md2okf --help` names all three agents** and how each signs in, explains
+  every option in plain words, and lists the exit codes.
 - **`web2md/` and `pdf2md/` moved to `extras/`.** Both are optional,
   clone-only helpers that prepare Markdown for `md/`, and neither is part of a
   compile. `make scrape` and `make test-web2md` work as before; run the

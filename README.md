@@ -14,7 +14,7 @@ Format](https://github.com/GoogleCloudPlatform/open-knowledge-format) by Google,
 is a tree of Markdown files with YAML frontmatter and nothing else — no schema
 registry, no server, nothing to install. The agent takes one source document per
 run and folds it into the wiki already on disk, so documents accumulate rather
-than overwrite. [SPEC.md](SPEC.md) is the OKF specification the wiki is built
+than overwrite. [SPEC.md](https://github.com/lars20070/md2okf/blob/master/SPEC.md) is the OKF specification the wiki is built
 against; the agent reads it at the start of every run, and it outranks any
 other instructions.
 
@@ -140,7 +140,8 @@ The first flag opens a shell inside the sandbox, at the wiki root; the second op
 
 ## Install sbx
 
-Install the `sbx` command-line tool and sign in.
+Install the `sbx` command-line tool, version 0.45.0 or newer, and sign in.
+`md2okf` refuses an older `sbx`.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
 
