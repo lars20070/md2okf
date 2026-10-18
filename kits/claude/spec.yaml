@@ -408,10 +408,12 @@ setup:
         chmod 0755 "$scripts/check-okf.sh"
       description: Make the compile-okf check script executable
 
-  # Bind mounts do not survive a sandbox stop. The startup hook covers normal
-  # starts and sbx exec; the entrypoint above is a second required call site for
-  # starts where the hook is not replayed, and md2okf-agent.sh (see files below)
-  # a third, for every process the driver starts. The helper is idempotent.
+  # Bind mounts do not survive a sandbox stop. The startup hook does not gate
+  # the entrypoint or sbx exec; it covers sessions that launch no agent, such
+  # as a shell. The entrypoint above (for sbx run) and md2okf-agent.sh (see
+  # files below; for every process the driver starts with sbx exec) each bind
+  # synchronously and refuse to start the agent if the bind fails. The helper
+  # is idempotent.
   startup:
     - command:
         - sh

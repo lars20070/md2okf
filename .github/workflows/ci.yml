@@ -152,8 +152,13 @@ jobs:
         run: make dist
 
   # Validate every kits/*/spec.yaml against the schema in the pinned sbx CLI.
-  # Static check — no Docker or login; only the CLI download needs the network.
+  # Off for now: since sbx 0.47, `sbx kit validate` needs a running daemon and
+  # `sbx login`, which a CI runner does not have
+  # (https://github.com/docker/sbx-releases/issues/685). Re-enable by deleting
+  # `if: false` once a stable sbx release ships `kit validate --offline` and
+  # `make validate` passes it; the pin below is kept current until then.
   validate-kit:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -173,7 +178,7 @@ jobs:
           set -euo pipefail
           sbx_version="$(<SBX_VERSION)"
           archive=/tmp/DockerSandboxes-linux.tar.gz
-          expected_sha256=77f3c36e63a60a034fa53b5a9e49c20c52c350a91b380ebd96281460a5270341
+          expected_sha256=609a2e4b881ba9a7fd21543077e53d3b863a6b99eebee1f208e51a097ab56a05
           curl -fsSL \
             "https://github.com/docker/sbx-releases/releases/download/v${sbx_version}/DockerSandboxes-linux.tar.gz" \
             -o "${archive}"

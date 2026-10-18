@@ -69,11 +69,11 @@ def test_create_returns_a_token_identity_reads_back(fake_sbx):
 def test_create_mounts_and_env_reach_the_argv(fake_sbx):
     mounts = [sandbox.Mount(Path("/work/okf")), sandbox.Mount(Path("/work/md"), readonly=True)]
     sandbox.create("md2okf", Path("/kit"), mounts, {"MD2OKF_STATE_DIR": "/state"})
-    run_call = next(c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"])
+    run_call = next(c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"])
     assert run_call == [
         "sbx",
         "run",
-        "--detached",
+        "--detach",
         "--name",
         "md2okf",
         "-e",

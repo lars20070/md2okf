@@ -8,6 +8,89 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-18
+
+### Added
+
+- **A `/read-pi-session-traces` skill for Claude Code** (`.claude/skills/`, a
+  development tool that is not shipped in the wheel or sdist). It lists,
+  searches and summarises Pi's JSON Lines session traces by streaming them,
+  so a long trace is never loaded whole, and has its own offline test suite.
+
+### Changed
+
+- **md2okf now requires sbx 0.48.0 (was 0.45.0).** `SBX_VERSION`, CI's pinned
+  checksum and the README move together. The kit fingerprint hashes the sbx
+  version, so every existing sandbox is rebuilt once, automatically, on its
+  first use after the upgrade.
+- **Sandboxes are created with `sbx run --detach`.** sbx 0.48 renamed the flag
+  and rejects the old `--detached`, so an older md2okf cannot create a sandbox
+  on sbx 0.48. `--dry-run` prints the new spelling.
+- **The OpenRouter key needs only one secret.** Until now the README and Pi's
+  credential remedy also asked for a sandbox-scoped copy,
+  `sbx secret set-custom --sandbox md2okf-pi --host openrouter.ai …`, and cited
+  [docker/sbx-releases#25](https://github.com/docker/sbx-releases/issues/25) as
+  the reason. That issue was about GitHub credentials, not OpenRouter, and sbx
+  fixed it in 0.38.0. On sbx 0.48.0, the global `sbx secret set openrouter` alone
+  is enough. This was checked live, with no custom secret in any scope: a
+  freshly built `md2okf-pi` passed `make test-sandbox`, and a real compile of
+  `tests/fixtures/smoke.md` went through OpenRouter. The README and the remedy
+  now name only the global secret. See Upgrading to remove an old copy.
+- **`make validate` needs an active `sbx login`, and CI no longer validates
+  the kits.** Since sbx 0.47, `sbx kit validate` needs a running daemon and a
+  Docker sign-in, even for a local directory
+  ([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685)).
+  Upstream has closed the issue, but its `--offline` flag exists only in a dev
+  build and did not make it into 0.48.0. CI's `validate-kit` job is therefore
+  switched off (`if: false`), with its checksum still pinned to `SBX_VERSION`.
+  It comes back once a stable release ships `kit validate --offline`. Until
+  then, run `make validate` on a signed-in host. Inside a sandbox,
+  `sbx kit pack` is an offline stand-in.
+- **The trace-bind call sites stay, although their upstream bug is fixed.**
+  [docker/sbx-releases#420](https://github.com/docker/sbx-releases/issues/420),
+  where `sbx daemon restart` stopped a kit's startup steps from running, was
+  fixed upstream after our old 0.45.0 floor, so 0.48.0 has the fix. The kit's
+  startup step therefore now also binds the
+  agent's trace directory after a daemon restart, including for sessions that
+  start no agent, such as `md2okf --shell`. The two other call sites still
+  bind as before, and were never only a workaround for #420. The kit
+  entrypoint binds synchronously for `sbx run`, and `md2okf-agent` does the
+  same for compile turns and `md2okf --agent`. Docker documents that startup
+  commands do not gate the entrypoint, and documents no ordering guarantee for
+  `sbx exec` at all. So both guards remain, and an agent starts only after a
+  successful bind: either guard refuses to start it when the bind fails. The
+  driver's other `sbx exec` calls, such as the `merkleokf` hash and the
+  credential check, start no agent and go through neither. Only the comments in
+  each `kits/*/spec.yaml` and `tests/test-mount-state.sh` that justified them
+  with #420 changed.
+- The Context7 MCP server for host development tools (`.mcp.json`) moves from
+  `@upstash/context7-mcp` 4.0.0 to 4.1.1. Pi's separate sandbox integration,
+  `@upstash/context7-pi`, is unchanged.
+- The README overview diagram pins Mermaid's `dagre` layout, so it keeps
+  rendering as before. The diagram's caption is now spell-checked, because the
+  `cspell:enable` marker moved up to directly after the diagram.
+
+### Fixed
+
+- **`uv run md2okf --version` no longer reports a stale version after
+  `VERSION` changes.** uv rebuilds a project only when a cache key changes, and
+  `VERSION` was not one, so a checkout kept its old build. `pyproject.toml` now
+  lists `VERSION` beside itself in `[tool.uv] cache-keys`.
+
+### Upgrading
+
+- Upgrade sbx to 0.48.0 or newer first: md2okf refuses an older one, and the
+  next run rebuilds each agent's sandbox on its own.
+- If you set the OpenRouter key twice, remove the custom copy before that
+  rebuild. Find its placeholder with `sbx secret ls --sandbox md2okf-pi`, run
+  `sbx secret rm --sandbox md2okf-pi --placeholder <placeholder>`, and check
+  that `sbx secret ls --sandbox md2okf-pi` no longer lists it. Then run
+  `sbx rm --force md2okf-pi`. Name the sandbox both times: without
+  `--sandbox`, `sbx secret rm --placeholder` searches only the global scope,
+  and exits 0 even when it finds nothing there. A sandbox-scoped
+  secret overrides the global one, so a stale copy would keep being used even
+  after you rotate the global key. Keep the global `sbx secret set openrouter`.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

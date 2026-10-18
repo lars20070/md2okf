@@ -41,6 +41,11 @@ build-backend = "hatchling.build"
 path = "VERSION"
 pattern = "(?P<version>.+)"
 
+# uv rebuilds the project only when a cache key changes, and by default VERSION
+# is not one, so `uv run md2okf --version` would keep reporting a stale version.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "VERSION" }]
+
 # The wheel carries the driver plus the assets resources.py expects beside it:
 # kits/<agent>/, SPEC.md, SBX_VERSION and clis/. Thus an installed md2okf works
 # with no checkout. One kits/ line per registered agent (agents.AGENTS), added

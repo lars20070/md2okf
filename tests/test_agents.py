@@ -118,11 +118,13 @@ def test_pi_credentials_are_ready_when_the_key_is_proxy_managed(fake_sbx):
     assert agents.PI.check_credentials(PI_SANDBOX) is None
 
 
-def test_pi_credential_remedy_names_the_openrouter_commands(fake_sbx):
+def test_pi_credential_remedy_names_the_openrouter_command(fake_sbx):
     """Regression.
 
     This used to tell the user to run a GitHub secret command for an
-    OpenRouter key problem -- the wrong provider entirely.
+    OpenRouter key problem -- the wrong provider entirely. Since sbx 0.48 the
+    global `openrouter` secret alone is enough, so the remedy no longer adds a
+    sandbox-scoped custom secret, which would override the global one.
     """
     fake_sbx.register(PI_SANDBOX)
     fake_sbx.openrouter_key = "sk-literal-value"
@@ -131,8 +133,8 @@ def test_pi_credential_remedy_names_the_openrouter_commands(fake_sbx):
 
     assert remedy is not None
     assert "sbx secret set openrouter" in remedy
-    assert f"sbx secret set-custom --sandbox {PI_SANDBOX}" in remedy
-    assert "openrouter.ai" in remedy
+    assert "set-custom" not in remedy
+    assert f"sbx rm --force {PI_SANDBOX}" in remedy
     assert "github" not in remedy.lower()
 
 

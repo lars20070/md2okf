@@ -235,10 +235,10 @@ CI because `okf/` is gitignored output, and the driver does not call it.
 `make test-sandbox` is host-only for the other reason — it needs an sbx runtime
 — and asks the driver for a sandbox, reusing the existing one when it is still
 ours and still matches. `md2okf` takes `OPENROUTER_API_KEY` from `sbx secret`,
-not from your shell (see the README for the two-step setup). Anything that
+not from your shell (see the README for the setup). Anything that
 touches a sandbox — `md2okf`, `make test-sandbox`, `sbx exec` — needs an active
-`sbx login` session; `make validate`, `make dist` and the pytest suites are
-static and do not.
+`sbx login` session, and since sbx 0.47 so does `make validate`; `make dist`
+and the pytest suites are static and do not.
 
 Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`: it verifies the
 tag against `VERSION`, builds the wheel and sdist once, publishes them to PyPI
@@ -255,15 +255,20 @@ Sandbox Kit specs before considering the task complete:
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema (a
-static schema check — no Docker, login, or network required) after enforcing the
-minimum in `SBX_VERSION`. The same check runs in CI (see `.github/workflows/ci.yml`,
-job `validate-kit`), so validating locally first avoids CI failures. Do not
-finish a task until it passes. If the `sbx` CLI is not installed, install it with
-`brew install docker/tap/sbx`; upgrade an older installation through Homebrew or
-APT.
+This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema
+after enforcing the minimum in `SBX_VERSION`. Since sbx 0.47, `sbx kit validate`
+needs a running daemon and an active `sbx login`
+([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685)),
+so `make validate` works only on a signed-in host. Inside a sandbox, use
+`sbx kit pack kits/<agent> --output <scratch>.zip` for each kit as an offline
+stand-in for the schema check, and ask the user to run `make validate` on the
+host. CI's `validate-kit` job (`.github/workflows/ci.yml`) is switched off until
+a stable sbx ships `kit validate --offline`, so nothing else catches a broken
+spec before it lands. Do not finish a task until it passes. If the `sbx` CLI is
+not installed, install it with `brew install docker/tap/sbx`; upgrade an older
+installation through Homebrew or APT.
 
-`make validate` only checks the spec statically. If you changed what the sandbox
+`make validate` only checks the spec against the schema. If you changed what the sandbox
 installs or what it carries in `kits/pi/files/`, also run `sbx rm --force md2okf-pi &&
 make test-sandbox AGENT=pi` — on its own `make test-sandbox` reuses whatever sandbox
 is running, which may predate your edit.

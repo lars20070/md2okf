@@ -146,7 +146,7 @@ def create(name: str, kit_dir: Path, mounts: Iterable[Mount], env: dict[str, str
     """
     _run(["sbx", "rm", "--force", name])
 
-    argv = ["sbx", "run", "--detached", "--name", name]
+    argv = ["sbx", "run", "--detach", "--name", name]
     for key, value in env.items():
         argv += ["-e", f"{key}={value}"]
     argv.append(str(kit_dir))
