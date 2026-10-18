@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-18
+
 ### Added
 
 - **A `/read-pi-session-traces` skill for Claude Code** (`.claude/skills/`, a
@@ -78,14 +80,16 @@ and this project adheres to
 ### Upgrading
 
 - Upgrade sbx to 0.48.0 or newer first: md2okf refuses an older one, and the
-next run rebuilds each agent's sandbox on its own.
-
+  next run rebuilds each agent's sandbox on its own.
 - If you set the OpenRouter key twice, remove the custom copy before that
-rebuild. Find its placeholder with `sbx secret ls`, run
-`sbx secret rm --placeholder <placeholder>`, then `sbx rm --force md2okf-pi`.
-A sandbox-scoped secret overrides the global one, so a stale copy would keep
-being used even after you rotate the global key. Keep the global
-`sbx secret set openrouter`.
+  rebuild. Find its placeholder with `sbx secret ls --sandbox md2okf-pi`, run
+  `sbx secret rm --sandbox md2okf-pi --placeholder <placeholder>`, and check
+  that `sbx secret ls --sandbox md2okf-pi` no longer lists it. Then run
+  `sbx rm --force md2okf-pi`. Name the sandbox both times: without
+  `--sandbox`, `sbx secret rm --placeholder` searches only the global scope,
+  and exits 0 even when it finds nothing there. A sandbox-scoped
+  secret overrides the global one, so a stale copy would keep being used even
+  after you rotate the global key. Keep the global `sbx secret set openrouter`.
 
 ## [0.3.0] - 2026-09-28
 
