@@ -23,6 +23,7 @@ other instructions.
 ```mermaid
 ---
 config:
+  layout: dagre
   flowchart:
     nodeSpacing: 35
     rankSpacing: 45
@@ -83,6 +84,8 @@ flowchart LR
   style OUT fill:none,stroke:none
 ```
 
+<!-- cspell:enable -->
+
 <br>*Host tooling (amber) builds the microVM from the kit and drives it with one
 `sbx exec` per source document. Inside, the coding agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
@@ -92,8 +95,6 @@ indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx credential proxy (teal), which
 injects the API key; OpenRouter routes them to DeepInfra or other providers (gray).*
-
-<!-- cspell:enable -->
 
 ## Contents
 
