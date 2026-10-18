@@ -77,10 +77,10 @@ and this project adheres to
 
 ### Upgrading
 
-Upgrade sbx to 0.48.0 or newer first: md2okf refuses an older one, and the
+- Upgrade sbx to 0.48.0 or newer first: md2okf refuses an older one, and the
 next run rebuilds each agent's sandbox on its own.
 
-If you set the OpenRouter key twice, remove the custom copy before that
+- If you set the OpenRouter key twice, remove the custom copy before that
 rebuild. Find its placeholder with `sbx secret ls`, run
 `sbx secret rm --placeholder <placeholder>`, then `sbx rm --force md2okf-pi`.
 A sandbox-scoped secret overrides the global one, so a stale copy would keep
