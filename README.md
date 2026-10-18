@@ -141,7 +141,7 @@ The first flag opens a shell inside the sandbox, at the wiki root; the second op
 
 ## Install sbx
 
-Install the `sbx` command-line tool, version 0.45.0 or newer, and sign in.
+Install the `sbx` command-line tool, version 0.48.0 or newer, and sign in.
 `md2okf` refuses an older `sbx`.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
@@ -165,23 +165,17 @@ sbx login
 
 `sbx` keeps the key out of the virtual machine. It holds the real key on the
 host and swaps it into requests at its proxy, so inside the sandbox
-`$OPENROUTER_API_KEY` reads `proxy-managed`. Store the key with `sbx` twice:
+`$OPENROUTER_API_KEY` reads `proxy-managed`. Store the key with `sbx` once:
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
-
-# And again as a custom secret, to work around a known sbx issue:
-# https://github.com/docker/sbx-releases/issues/25
-sbx secret set-custom --sandbox md2okf-pi \
-  --host openrouter.ai \
-  --env OPENROUTER_API_KEY \
-  --value "$OPENROUTER_API_KEY"
 ```
 
-`md2okf-pi` is the sandbox Pi runs in; each agent gets its own, called
-`md2okf-<agent>`. The `export` only passes the key to the two `sbx` commands:
-`md2okf` reads it from `sbx secret`, never from your shell environment.
+The secret is global, so it reaches `md2okf-pi`, the sandbox Pi runs in; each
+agent gets its own, called `md2okf-<agent>`. The `export` only passes the key
+to the `sbx` command: `md2okf` reads it from `sbx secret`, never from your
+shell environment.
 
 ## Further documentation
 

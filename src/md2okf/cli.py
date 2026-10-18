@@ -155,7 +155,7 @@ def _format_sbx_run(agent: agents.Agent, wb: workbench.Workbench) -> str:
     """
     mount_args = " ".join(mount.as_arg() for mount in wb.mounts())
     return (
-        f"sbx run --detached --name {workbench.sandbox_name(agent.name)} "
+        f"sbx run --detach --name {workbench.sandbox_name(agent.name)} "
         f"-e MD2OKF_STATE_DIR={wb.root} {resources.kit_dir(agent.name)} {mount_args}"
     )
 

@@ -100,7 +100,7 @@ def test_dry_run_prints_the_command_lines_that_would_run(tmp_path, capsys, isola
     out = capsys.readouterr().out
     assert "commands:" in out
     assert "  agent:  pi\n" in out
-    assert f"sbx run --detached --name {PI_SANDBOX} " in out
+    assert f"sbx run --detach --name {PI_SANDBOX} " in out
     assert f"{resources.kit_dir('pi')} " in out
     assert f"sbx exec {PI_SANDBOX} -- md2okf-agent pi --mode json 'Load the compile-okf skill" in out
     assert doc.name in out  # the staged basename is embedded in the pi prompt
@@ -212,7 +212,7 @@ def test_first_run_creates_the_sandbox_and_prints_one_tsv_row(tmp_path, capsys, 
     assert hash_before == hash_after == "aaaa0000"
     assert "Compiling document" in err
 
-    assert any(c[:3] == ["sbx", "run", "--detached"] for c in fake_sbx.calls)
+    assert any(c[:3] == ["sbx", "run", "--detach"] for c in fake_sbx.calls)
     assert (output_dir / "page.md").exists()
 
 
@@ -226,11 +226,11 @@ def test_second_run_with_unchanged_config_reuses_the_sandbox(tmp_path, isolated_
         fake_sbx.queue_hash("aaaa0000")
 
     assert cli.main(["-o", str(output_dir), str(doc)]) == 0
-    run_calls_after_first = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]
+    run_calls_after_first = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]]
     assert len(run_calls_after_first) == 1
 
     assert cli.main(["-o", str(output_dir), str(doc)]) == 0
-    run_calls_after_second = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]
+    run_calls_after_second = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]]
     assert len(run_calls_after_second) == 1  # not recreated
 
 
@@ -245,7 +245,7 @@ def test_fresh_forces_a_recreate(tmp_path, isolated_state, fake_sbx):
 
     assert cli.main(["-o", str(output_dir), str(doc)]) == 0
     assert cli.main(["--fresh", "-o", str(output_dir), str(doc)]) == 0
-    run_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]
+    run_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]]
     assert len(run_calls) == 2
 
 
@@ -440,8 +440,8 @@ def test_shell_creates_the_sandbox_before_entering_it(isolated_state, fake_sbx, 
         cli.main(["--shell"])
 
     shapes = [c[:3] for c in fake_sbx.calls]
-    assert ["sbx", "run", "--detached"] in shapes
-    assert shapes.index(["sbx", "run", "--detached"]) < shapes.index(["sbx", "exec", "-it"])
+    assert ["sbx", "run", "--detach"] in shapes
+    assert shapes.index(["sbx", "run", "--detach"]) < shapes.index(["sbx", "exec", "-it"])
 
 
 def test_interactive_holds_the_lock_through_process_replacement(
@@ -512,7 +512,7 @@ def test_shell_with_fresh_recreates_the_sandbox_before_entering_it(isolated_stat
         with pytest.raises(ExecvpCalled):
             cli.main(argv)
 
-    run_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]
+    run_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]]
     assert len(run_calls) == 2  # the second entry reused nothing
 
 
@@ -599,7 +599,7 @@ def test_claude_dry_run_resolves_its_own_sandbox_kit_workbench_and_argv(tmp_path
     assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
     out = capsys.readouterr().out
     assert "  agent:  claude\n" in out
-    assert f"sbx run --detached --name {CLAUDE_SANDBOX} " in out
+    assert f"sbx run --detach --name {CLAUDE_SANDBOX} " in out
     assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'claude'} " in out
     assert f"{resources.kit_dir('claude')} " in out
     assert (

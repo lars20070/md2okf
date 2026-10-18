@@ -8,6 +8,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **md2okf now requires sbx 0.48.0 (was 0.45.0).** The kit fingerprint hashes
+  the sbx version, so every existing sandbox is rebuilt once on its first use
+  after the upgrade.
+- **Sandboxes are created with `sbx run --detach`.** sbx 0.48 renamed the flag
+  and rejects the old `--detached`.
+- **`make validate` needs an active `sbx login`.** Since sbx 0.47,
+  `sbx kit validate` needs a running daemon and a Docker sign-in
+  ([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685)).
+  CI's `validate-kit` job is switched off until a stable sbx release ships
+  `kit validate --offline`; run `make validate` on a signed-in host instead.
+- **The OpenRouter key needs only one secret.** The global
+  `sbx secret set openrouter` is enough on sbx 0.48.0, verified by a real
+  compile without any custom secret. The README and the credential remedy no
+  longer ask for the sandbox-scoped `sbx secret set-custom` copy.
+
+### Upgrading
+
+If you set the OpenRouter key with `sbx secret set-custom --sandbox md2okf-pi …`,
+remove that custom secret: find its placeholder with `sbx secret ls`, run
+`sbx secret rm --placeholder <placeholder>`, then `sbx rm --force md2okf-pi`.
+A sandbox-scoped secret overrides the global one, so a stale copy would keep
+being used.
+
 ## [0.3.0] - 2026-09-28
 
 ### Added

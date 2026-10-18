@@ -152,7 +152,7 @@ class FakeSbx:
         if argv[:3] == ["sbx", "rm", "--force"]:
             existed = self.sandboxes.pop(argv[3], None) is not None
             return done(0 if existed else 1)
-        if argv[:3] == ["sbx", "run", "--detached"]:
+        if argv[:3] == ["sbx", "run", "--detach"]:
             name = argv[argv.index("--name") + 1]
             if name in self.run_fail_names:
                 return done(1, "", "boom")

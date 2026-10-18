@@ -728,9 +728,9 @@ def test_ensure_sandbox_reuses_a_previously_created_one(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
     workbench.ensure_sandbox(wb, PI)
-    run_calls_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
+    run_calls_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]])
     assert workbench.ensure_sandbox(wb, PI) == "reuse"
-    run_calls_after = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
+    run_calls_after = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]])
     assert run_calls_after == run_calls_before
 
 
@@ -766,14 +766,14 @@ def test_credentials_are_checked_on_reuse_too(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
     assert workbench.ensure_sandbox(wb, PI) == "created"
-    runs_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]])
+    runs_before = len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]])
 
     fake_sbx.openrouter_key = "sk-literal-value"
     with pytest.raises(workbench.CredentialNotReadyError) as excinfo:
         workbench.ensure_sandbox(wb, PI)
 
     assert excinfo.value.name == PI_SANDBOX
-    assert len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detached"]]) == runs_before
+    assert len([c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"]]) == runs_before
     assert workbench.read_ownership_marker(wb) is not None
 
 

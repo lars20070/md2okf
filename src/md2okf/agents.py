@@ -72,8 +72,8 @@ def _pi_compile_prompt(document: Path) -> str:
 def _pi_check_credentials(name: str) -> str | None:
     """OPENROUTER_API_KEY must be the proxy-managed sentinel, never a literal key.
 
-    The remedy names the two-step setup in README.md, "Set up the OpenRouter
-    key". Regression: it once named `sbx secret set github ...` -- the wrong
+    The remedy names the setup in README.md, "Set up the OpenRouter key".
+    Regression: it once named `sbx secret set github ...` -- the wrong
     provider entirely, copied from an unrelated GitHub-auth pattern.
     """
     if sandbox.key_is_proxy_managed(name):
@@ -82,8 +82,6 @@ def _pi_check_credentials(name: str) -> str | None:
         f"OPENROUTER_API_KEY inside {name!r} is not proxy-managed.\n"
         '  Set it via sbx secret (see README.md, "Set up the OpenRouter key"):\n'
         '  echo "$OPENROUTER_API_KEY" | sbx secret set openrouter\n'
-        f"  sbx secret set-custom --sandbox {name} --host openrouter.ai "
-        '--env OPENROUTER_API_KEY --value "$OPENROUTER_API_KEY"\n'
         f"{_rebuild_hint(name)}"
     )
 

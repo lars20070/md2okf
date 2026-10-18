@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 
 # Validate every Docker Sandbox Kit spec (kits/*/spec.yaml) against the current
-# Sandbox Kit schema. Runs identically locally and in CI. Kits are discovered,
-# not listed, so a kit being authored is checked from its first commit -- long
-# before md2okf.agents registers it -- and a new one needs no edit here.
+# Sandbox Kit schema. Kits are discovered, not listed, so a kit being authored
+# is checked from its first commit -- long before md2okf.agents registers it --
+# and a new one needs no edit here.
 #
-# `sbx kit validate` is a static schema check: no Docker, no `sbx login`, no
-# network. It uses the installed CLI's schema, after checking that CLI against
-# the repository-wide minimum in SBX_VERSION.
+# `sbx kit validate` uses the installed CLI's schema, after checking that CLI
+# against the repository-wide minimum in SBX_VERSION. Since sbx 0.47 it also
+# needs a running daemon and an active `sbx login`, so it runs on a signed-in
+# host only -- not in CI and not inside a sandbox -- until a stable release
+# ships `kit validate --offline`
+# (https://github.com/docker/sbx-releases/issues/685).
 
 set -euo pipefail
 

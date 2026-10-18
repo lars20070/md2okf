@@ -217,9 +217,11 @@ pass "the wrapper refuses to run without a command"
 
 # --- every kit's relocation sites ----------------------------------------------
 #
-# The bind is required from all three lifecycle sites: the entrypoint (starts
-# where the startup hook is not replayed), the startup hook (normal starts),
-# and the wrapper shim (every process the driver starts with `sbx exec`). Each
+# The bind is required from all three lifecycle sites: the entrypoint (every
+# `sbx run` launch), the wrapper shim (every process the driver starts with
+# `sbx exec`), and the startup hook (sessions that launch no agent, such as a
+# shell). The startup hook gates neither of the others, so only the entrypoint
+# and the wrapper guarantee the bind before the agent starts. Each
 # is named rather than counted, so a missing site and a stray duplicate are
 # both caught with a message saying which -- and all three must name the same
 # native trace directory, or an agent's traces would be bound in one lifecycle
