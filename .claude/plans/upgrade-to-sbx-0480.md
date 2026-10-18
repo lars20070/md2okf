@@ -157,8 +157,10 @@ On the host (needs `sbx login`, which I can't do here):
       that nothing came back.
    4. `make test-sandbox AGENT=pi`: the rebuild, the sentinel check, and the
       trace-probe check.
-   5. `uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md`: a real,
-      authenticated OpenRouter compile in that same configuration.
+   5. `MD2OKF_AGENT=pi uv run md2okf -o "$(mktemp -d)" tests/fixtures/smoke.md`:
+      a real, authenticated OpenRouter compile in that same configuration.
+      The explicit `MD2OKF_AGENT=pi` matters: an exported `claude` or `codex`
+      would let the compile succeed without ever reaching OpenRouter.
 
    If 4 or 5 fails, take the "fails" branch of §4 and restore the custom
    secret.
