@@ -6,11 +6,11 @@
 # and a new one needs no edit here.
 #
 # `sbx kit validate` uses the installed CLI's schema, after checking that CLI
-# against the repository-wide minimum in SBX_VERSION. Since sbx 0.47 it also
-# needs a running daemon and an active `sbx login`, so it runs on a signed-in
-# host only -- not in CI and not inside a sandbox -- until a stable release
-# ships `kit validate --offline`
-# (https://github.com/docker/sbx-releases/issues/685).
+# against the repository-wide minimum in SBX_VERSION. `--offline` skips the
+# daemon-backed kit policy, so it needs neither a running daemon nor an
+# `sbx login`, and runs in CI and inside a sandbox as well as on the host.
+# Since sbx 0.47 the online form needed both
+# (https://github.com/docker/sbx-releases/issues/685, fixed in 0.49.2).
 
 set -euo pipefail
 
@@ -48,7 +48,7 @@ for spec in "${repo_root}"/kits/*/spec.yaml; do
 	found=$((found + 1))
 	echo "Validating ${kit} with sbx ${installed} (minimum ${required})..."
 	# Keep going after a failure, so one run reports every invalid kit.
-	sbx kit validate "${kit}/" || status=1
+	sbx kit validate --offline "${kit}/" || status=1
 done
 
 if [[ "${found}" -eq 0 ]]; then

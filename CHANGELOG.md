@@ -51,6 +51,16 @@ and this project adheres to
   flags. The kit fingerprint hashes the sbx version, so every existing sandbox
   is rebuilt once, automatically, on its first use after the upgrade, and the
   rebuild is what picks up the new images.
+- **`make validate` runs `sbx kit validate --offline`, and CI's `validate-kit`
+  job is switched back on.** sbx 0.49.2 fixes
+  [docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685):
+  `--offline` skips the daemon-backed kit policy, so validating a kit needs
+  neither a running daemon nor an `sbx login`. `make validate` therefore works
+  inside a sandbox and on a CI runner as well as on a signed-in host, and the
+  job (deleted `if: false`) checks every `kits/*/spec.yaml` on each pull request
+  against the schema of the exact sbx release in `SBX_VERSION`. Checked with
+  sbx 0.49.2 against all three kits. This reverses the 0.3.1 entry that
+  switched the job off.
 - `make lint` skips a `tmp/` folder: markdownlint and cspell leave tracked
   Markdown under it alone, and cspell ignores `tmp/**`. For scratch notes and
   plans.
