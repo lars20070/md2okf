@@ -56,12 +56,12 @@ endif
 # '*/pyproject.toml' subprojects; its own [tool.ruff] scopes that walk away
 # from md/, okf/, and everything else that isn't its source.
 lint:
-	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
+	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
 		| xargs -0 $(MARKDOWNLINT)
 	git ls-files -z -- '*.json' | xargs -0 -n1 jq empty
 	git ls-files -z -- '*.yaml' '*.yml' | xargs -0 $(YAMLLINT)
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
-	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' \
+	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
 		| xargs -0 $(CSPELL) --no-progress
 	git ls-files -- 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
 	if [ ! -f VERSION ]; then \

@@ -13,7 +13,8 @@
     "scripts/inspectokf/tests/**",
     "scripts/sizeokf/tests/**",
     "scripts/merkleokf/tests/**",
-    "tests/**"
+    "tests/**",
+    "tmp/**"
   ],
   "words": [
     "okf",
