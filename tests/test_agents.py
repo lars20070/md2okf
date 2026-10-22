@@ -70,7 +70,28 @@ def test_from_env_honours_an_explicit_value(monkeypatch):
 
 
 def test_pi_compile_args_run_pi_json_mode_through_the_wrapper():
-    assert agents.PI.compile_args("do it") == ["md2okf-agent", "pi", "--mode", "json", "do it"]
+    assert agents.PI.compile_args("do it") == [
+        "md2okf-agent",
+        "pi",
+        "--mode",
+        "json",
+        "--no-mcp",
+        "--tools",
+        "-tool_search",
+        "do it",
+    ]
+
+
+def test_pi_compile_carries_no_mcp_tools_but_interactive_does():
+    """A compile runs without the kit's GitHub MCP server or its deferred-tool loader.
+
+    `md2okf --agent` keeps both: the flags belong to the compile alone.
+    """
+    compile_argv = agents.PI.compile_args("do it")
+    assert "--no-mcp" in compile_argv
+    assert compile_argv[compile_argv.index("--tools") + 1] == "-tool_search"
+    assert "--no-mcp" not in agents.PI.interactive_args
+    assert "--tools" not in agents.PI.interactive_args
 
 
 def test_pi_interactive_args_run_pi_through_the_wrapper():

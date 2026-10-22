@@ -16,8 +16,10 @@ KNOWN_TYPES = {
     "custom",
     "custom_message",
     "label",
+    "usage",
+    "context_edit",
 }
-KNOWN_ROLES = {"user", "assistant", "toolResult", "bashExecution", "custom"}
+KNOWN_ROLES = {"system", "user", "assistant", "toolResult", "bashExecution", "custom"}
 KNOWN_BLOCKS = {"text", "thinking", "toolCall", "image"}
 TOKEN_FIELDS = (
     "input",
@@ -97,6 +99,44 @@ def _content(content, chars, thinking, tools):
     return [_block(block, chars, thinking, tools) for block in _blocks(content)]
 
 
+def _names(items, key=None):
+    """Clipped names, capped like field_names; never the values behind them."""
+    if key is not None:
+        items = [item.get(key) for item in items if isinstance(item, dict)]
+    names = [clip(text_value(item), 200) for item in items[:50]]
+    if len(items) > 50:
+        names.append(f"…{len(items) - 50} more")
+    return names
+
+
+def _system(msg):
+    """Section names and tool deltas only; prompt text is never projected."""
+    result = {}
+    sections = msg.get("sections")
+    if isinstance(sections, dict):
+        kept = sorted(
+            str(name) for name, value in sections.items() if value is not None
+        )
+        removed = sorted(str(name) for name, value in sections.items() if value is None)
+        if kept:
+            result["sections"] = _names(kept)
+        if removed:
+            result["sectionsRemoved"] = _names(removed)
+    for key in ("toolsAdded", "toolsRemoved"):
+        if isinstance(msg.get(key), list):
+            result[key] = _names(msg[key], "name")
+    return result
+
+
+def _nested_calls(value):
+    if not isinstance(value, dict) or not isinstance(value.get("calls"), list):
+        return None
+    result = {"count": len(value["calls"])}
+    if isinstance(value.get("complete"), bool):
+        result["complete"] = value["complete"]
+    return result
+
+
 def _details(value, chars):
     result = shape(value)
     if isinstance(value, dict):
@@ -127,12 +167,16 @@ def project_entry(record, chars, thinking=False, tools=True):
         msg = obj["message"]
         role = msg.get("role")
         result["role"] = scalar(role, 100)
-        if role == "user":
+        if role == "system":
+            result.update(_system(msg))
+        elif role == "user":
             result["content"] = _content(msg.get("content"), chars, thinking, tools)
         elif role == "assistant":
             result["provider"] = scalar(msg.get("provider"), 200)
             result["model"] = scalar(msg.get("model"), 200)
             result["stopReason"] = scalar(msg.get("stopReason"), 100)
+            if "thinkingLevel" in msg:
+                result["thinkingLevel"] = scalar(msg["thinkingLevel"], 100)
             if isinstance(msg.get("errorMessage"), str):
                 result["errorMessage"] = clip(msg["errorMessage"], chars)
             result["content"] = [
@@ -146,6 +190,9 @@ def project_entry(record, chars, thinking=False, tools=True):
             result["toolName"] = scalar(msg.get("toolName"), 200)
             result["toolCallId"] = scalar(msg.get("toolCallId"), ID_CHARS)
             result["isError"] = msg.get("isError") is True
+            nested = _nested_calls(msg.get("nestedCalls"))
+            if nested is not None:
+                result["nestedCalls"] = nested
             if tools:
                 result["content"] = _content(msg.get("content"), chars, thinking, tools)
                 if msg.get("details") is not None:
@@ -205,6 +252,21 @@ def project_entry(record, chars, thinking=False, tools=True):
     elif entry_type == "label":
         result["targetId"] = scalar(obj.get("targetId"), ID_CHARS)
         result["label"] = scalar(obj.get("label"), chars)
+    elif entry_type == "usage":
+        # "kind" already names the record kind, so the entry's kind is renamed.
+        result["usageKind"] = scalar(obj.get("kind"), 200)
+        result["provider"] = scalar(obj.get("provider"), 200)
+        result["model"] = scalar(obj.get("model"), 200)
+        usage = project_usage(obj.get("usage"))
+        if usage is not None:
+            result["usage"] = usage
+    elif entry_type == "context_edit":
+        # The replacement is model context, so only its presence is reported.
+        result["targetId"] = scalar(obj.get("targetId"), ID_CHARS)
+        if obj.get("replacement") is None:
+            result["hidden"] = True
+        else:
+            result["replaced"] = True
     else:
         result["fields"] = field_names(obj)
         result["size"] = record.size
@@ -227,7 +289,8 @@ def searchable_fields(record, include_thinking=False):
             for key in ("command", "output"):
                 if isinstance(msg.get(key), str):
                     yield key, msg[key]
-        content = msg.get("content")
+        # System content is prompt text, which is never printed or searched.
+        content = None if role == "system" else msg.get("content")
     elif entry_type == "custom_message":
         content = obj.get("content")
     else:
@@ -285,8 +348,14 @@ def render_entry(record):
     label = role or record.get("type")
     if role == "assistant":
         label += f" {record.get('provider')}/{record.get('model')}"
+        if "thinkingLevel" in record:
+            label += f" thinking={record['thinkingLevel']}"
     elif role == "toolResult":
         label += f" {record.get('toolName')} [{record.get('toolCallId')}]"
+    elif record.get("type") == "usage":
+        label += (
+            f" {record.get('usageKind')} {record.get('provider')}/{record.get('model')}"
+        )
     lines = [
         f"L{record.get('line')}  {record.get('id')}  {record.get('timestamp') or '-'}  {label}"
     ]
@@ -294,6 +363,17 @@ def render_entry(record):
         lines.append(f"    error: {record['errorMessage']}")
     if "command" in record:
         lines.append(f"    $ {record['command']}")
+    for key, title in (
+        ("sections", "sections"),
+        ("sectionsRemoved", "sections removed"),
+        ("toolsAdded", "tools added"),
+        ("toolsRemoved", "tools removed"),
+    ):
+        if key in record:
+            lines.append(f"    {title}: {', '.join(record[key]) or '-'}")
+    if "targetId" in record and record.get("type") == "context_edit":
+        effect = "hidden" if record.get("hidden") else "content replaced; not shown"
+        lines.append(f"    target: {record['targetId']} ({effect})")
     for block in record.get("content", []):
         block_type = block.get("type")
         if block_type == "text":
@@ -318,6 +398,10 @@ def render_entry(record):
         lines.extend(f"    {line}" for line in record["output"].splitlines())
     if "summary" in record:
         lines.append(f"    summary: {record['summary']}")
+    if "nestedCalls" in record:
+        nested = record["nestedCalls"]
+        tail = "" if nested.get("complete", True) else " (record incomplete)"
+        lines.append(f"    nested calls: {nested.get('count')}{tail}")
     if "usage" in record:
         lines.append(f"    usage: {_usage_text(record['usage'])}")
     if "fields" in record:

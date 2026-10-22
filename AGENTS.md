@@ -123,7 +123,7 @@ generic modules. An agent is registered only once its kit ships.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `kits/pi/`.
 Its spec is `kits/pi/spec.yaml` and its Pi config (`AGENTS.md`,
-`settings.json`, `models.json`, `skills/`) lives in
+`settings.json`, `models.json`, `mcp.json`, `skills/`) lives in
 `kits/pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
 its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits

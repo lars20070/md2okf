@@ -71,6 +71,22 @@ remove that agent's sandbox as described in
 Pi uses an OpenRouter API key; see
 [Set up the OpenRouter key](../README.md#set-up-the-openrouter-key).
 
+A GitHub token is optional. It authenticates the GitHub MCP server that
+`md2okf --agent` offers, along with `gh` and `git` over HTTPS. Pass it on stdin,
+before the sandbox is created:
+
+```bash
+printf '%s\n' "$MD2OKF_GITHUB_TOKEN" | sbx secret set github
+sbx rm --force md2okf-pi
+```
+
+A bound token is usable by every process in the Pi sandbox, compile turns
+included: the `sbx` proxy injects it into every request to GitHub, and a
+compile turn has a shell. So use a fine-grained, read-only token scoped to the
+repositories you need, or leave it unbound; a compile does not use it. See
+[GitHub MCP server](../kits/pi/README.md#github-mcp-server) in the Pi kit
+guide.
+
 ### Claude Code
 
 Claude Code signs in with the host's `anthropic` secret:

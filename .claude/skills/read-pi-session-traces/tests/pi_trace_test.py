@@ -350,7 +350,9 @@ class InspectTests(TempCase):
             firstKeptEntryId="00000001",
             usage=usage(10, 0.125),
         )
-        trace.add("usage", provider="future", model="future", usage=usage(1000, 8))
+        trace.add(
+            "future_usage", provider="future", model="future", usage=usage(1000, 8)
+        )
         trace.add("future_type", payload="opaque")
         path = trace.write(self.folder)
         output = records(run("inspect", path, "--json"))
@@ -366,9 +368,15 @@ class InspectTests(TempCase):
         }
         self.assertEqual(
             costs,
-            {"conversation": 0.5, "toolExecution": 0.25, "summarization": 0.125},
+            {
+                "conversation": 0.5,
+                "toolExecution": 0.25,
+                "summarization": 0.125,
+                "auxiliary": 0,
+            },
         )
-        self.assertNotIn("standalone", report["usage"]["bySource"])
+        self.assertEqual(report["usage"]["total"]["cost"]["total"], 0.875)
+        self.assertNotIn("future/future", report["usage"]["byModel"])
         warnings = " ".join(item["message"] for item in kind(output, "warning"))
         self.assertIn("metadata only", warnings)
         self.assertIn("forked session", warnings)
@@ -390,6 +398,224 @@ class InspectTests(TempCase):
             (output[-1]["total"], output[-1]["shown"], output[-1]["remaining"]),
             (3, 1, 2),
         )
+
+
+class ModernCarrierTests(TempCase):
+    def unknown_warnings(self, output):
+        return [
+            item["message"]
+            for item in kind(output, "warning")
+            if "unknown" in item["message"]
+        ]
+
+    def test_system_messages_show_section_names_and_tool_deltas_only(self):
+        secret = "SECTION_TEXT_MUST_NOT_LEAK"
+        trace = Trace("system")
+        first = trace.message(
+            "system",
+            content=f"{secret} content",
+            sections={"preamble": secret, "tools": f"<tools>{secret}</tools>"},
+            toolsAdded=[
+                {"name": "read", "description": secret, "parameters": {"x": secret}},
+                {"name": "bash", "description": secret, "parameters": {}},
+            ],
+        )
+        trace.user("hello")
+        patch = trace.message(
+            "system",
+            content=[text(secret)],
+            sections={"skills": secret, "tools": None},
+            toolsRemoved=[{"name": "bash"}],
+        )
+        path = trace.write(self.folder)
+
+        result = run("show", path, "--all", "--thinking", "--json", "--unlimited")
+        self.assertNotIn(secret, result.stdout)
+        entries = {entry["id"]: entry for entry in kind(records(result), "entry")}
+        self.assertEqual(entries[first]["role"], "system")
+        self.assertEqual(entries[first]["sections"], ["preamble", "tools"])
+        self.assertEqual(entries[first]["toolsAdded"], ["read", "bash"])
+        self.assertEqual(entries[patch]["sections"], ["skills"])
+        self.assertEqual(entries[patch]["sectionsRemoved"], ["tools"])
+        self.assertEqual(entries[patch]["toolsRemoved"], ["bash"])
+        self.assertNotIn("content", entries[first])
+
+        rendered = run("show", path, "--all", "--unlimited").stdout
+        self.assertNotIn(secret, rendered)
+        self.assertIn("tools added: read, bash", rendered)
+        self.assertIn("sections removed: tools", rendered)
+        self.assertEqual(
+            run("search", path, secret, "--thinking", code=1).returncode, 1
+        )
+
+        output = records(run("inspect", path, "--json"))
+        self.assertEqual(kind(output, "session")[0]["counts"]["roles"]["system"], 2)
+        self.assertEqual(self.unknown_warnings(output), [])
+
+    def test_usage_entry_counts_as_auxiliary_and_in_the_total(self):
+        trace = Trace("cache")
+        trace.user("prompt")
+        trace.assistant([text("answer")], spend=0.5)
+        warm = trace.add(
+            "usage",
+            kind="cache_warm",
+            provider="provider-b",
+            model="model-b",
+            usage=usage(50000, 0.015),
+        )
+        path = trace.write(self.folder)
+
+        output = records(run("inspect", path, "--json"))
+        report = kind(output, "session")[0]["usage"]
+        auxiliary = report["bySource"]["auxiliary"]
+        self.assertEqual(auxiliary["records"], 1)
+        self.assertEqual(auxiliary["totalTokens"], 50000)
+        self.assertEqual(auxiliary["cost"]["total"], 0.015)
+        self.assertEqual(
+            report["byModel"]["provider-b/model-b"]["cost"]["total"], 0.015
+        )
+        self.assertEqual(report["total"]["records"], 2)
+        self.assertEqual(report["total"]["totalTokens"], 50100)
+        self.assertAlmostEqual(report["total"]["cost"]["total"], 0.515)
+        self.assertEqual(self.unknown_warnings(output), [])
+
+        entry = kind(records(run("show", path, "--entry", warm, "--json")), "entry")
+        entry = next(item for item in entry if item["id"] == warm)
+        self.assertEqual(entry["kind"], "entry")
+        self.assertEqual(entry["usageKind"], "cache_warm")
+        self.assertEqual(entry["usage"]["cost"]["total"], 0.015)
+        rendered = run("show", path, "--entry", warm).stdout
+        self.assertIn("usage cache_warm provider-b/model-b", rendered)
+        self.assertIn("usage: 50,000 tokens, $0.015000", rendered)
+
+    def test_context_edit_annotates_hidden_and_replaced_targets(self):
+        secret = "REPLACEMENT_MUST_NOT_LEAK"
+        trace = Trace("edits")
+        hidden = trace.user("drop me")
+        replaced = trace.assistant([text("long answer")])
+        kept = trace.user("keep me")
+        hide = trace.add("context_edit", targetId=hidden, replacement=None)
+        superseded = trace.add("context_edit", targetId=replaced, replacement=None)
+        replace = trace.add(
+            "context_edit", targetId=replaced, replacement=[text(secret)]
+        )
+        stray = trace.add("context_edit", targetId="elsewhere", replacement=None)
+        path = trace.write(self.folder)
+
+        result = run("show", path, "--all", "--json", "--unlimited")
+        self.assertNotIn(secret, result.stdout)
+        output = records(result)
+        entries = {entry["id"]: entry for entry in kind(output, "entry")}
+        self.assertEqual(entries[hidden]["context"], "hidden from later context")
+        self.assertEqual(entries[replaced]["context"], "replaced in later context")
+        self.assertNotIn("context", entries[kept])
+        self.assertEqual(
+            (entries[hide]["targetId"], entries[hide]["hidden"]), (hidden, True)
+        )
+        self.assertTrue(entries[replace]["replaced"])
+        self.assertNotIn("hidden", entries[replace])
+        self.assertIn("superseded", entries[superseded]["context"])
+        self.assertIn("not earlier on this path", entries[stray]["context"])
+        self.assertEqual(self.unknown_warnings(output), [])
+
+        rendered = run("show", path, "--all", "--unlimited").stdout
+        self.assertNotIn(secret, rendered)
+        self.assertIn("context: hidden from later context", rendered)
+        self.assertEqual(run("search", path, secret, code=1).returncode, 1)
+
+        # The edit only needs to be on the selected path, not in the window.
+        alone = records(
+            run("show", path, "--entry", hidden, "--before", 0, "--after", 0, "--json")
+        )
+        self.assertEqual(
+            kind(alone, "entry")[0]["context"], "hidden from later context"
+        )
+        # A path that stops before the edits shows the targets unedited.
+        before = records(run("show", path, "--leaf", kept, "--all", "--json"))
+        self.assertTrue(all("context" not in entry for entry in kind(before, "entry")))
+
+    def test_nested_calls_count_apart_from_direct_calls(self):
+        trace = Trace("nested")
+        trace.user("go")
+        trace.assistant([tool_call("call-1", "codemode", {"code": "run()"})])
+        result_id = trace.tool_result(
+            "call-1",
+            "codemode",
+            "done",
+            nestedCalls={
+                "calls": [
+                    {
+                        "id": "n1",
+                        "name": "bash",
+                        "arguments": {"command": "true"},
+                        "status": "ok",
+                        "durationMs": 30,
+                    },
+                    {
+                        "id": "n2",
+                        "name": "bash",
+                        "status": "error",
+                        "durationMs": 70,
+                        "error": "boom",
+                    },
+                    {"id": "n3", "name": "read", "status": "unfinished"},
+                ],
+                "complete": False,
+            },
+        )
+        path = trace.write(self.folder)
+
+        output = records(run("inspect", path, "--json"))
+        report = kind(output, "session")[0]
+        self.assertEqual(list(report["tools"]), ["codemode"])
+        direct = report["tools"]["codemode"]
+        self.assertEqual(
+            (
+                direct["calls"],
+                direct["errors"],
+                direct["withoutResult"],
+                direct["resultsWithoutCall"],
+            ),
+            (1, 0, 0, 0),
+        )
+        self.assertEqual(direct["elapsedMs"], {"total": 1000, "max": 1000})
+        self.assertEqual(
+            report["nestedTools"],
+            {
+                "bash": {
+                    "calls": 2,
+                    "errors": 1,
+                    "durationMs": {"total": 100, "max": 70},
+                },
+                "read": {"calls": 1, "errors": 0, "durationMs": {"total": 0, "max": 0}},
+            },
+        )
+        warnings = " ".join(item["message"] for item in kind(output, "warning"))
+        self.assertIn("nestedTools undercounts", warnings)
+
+        shown = kind(
+            records(run("show", path, "--entry", result_id, "--json")), "entry"
+        )
+        shown = next(item for item in shown if item["id"] == result_id)
+        self.assertEqual(shown["nestedCalls"], {"count": 3, "complete": False})
+        rendered = run("show", path, "--entry", result_id).stdout
+        self.assertIn("nested calls: 3 (record incomplete)", rendered)
+
+    def test_assistant_thinking_level(self):
+        trace = Trace("thinking")
+        trace.user("go")
+        leveled = trace.assistant([text("ok")], thinkingLevel="high")
+        plain = trace.assistant([text("ok")])
+        path = trace.write(self.folder)
+
+        entries = {
+            entry["id"]: entry
+            for entry in kind(records(run("show", path, "--all", "--json")), "entry")
+        }
+        self.assertEqual(entries[leveled]["thinkingLevel"], "high")
+        self.assertNotIn("thinkingLevel", entries[plain])
+        rendered = run("show", path, "--all").stdout
+        self.assertIn("provider-a/model-a thinking=high", rendered)
 
 
 class BudgetAndRobustnessTests(TempCase):

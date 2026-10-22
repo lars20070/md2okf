@@ -1,6 +1,6 @@
 ---
 name: read-pi-session-traces
-description: Explore Pi coding-agent session traces saved by sbxpi without loading them whole. Use to list or search past Pi sessions, show one branch around an entry, or inspect structure, tools, and recorded usage. Not for Claude Code transcripts.
+description: Explore Pi coding-agent session traces saved by md2okf's Pi sandbox (md2okf-pi) without loading them whole. Use to list or search past Pi sessions, show one branch around an entry, or inspect structure, tools, and recorded usage. Not for Claude Code transcripts.
 compatibility: Requires Python 3.9 or newer.
 ---
 
@@ -12,7 +12,8 @@ it whole. The command streams records, projects only allowlisted fields, clips
 large fields, and caps total output at 20,000 characters unless `--unlimited`
 is explicit.
 
-This skill is pinned to Pi `0.84.4`, the version installed by `sbxpi`. Unknown
+This skill is pinned to Pi `1.4.0`, the version in `md2okf-pi`'s image
+(`kits/pi/spec.yaml`). Unknown
 entry, role, and block types are metadata only. Read
 [`references/schema.md`](references/schema.md) when field-level interpretation
 matters or the repository's Pi pin changes.
@@ -21,7 +22,7 @@ matters or the repository's Pi pin changes.
 
 ```bash
 t=.claude/skills/read-pi-session-traces/scripts/pi-trace.py
-root=~/.local/state/sbxagent/traces/<slug>-<hash>/sbxpi/sessions
+root="${XDG_STATE_HOME:-$HOME/.local/state}/md2okf/pi/sessions"
 
 python3 "$t" sessions "$root" --json
 python3 "$t" search "$root" 'text to find' --json
@@ -84,7 +85,7 @@ There are no generated continuation commands. Calculate them from counts:
   `--before 0 --after N`. That id prints again, as the new anchor. Add
   `--leaf ID` when preserving a non-default branch matters.
 
-## Pi 0.84.4 traps
+## Pi 1.4.0 traps
 
 - The header is not a tree node. A session may have several leaves, plus
   cycles, orphans, or duplicate ids in malformed files.
@@ -93,13 +94,22 @@ There are no generated continuation commands. Calculate them from counts:
 - Thinking text is hidden and unsearched unless `--thinking` is passed.
 - Tool `details` are opaque metadata. A recorded `fullOutputPath` is reported
   but never opened.
-- Assistant messages, tool results, compactions, and branch summaries are the
-  Pi 0.84.4 usage carriers. `inspect` reports sums by source and model. Unknown
+- Assistant messages, tool results, compactions, branch summaries, and
+  standalone `usage` entries (such as cache warming) are the Pi 1.4.0 usage
+  carriers. `inspect` reports a total plus sums by source and model. Unknown
   future entries are not counted as usage.
+- System messages carry the prompt and tool loadout. Only section names and
+  added or removed tool names are shown; prompt text is never printed or
+  searched.
+- A codemode tool result records its inner calls in `nestedCalls`. `inspect`
+  counts them under `nestedTools`, apart from direct `tools`.
 - A fork copies its parent's history, so its recorded usage includes copied
   history. Call the result a "sum of recorded usage", not total cost.
 - Compaction replaces earlier model context; a branch summary adds a summary
-  while retaining ancestors. `show` annotates both on the selected path.
+  while retaining ancestors. A `context_edit` hides or replaces one earlier
+  entry in later model context only; raw history is unchanged and the
+  replacement is never shown. `show` annotates all three on the selected
+  path.
 
 ## Reporting and security
 

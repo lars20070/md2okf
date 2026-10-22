@@ -252,7 +252,16 @@ def test_continuation_prompt_appended_from_iteration_two(fake_sbx, tmp_path):
     compile_mod.compile_document(PI, NAME, _doc(tmp_path), wb, tmp_path / "out")
 
     first, second = fake_sbx.turn_argvs
-    assert first == ["md2okf-agent", "pi", "--mode", "json", PI.compile_prompt(wb.work_md / "a.md")]
+    assert first == [
+        "md2okf-agent",
+        "pi",
+        "--mode",
+        "json",
+        "--no-mcp",
+        "--tools",
+        "-tool_search",
+        PI.compile_prompt(wb.work_md / "a.md"),
+    ]
     assert compile_mod.CONTINUATION_PROMPT not in first[-1]
     assert second[-1] == f"{first[-1]} {compile_mod.CONTINUATION_PROMPT}"
 
