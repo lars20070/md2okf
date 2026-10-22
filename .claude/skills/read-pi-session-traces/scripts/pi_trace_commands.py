@@ -1,4 +1,4 @@
-"""Command handlers, fixed output budgeting, and Pi 0.84.4 statistics."""
+"""Command handlers, fixed output budgeting, and Pi 1.4.0 statistics."""
 
 from __future__ import annotations
 
@@ -251,6 +251,31 @@ def _compaction_note(obj, node, path, latest):
     return note
 
 
+def _context_edits(stream, path):
+    """Map each edited target on the path to its latest later edit."""
+    positions = {node.id: index for index, node in enumerate(path)}
+    edits = {}
+    for index, node in enumerate(path):
+        if node.type != "context_edit":
+            continue
+        record = read_at(stream, node.line, node.offset)
+        if record is None:
+            continue
+        target = record.obj.get("targetId")
+        if isinstance(target, str) and positions.get(target, index) < index:
+            edits[target] = (node.id, record.obj.get("replacement") is None)
+    return edits
+
+
+def _context_edit_note(obj, node, edits):
+    target = obj.get("targetId")
+    if not isinstance(target, str) or target not in edits:
+        return "targetId is not earlier on this path; no effect here"
+    if edits[target][0] != node.id:
+        return "superseded by a later context edit of the same target"
+    return "changes only later model context; raw history is unchanged"
+
+
 def _branch_note(obj, tree):
     source = obj.get("fromId")
     if isinstance(source, str) and source not in tree.nodes:
@@ -258,7 +283,9 @@ def _branch_note(obj, tree):
     return "adds an abandoned-branch summary to model context"
 
 
-def _show_entry(stream, session, tree, path, index, latest_compaction, args, warnings):
+def _show_entry(
+    stream, session, tree, path, index, latest_compaction, edits, args, warnings
+):
     """Project path[index] with its path annotations, or None if unreadable."""
     node = path[index]
     record = read_at(stream, node.line, node.offset)
@@ -290,6 +317,14 @@ def _show_entry(stream, session, tree, path, index, latest_compaction, args, war
         )
     elif node.type == "branch_summary":
         projected["context"] = _branch_note(record.obj, tree)
+    elif node.type == "context_edit":
+        projected["context"] = _context_edit_note(record.obj, node, edits)
+    elif node.id in edits:
+        projected["context"] = (
+            "hidden from later context"
+            if edits[node.id][1]
+            else "replaced in later context"
+        )
     return projected
 
 
@@ -388,10 +423,19 @@ def cmd_show(args):
     shown = 0
     anchor_shown = False
     with open(session.path, "rb") as stream:
+        edits = _context_edits(stream, path)
 
         def render(index):
             projected = _show_entry(
-                stream, session, tree, path, index, latest_compaction, args, warnings
+                stream,
+                session,
+                tree,
+                path,
+                index,
+                latest_compaction,
+                edits,
+                args,
+                warnings,
             )
             return None if projected is None else out.render(projected)
 
@@ -498,6 +542,30 @@ class ToolStats:
         }
 
 
+class NestedToolStats:
+    def __init__(self):
+        self.calls = 0
+        self.errors = 0
+        self.duration_total = 0
+        self.duration_max = 0
+
+    def add(self, call):
+        self.calls += 1
+        if call.get("status") == "error" or isinstance(call.get("error"), str):
+            self.errors += 1
+        duration = call.get("durationMs")
+        if is_number(duration) and duration >= 0:
+            self.duration_total += duration
+            self.duration_max = max(self.duration_max, duration)
+
+    def as_dict(self):
+        return {
+            "calls": self.calls,
+            "errors": self.errors,
+            "durationMs": {"total": self.duration_total, "max": self.duration_max},
+        }
+
+
 class SessionStats:
     def __init__(self, chars):
         self.chars = chars
@@ -511,13 +579,17 @@ class SessionStats:
         self.models = collections.Counter()
         self.model_changes = collections.Counter()
         self.tools = {}
+        self.nested_tools = {}
+        self.incomplete_nested = 0
         self.pending = {}
         self.by_source = {
             "conversation": UsageSum(),
             "toolExecution": UsageSum(),
             "summarization": UsageSum(),
+            "auxiliary": UsageSum(),
         }
         self.by_model = {}
+        self.total = UsageSum()
         self.summaries_without_usage = 0
 
     def name(self, value):
@@ -532,8 +604,22 @@ class SessionStats:
         return self.tools.setdefault(name, ToolStats())
 
     def usage(self, source, model, value):
-        if self.by_source[source].add(value):
-            self.by_model.setdefault(model, UsageSum()).add(value)
+        if not self.by_source[source].add(value):
+            return False
+        self.by_model.setdefault(model, UsageSum()).add(value)
+        self.total.add(value)
+        return True
+
+    def nested(self, value):
+        """Count a tool result's nested calls apart from direct tool calls."""
+        if not isinstance(value, dict) or not isinstance(value.get("calls"), list):
+            return
+        if value.get("complete") is False:
+            self.incomplete_nested += 1
+        for call in value["calls"]:
+            if isinstance(call, dict):
+                name = self.name(call.get("name"))
+                self.nested_tools.setdefault(name, NestedToolStats()).add(call)
 
     def count_blocks(self, content):
         if not isinstance(content, list):
@@ -558,12 +644,12 @@ class SessionStats:
         elif entry_type == "custom_message":
             self.count_blocks(obj.get("content"))
         elif entry_type in ("compaction", "branch_summary"):
-            if not self.by_source["summarization"].add(obj.get("usage")):
+            if not self.usage("summarization", "unattributed", obj.get("usage")):
                 self.summaries_without_usage += 1
-            else:
-                self.by_model.setdefault("unattributed", UsageSum()).add(
-                    obj.get("usage")
-                )
+        elif entry_type == "usage":
+            # Any kind counts, as Pi counts unknown kinds as normal usage.
+            model = f"{self.name(obj.get('provider'))}/{self.name(obj.get('model'))}"
+            self.usage("auxiliary", model, obj.get("usage"))
         elif entry_type not in KNOWN_TYPES:
             # Future entries are metadata only, including any future usage carrier.
             self.unknown_types[name] += 1
@@ -592,6 +678,7 @@ class SessionStats:
                         self.pending[call_id] = (block.get("name"), when)
         elif role == "toolResult":
             self.usage("toolExecution", "unattributed", msg.get("usage"))
+            self.nested(msg.get("nestedCalls"))
             call_id = msg.get("toolCallId")
             pending = (
                 self.pending.pop(call_id, None) if isinstance(call_id, str) else None
@@ -633,6 +720,11 @@ def _inspect_record(session, chars, warnings):
                 + ", ".join(f"{key} x{count}" for key, count in values.most_common(10))
                 + "; metadata only"
             )
+    if stats.incomplete_nested:
+        messages.append(
+            f"{stats.incomplete_nested} tool result(s) recorded only part of their"
+            " nested calls; nestedTools undercounts them"
+        )
     if session.parent_session:
         messages.append(
             "forked session: recorded usage includes history copied from its parent"
@@ -685,8 +777,12 @@ def _inspect_record(session, chars, warnings):
             "changes": dict(stats.model_changes),
         },
         "tools": {key: value.as_dict() for key, value in sorted(stats.tools.items())},
+        "nestedTools": {
+            key: value.as_dict() for key, value in sorted(stats.nested_tools.items())
+        },
         "usage": {
-            "note": "sum of usage recorded by Pi 0.84.4 carriers",
+            "note": "sum of usage recorded by Pi 1.4.0 carriers",
+            "total": stats.total.as_dict(),
             "bySource": {
                 key: value.as_dict() for key, value in stats.by_source.items()
             },

@@ -56,9 +56,18 @@ MD2OKF_AGENT="${agent}" uv run python -m md2okf.sandbox
 # stdin at EOF, which is what stops the guest blocking on a pipe that never
 # ends -- the same reason md2okf.sandbox runs every non-interactive agent
 # turn with stdin=DEVNULL.
+#
+# REQUIRE_GITHUB=1 (Pi only) makes "no GitHub secret bound" a failure rather
+# than a skip. It goes in as the script's first line because a plain `sbx
+# exec` does not carry the host's environment; only a literal 1 is passed.
+require_github=0
+[[ "${REQUIRE_GITHUB:-0}" == 1 ]] && require_github=1
 guest_log="$(mktemp "${TMPDIR:-/tmp}/md2okf-guest.XXXXXX")"
 trap 'rm -f "${guest_log}"' EXIT
-cat "${guest_script}" "${common_script}" |
+{
+	printf 'REQUIRE_GITHUB=%s\n' "${require_github}"
+	cat "${guest_script}" "${common_script}"
+} |
 	sbx exec "${sandbox_name}" -- sh -l -s | tee "${guest_log}"
 
 # --- host-side checks ----------------------------------------------------------

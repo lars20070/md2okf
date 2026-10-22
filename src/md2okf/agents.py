@@ -146,7 +146,13 @@ WRAPPER = "md2okf-agent"
 
 PI = Agent(
     name="pi",
-    compile_args=lambda prompt: [WRAPPER, "pi", "--mode", "json", prompt],
+    # --no-mcp: no MCP servers, so not the kit's GitHub one, which a compile
+    # does not use -- the counterpart of Claude's --strict-mcp-config.
+    # `--tools -tool_search` drops the loader settings.json adds for those
+    # deferred tools, leaving the compile the tool set Pi 0.86 gave it. This
+    # removes MCP *tools*, not GitHub access: a bound `github` secret still
+    # reaches `gh` and `git` through bash (see kits/pi/README.md).
+    compile_args=lambda prompt: [WRAPPER, "pi", "--mode", "json", "--no-mcp", "--tools", "-tool_search", prompt],
     interactive_args=(WRAPPER, "pi"),
     compile_prompt=_pi_compile_prompt,
     check_credentials=_pi_check_credentials,

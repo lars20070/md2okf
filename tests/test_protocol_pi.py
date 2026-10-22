@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from md2okf.protocols import Event
 from md2okf.protocols import pi as events
@@ -91,6 +92,63 @@ def test_process_drops_protocol_events_but_keeps_non_json_diagnostics():
     displays = [event.display for event in events.process([delta, traceback_line])]
 
     assert displays == [None, traceback_line]
+
+
+# --- the captured Pi 1.4.0 run (tests/fixtures/protocols/pi/README.md) ---------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "protocols" / "pi"
+
+
+def _lines(name: str) -> list[str]:
+    return (FIXTURES / name).read_text(encoding="utf-8").splitlines()
+
+
+def test_captured_run_shows_thinking_the_tool_call_and_the_reply_in_order():
+    """Only those three lines are shown.
+
+    Everything else Pi 1.4.0 emits -- system and user messages, per-token
+    updates, tool updates and results, turn and agent ends -- is dropped.
+    """
+    shown = [event.display for event in events.process(_lines("success-bash.jsonl")) if event.display]
+    assert shown == ["[thinking]\nList the workspace first.", "bash {'command': 'ls'}", "Done."]
+
+
+def test_captured_run_has_exactly_one_tool_call_and_no_failure():
+    lines = _lines("success-bash.jsonl")
+    processed = list(events.process(lines))
+    assert [event.raw for event in processed] == lines
+    assert sum(event.is_tool_call for event in processed) == 1
+    assert sum(events.is_tool_call(line) for line in lines) == 1
+    assert not any(event.failure for event in processed)
+
+
+def test_captured_run_is_all_protocol_events_none_shown_verbatim():
+    """Every captured line is JSON, so none takes the non-JSON diagnostic path."""
+    for line in _lines("success-bash.jsonl"):
+        assert isinstance(json.loads(line), dict)
+
+
+def test_captured_system_message_and_tool_lifecycle_are_not_rendered():
+    """Pi 1.4.0 adds a role "system" message pair; tool updates and ends are not calls."""
+    by_type = {}
+    for line in _lines("success-bash.jsonl"):
+        event = json.loads(line)
+        role = (event.get("message") or {}).get("role")
+        by_type.setdefault((event["type"], role), []).append(line)
+
+    for line in by_type[("message_end", "system")] + by_type[("message_end", "toolResult")]:
+        assert events.translate(line) is None
+    for kind in ("tool_execution_update", "tool_execution_end"):
+        for line in by_type[(kind, None)]:
+            assert events.translate(line) is None
+            assert events.is_tool_call(line) is False
+
+
+def test_captured_run_ends_with_agent_end_then_agent_settled():
+    """The terminal events Pi 1.4.0 emits; `aborted` is new in 1.1.0."""
+    tail = [json.loads(line) for line in _lines("success-bash.jsonl")[-2:]]
+    assert [event["type"] for event in tail] == ["agent_end", "agent_settled"]
+    assert tail[-1]["aborted"] is False
 
 
 def test_process_never_reports_a_failure_until_one_is_captured():

@@ -8,6 +8,121 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-22
+
+### Added
+
+- **Pi can use GitHub's MCP server in `md2okf --agent`.** Pi has had a
+  built-in MCP client since 0.99.0
+  ([earendil-works/pi#10040](https://github.com/earendil-works/pi/pull/10040)).
+  The kit now installs `github-mcp-server` `1.12.2` (pinned by SHA-256) and
+  configures it in `~/.pi/agent/mcp.json`. Its tools are deferred: `tool_search`,
+  switched on in `settings.json`, loads the ones a task needs.
+  `autoEnableCodemode` is off, so MCP does not switch codemode on by itself.
+  Compile turns get none of this: they run with `--no-mcp --tools -tool_search`,
+  the counterpart of Claude's `--strict-mcp-config` and Codex's gateway
+  override, so their tool set is the one they had on Pi 0.86.1.
+- **The Pi kit declares an optional `github` credential.** `GH_TOKEN` is the
+  proxy-managed sentinel, injected as a bearer token on `api.github.com` and as
+  `x-access-token` basic auth on `github.com`. The entrypoint and the Pi kit's
+  `md2okf-agent` shim export it as `GITHUB_TOKEN` and
+  `GITHUB_PERSONAL_ACCESS_TOKEN` for `mcp.json`. Binding it is optional, and
+  `api.github.com` joins the allowlist. See
+  [GitHub MCP server](https://github.com/lars20070/md2okf/blob/master/kits/pi/README.md#github-mcp-server)
+  in the Pi kit guide.
+- `settings.json` and `models.json` declare Pi's published `$schema`, for editor
+  completion and validation. Pi itself ignores it.
+- `make test-sandbox AGENT=pi` checks the image's provenance (exactly one Pi,
+  at the pinned version), the new config, and the token exports through
+  `md2okf-agent`. With a GitHub secret bound, it also checks `gh`, the MCP
+  server's connection and one authenticated, read-only `get_me` call.
+  `REQUIRE_GITHUB=1` turns a missing secret from a skip into a failure.
+- The Pi parser is now tested against a real Pi 1.4.0 `--mode json` stream
+  (`tests/fixtures/protocols/pi/`), run with the compile's own flags against a
+  scripted local model. It confirmed that md2okf's view is unchanged. 1.4.0
+  adds a `role: "system"` message, which the parser drops, as it should.
+
+### Changed
+
+- **md2okf now requires sbx 0.49.2 (was 0.48.0).** `SBX_VERSION`, CI's pinned
+  checksum and the README move together. sbx 0.49.2 is a security release that
+  rebuilds its built-in template images with updated CA certificates, after a
+  certificate authority compromise; it changes no kit-spec or CLI
+  flags. The kit fingerprint hashes the sbx version, so every existing sandbox
+  is rebuilt once, automatically, on its first use after the upgrade, and the
+  rebuild is what picks up the new images.
+- **`make validate` runs `sbx kit validate --offline`, and CI's `validate-kit`
+  job is switched back on.** sbx 0.49.2 fixes
+  [docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685):
+  `--offline` skips the daemon-backed kit policy, so validating a kit needs
+  neither a running daemon nor an `sbx login`. `make validate` therefore works
+  inside a sandbox and on a CI runner as well as on a signed-in host, and the
+  job (deleted `if: false`) checks every `kits/*/spec.yaml` on each pull request
+  against the schema of the exact sbx release in `SBX_VERSION`. Checked with
+  sbx 0.49.2 against all three kits. This reverses the 0.3.1 entry that
+  switched the job off.
+- `make lint` skips a `tmp/` folder: markdownlint and cspell leave tracked
+  Markdown under it alone, and cspell ignores `tmp/**`. For scratch notes and
+  plans.
+- **Pi `1.4.0`, up from `0.86.1`.** Pi now comes prebuilt in Docker's own Pi
+  image, `docker.io/sbx/pi-image`
+  ([`docker/sbx-kits-contrib`](https://github.com/docker/sbx-kits-contrib/tree/main/pi)),
+  pinned by digest, instead of a kit-time `npm install -g`. Pi stopped shipping
+  a lockfile in 1.0.1, so npm no longer pins Pi's dependencies: the image's
+  install resolved them when Docker built it, and the digest freezes that. The
+  digest also freezes the `shell-docker` template beneath it, which used to
+  float, so template fixes now arrive only with a digest bump. `fd` comes from
+  the image too, as both `fd` and `fdfind`. Pi's changelog shows no change to
+  the `--mode json` events md2okf reads, or to the session format (still
+  version 3). Since Pi
+  1.0.0 the TUI in `md2okf --agent` runs fullscreen; set `tuiMode` to
+  `"regular"` to keep the terminal's own scrollback. Everything else is in
+  [Pi's changelog](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/CHANGELOG.md),
+  0.87.0 to 1.4.0.
+- The Context7 Pi package is `0.1.3`, up from `0.1.2`. Upstream only updated
+  the examples in its tool descriptions.
+- `read-pi-session-traces` reads Pi `1.4.0` traces. `inspect` now counts
+  standalone `usage` entries, such as prompt-cache warming, under a new
+  `auxiliary` source and in a new `usage.total`; before, that spend was
+  silently left out. It counts a codemode script's inner tool calls under
+  `nestedTools`, apart from direct calls. `show` lists system messages by
+  section and tool names only, never their prompt text, and marks an entry
+  that a later `context_edit` hides or replaces. Its examples point at
+  md2okf's own session directory.
+- The Pi kit README no longer warns off `deepseek/deepseek-v4-flash` for its
+  4.1K output cap: Pi 1.4.0's catalogue lists 943.7K. It now says to check a
+  model's limits with `pi --list-models` before switching.
+
+### Security
+
+- **A bound GitHub secret is usable by every process in the `md2okf-pi`
+  sandbox, compile turns included.** The sbx proxy injects it into every
+  request to `api.github.com` and `github.com`, and a compile turn has `bash`,
+  so a source document that steers one could make authenticated GitHub requests
+  with `curl`, `gh` or `git`, with the token's full scope. `--no-mcp` keeps the
+  MCP tools out of a compile; it is not a credential boundary. Bind a
+  fine-grained, read-only token scoped to the repositories you need, or none.
+  `gh auth token | sbx secret set github` hands over the GitHub CLI's own
+  credential with every scope it has.
+- GitHub MCP results are not inspected or filtered. Treat them as untrusted
+  input, like a source document.
+- Trusting a project in `md2okf --agent` now also applies its `.pi/mcp.json`,
+  which can add MCP servers (a stdio server is an arbitrary command), override
+  the kit's, and switch `autoEnableCodemode` back on. Pi asks before it trusts
+  a project, and compile turns run in JSON mode, which skips project config.
+  The wiki is written by compile turns, so decline unless you put that file
+  there yourself.
+
+### Upgrading
+
+- Upgrade sbx to 0.49.2 or newer first (`brew upgrade sbx`): md2okf refuses an
+  older one. To rebuild a sandbox at once instead, run `md2okf --fresh` or
+  `sbx rm --force md2okf-<agent>`.
+- The next run rebuilds `md2okf-pi` on its own, because the kit changed.
+- A `github` secret you already set globally, for another sbx kit, binds to
+  `md2okf-pi` at that rebuild. Check with `sbx secret ls`, and read the
+  Security entry above before keeping it.
+
 ## [0.3.1] - 2026-10-18
 
 ### Added

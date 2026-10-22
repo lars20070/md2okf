@@ -123,7 +123,7 @@ generic modules. An agent is registered only once its kit ships.
 
 Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `kits/pi/`.
 Its spec is `kits/pi/spec.yaml` and its Pi config (`AGENTS.md`,
-`settings.json`, `models.json`, `skills/`) lives in
+`settings.json`, `models.json`, `mcp.json`, `skills/`) lives in
 `kits/pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
 its own output and dates its log entries, and the OpenRouter key stays outside
 the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
@@ -237,8 +237,8 @@ CI because `okf/` is gitignored output, and the driver does not call it.
 ours and still matches. `md2okf` takes `OPENROUTER_API_KEY` from `sbx secret`,
 not from your shell (see the README for the setup). Anything that
 touches a sandbox — `md2okf`, `make test-sandbox`, `sbx exec` — needs an active
-`sbx login` session, and since sbx 0.47 so does `make validate`; `make dist`
-and the pytest suites are static and do not.
+`sbx login` session. `make validate` (offline), `make dist` and the pytest
+suites are static and do not.
 
 Pushing a `vX.Y.Z` tag triggers `.github/workflows/release.yml`: it verifies the
 tag against `VERSION`, builds the wheel and sdist once, publishes them to PyPI
@@ -256,15 +256,12 @@ Sandbox Kit specs before considering the task complete:
 ```
 
 This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema
-after enforcing the minimum in `SBX_VERSION`. Since sbx 0.47, `sbx kit validate`
-needs a running daemon and an active `sbx login`
-([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685)),
-so `make validate` works only on a signed-in host. Inside a sandbox, use
-`sbx kit pack kits/<agent> --output <scratch>.zip` for each kit as an offline
-stand-in for the schema check, and ask the user to run `make validate` on the
-host. CI's `validate-kit` job (`.github/workflows/ci.yml`) is switched off until
-a stable sbx ships `kit validate --offline`, so nothing else catches a broken
-spec before it lands. Do not finish a task until it passes. If the `sbx` CLI is
+after enforcing the minimum in `SBX_VERSION`. It runs `sbx kit validate
+--offline`, which needs neither a daemon nor an `sbx login`
+([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685),
+fixed in sbx 0.49.2), so it works inside a sandbox, on the host and in CI,
+where the `validate-kit` job (`.github/workflows/ci.yml`) runs it. Do not
+finish a task until it passes. If the `sbx` CLI is
 not installed, install it with `brew install docker/tap/sbx`; upgrade an older
 installation through Homebrew or APT.
 

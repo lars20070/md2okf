@@ -8,7 +8,23 @@ description: >
   OpenRouter and proxy-managed API credentials.
 
 sandbox:
-  image: "docker/sandbox-templates:shell-docker"
+  # Docker's own Pi image (docker/sbx-kits-contrib, pi/Dockerfile), reused as
+  # a plain image. This is not `extends:` — that accepts only claude, codex,
+  # copilot, cursor, gemini, kiro and opencode — and nothing of that repo's Pi
+  # kit spec comes along: none of its credentials, allowlist or setup. The
+  # image is the shell-docker template plus Pi, installed with
+  # `npm install -g` as the agent user, `fd-find` with an `fd` link, and the
+  # `pi` flavor label that `sbx ls` reports. Its NPM_CONFIG_PREFIX
+  # (/usr/local/share/npm-global) is owned by the agent user, so the user-1000
+  # `npm install --global` steps below keep working.
+  #
+  # The tag is rebuilt nightly against Pi's npm `latest`, so it is pinned by
+  # its index digest instead. That freezes Pi, the npm dependency tree it
+  # resolved without a lockfile (Pi stopped shipping one in 1.0.1), and the
+  # shell-docker template beneath it, for both architectures at once.
+  # Template fixes therefore reach this kit only with a new digest; the
+  # README's "Bumping Pi" has the check to run before bumping.
+  image: "docker.io/sbx/pi-image@sha256:134b48cfc7b83a270d12d2c0ad0b7b7d0d40ffedf7dd567792246a9215a1d2d5"
   # Model and provider come from the kit's own config (files/home/.pi/agent/
   # settings.json + models.json), delivered to ~/.pi/agent/ in the VM. No
   # --provider/--model flags here — Pi resolves defaults from settings.json.
@@ -23,6 +39,16 @@ sandbox:
       if [ "${mount_state_status}" -ne 0 ]; then
         echo "md2okf: could not relocate Pi sessions onto state; refusing to start pi" >&2
         exit "${mount_state_status}"
+      fi
+      # The `github` MCP server in ~/.pi/agent/mcp.json reads
+      # GITHUB_PERSONAL_ACCESS_TOKEN, which mcp.json sets from
+      # "${GITHUB_TOKEN}"; Pi expands that from this process's environment.
+      # GH_TOKEN is the proxy-managed `github` sentinel declared under
+      # credentials: below. The md2okf-agent shim (files: below) makes the
+      # same exports for every process the driver starts with `sbx exec`.
+      if [ -n "${GH_TOKEN:-}" ]; then
+        export GITHUB_TOKEN="$GH_TOKEN"
+        export GITHUB_PERSONAL_ACCESS_TOKEN="$GH_TOKEN"
       fi
       exec pi "$@"
     - md2okf-entrypoint
@@ -54,8 +80,8 @@ agentInstructions:
     ## Installed tools
     These commands are on PATH. Use them; do not reinstall them.
 
-    - `curl`, `fdfind` (fd; Ubuntu package `fd-find`), `jq`, `python3`,
-      `rg` (ripgrep), `shellcheck`, `tree`
+    - `curl`, `fd` (also on PATH as `fdfind`, Ubuntu's name for it), `jq`,
+      `python3`, `rg` (ripgrep), `shellcheck`, `tree`
     - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring
       verbs (the curate-okf skill covers it)
     - `markdownlint-cli2`, `cspell` — Markdown and spelling
@@ -65,6 +91,14 @@ agentInstructions:
     - `sizeokf` — Markdown content word counts, excluding frontmatter
     - `merkleokf` — wiki Merkle hash tree, for change detection
     - `mq` — jq-like query/filter tool for Markdown (https://mqlang.org)
+    - GitHub: in an interactive session the `github` MCP server is
+      configured, but its tools are deferred, so they are not declared until
+      you load them. Call `tool_search` with what you need, then call the
+      `mcp__github__*` tools it loads. A compile run starts Pi with
+      `--no-mcp`, so it has neither those tools nor `tool_search`. `gh`, and
+      `git` over HTTPS, carry the sandbox's GitHub credential whenever one is
+      bound, in every run, so treat them like any other tool with reach
+      beyond the wiki.
 
 # Outbound egress allowlist. Default-deny: every host the kit reaches must be
 # listed. Pointing Pi at a different provider means adding its host here too —
@@ -76,7 +110,8 @@ permissions:
       - "openrouter.ai"
       # Pi service bootstrap.
       - "pi.dev"
-      # npm: pi-coding-agent, markdownlint-cli2, cspell.
+      # npm: context7-pi, markdownlint-cli2, cspell. Pi itself comes prebuilt
+      # in the base image, so npm no longer installs pi-coding-agent.
       - "registry.npmjs.org:443"
       # uv tool install: ruff, yamllint (index + wheels).
       - "pypi.org:443"
@@ -88,9 +123,14 @@ permissions:
       - "security.ubuntu.com:80"
       - "ports.ubuntu.com:80"
       - "download.docker.com:443"
-      # mq and okfctl release binaries: github.com redirects to a GitHub CDN
-      # host. Today that is objects.githubusercontent.com; release-assets is
-      # also used for release downloads and must stay allowlisted.
+      # GitHub: the GitHub MCP server's API calls and `gh` (api.github.com),
+      # git over HTTPS (github.com), and the mq, okfctl and github-mcp-server
+      # release binaries: github.com redirects to a GitHub CDN host. Today
+      # that is objects.githubusercontent.com; release-assets is also used for
+      # release downloads and must stay allowlisted. The `github` credential
+      # below is injected for api.github.com and github.com. No gist hosts:
+      # Pi's `/share` is not needed here.
+      - "api.github.com:443"
       - "github.com:443"
       - "objects.githubusercontent.com:443"
       - "release-assets.githubusercontent.com:443"
@@ -113,18 +153,40 @@ credentials:
         - domain: openrouter.ai
           header: Authorization
           format: "Bearer %s"
+  # Optional, in the same shape as Docker's github-clone mixin
+  # (docker/sbx-kits-contrib). GH_TOKEN is the sentinel: a bearer token on
+  # api.github.com (gh, github-mcp-server) and x-access-token basic auth on
+  # github.com (git over HTTPS). `sbx secret set github` on the host binds it,
+  # and only at create time; with nothing bound, SBX_CRED_GITHUB_MODE reads
+  # `none` and GitHub stays unauthenticated. A bound token is usable by every
+  # process in the sandbox, compile turns included — see the README's
+  # "GitHub MCP server" before binding one.
+  - service: github
+    apiKey:
+      name: GH_TOKEN
+      proxyManaged: true
+      inject:
+        - domain: api.github.com
+          header: Authorization
+          format: "Bearer %s"
+        - domain: github.com
+          header: Authorization
+          username: x-access-token
+          format: "%s"
 
 # Runs once at sandbox create, in order, via `sh -c`. `user` defaults to root
 # ("0"); "1000" is the agent.
 setup:
   install:
-    # Distro CLI tools the agent shells out to.
+    # Distro CLI tools the agent shells out to. No fd-find here: the base
+    # image ships it, with an `fd` link next to Ubuntu's `fdfind`. Pi needs one
+    # of the two on PATH, or it downloads an unpinned `fd` from GitHub releases
+    # at first launch. ripgrep covers Pi's other bundled tool the same way.
     - command: |
         set -eu
         apt-get update
         apt-get install -y \
           curl \
-          fd-find \
           jq \
           python3 \
           ripgrep \
@@ -132,34 +194,16 @@ setup:
           tree
       description: Install distro CLI tools
 
-    # npm through the sandbox proxy is flaky: pin, one socket, 10-minute fetch,
-    # five attempts. `npm config` writes ~/.npmrc, so later npm steps inherit it.
+    # npm through the sandbox proxy is flaky on this image. `npm config`
+    # writes ~/.npmrc, so every later npm step inherits it — which is why this
+    # runs before the first of them, as the same user (1000) that owns that
+    # ~/.npmrc. Pi itself is not installed here: it comes with the image.
     - command: |
         set -eu
-        PI_VERSION=0.86.1
-
         npm config set proxy "$HTTP_PROXY"
         npm config set https-proxy "$HTTP_PROXY"
-
-        npm_install_retry() {
-          pkg=$1
-          attempt=1
-          until npm install -g --ignore-scripts --maxsockets=1 \
-            --fetch-timeout=600000 "$pkg"
-          do
-            if [ "$attempt" -ge 5 ]; then
-              echo "${pkg} install failed after ${attempt} attempts" >&2
-              exit 1
-            fi
-            echo "${pkg} install failed (attempt ${attempt}/5), retrying..."
-            attempt=$((attempt + 1))
-            sleep 5
-          done
-        }
-
-        npm_install_retry "@earendil-works/pi-coding-agent@${PI_VERSION}"
       user: "1000"
-      description: Configure npm proxy and install Pi
+      description: Configure npm proxy
 
     - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
       user: "1000"
@@ -243,10 +287,51 @@ setup:
       user: "1000"
       description: Install okfctl (OKF bundle tool)
 
+    # The GitHub MCP server Pi runs over stdio (files/home/.pi/agent/mcp.json).
+    # Unlike mq and okfctl, the digests are pinned here rather than read from
+    # the release's checksums file: the same SHA-256 values sbxagent pins for
+    # the v1.12.2 archives, so a re-uploaded asset fails the build too.
+    - command: |
+        set -eu
+        GITHUB_MCP_VERSION=1.12.2
+
+        case "$(uname -m)" in
+          x86_64)
+            GITHUB_MCP_ASSET=Linux_x86_64
+            expected=95843162759da2c31dde082dd145be35db82164594796c294414b69790c2290e
+            ;;
+          aarch64)
+            GITHUB_MCP_ASSET=Linux_arm64
+            expected=2b30f9fcc061b57456cbe38ddc0f13c88863bad49557508a9196f2d1c4cb17a5
+            ;;
+          *)
+            echo "github-mcp-server: unsupported architecture: $(uname -m)" >&2
+            exit 1
+            ;;
+        esac
+
+        tmp=$(mktemp -d)
+        archive="github-mcp-server_${GITHUB_MCP_ASSET}.tar.gz"
+        base="https://github.com/github/github-mcp-server/releases/download/v${GITHUB_MCP_VERSION}"
+        curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
+
+        actual=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+        if [ "$expected" != "$actual" ]; then
+          echo "github-mcp-server: checksum mismatch for ${archive}" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$archive" -C "$tmp" github-mcp-server
+        mkdir -p "$HOME/.local/bin"
+        install -m 0755 "$tmp/github-mcp-server" "$HOME/.local/bin/github-mcp-server"
+        rm -rf "$tmp"
+      user: "1000"
+      description: Install github-mcp-server (GitHub MCP, stdio)
+
     # Native Pi package (not MCP): tools + context7-docs skill under ~/.pi/agent/npm/.
     - command: |
         set -eu
-        CONTEXT7_PI_VERSION=0.1.2
+        CONTEXT7_PI_VERSION=0.1.3
         pi install "npm:@upstash/context7-pi@${CONTEXT7_PI_VERSION}"
       user: "1000"
       description: Install Context7 Pi extension
@@ -286,7 +371,9 @@ setup:
     # The driver runs every compile turn and `md2okf --agent` through this, so
     # each Pi process first checks the sessions bind itself: `sbx exec`
     # bypasses the entrypoint above. The shared script (identical in every
-    # kit) does the work; this shim only names Pi's own trace directory.
+    # kit) does the work; this shim names Pi's own trace directory and makes
+    # the entrypoint's GitHub token exports, which mcp.json expands. They live
+    # here rather than in the shared script because only Pi needs them.
     - path: /home/agent/.local/bin/md2okf-agent
       mode: "0755"
       description: Per-process wrapper the driver starts Pi through
@@ -294,6 +381,11 @@ setup:
         #!/bin/sh
         set -eu
         home="${HOME:-/home/agent}"
+        if [ -n "${GH_TOKEN:-}" ]; then
+          GITHUB_TOKEN="$GH_TOKEN"
+          GITHUB_PERSONAL_ACCESS_TOKEN="$GH_TOKEN"
+          export GITHUB_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN
+        fi
         exec sh "${home}/.local/lib/md2okf/md2okf-agent.sh" \
           "${home}/.pi/agent/sessions" "$@"
 

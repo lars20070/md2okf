@@ -40,23 +40,20 @@ markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
 `uv tool run` and cspell via `npx`, so none of them needs a separate install.
 `make check-okf` needs `okfctl`: `brew install cwest/tap/okfctl`.
 
-CI (`.github/workflows/ci.yml`) runs six jobs on every pull request: `lint`,
-`test-shell`, `test-web2md`, `test-clis`, `test-md2okf` and `build-package`.
-Each one reuses the matching make target, so a green
+CI (`.github/workflows/ci.yml`) runs seven jobs on every pull request: `lint`,
+`test-shell`, `test-web2md`, `test-clis`, `test-md2okf`, `build-package` and
+`validate-kit`. Each one reuses the matching make target, so a green
 `make lint && make test-shell && make test-web2md && make test-clis &&
-make test-md2okf && make dist` locally means a green build. A seventh job,
-`validate-kit`, is switched off until a stable sbx ships an offline
-`kit validate` ([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685)),
-so run `make validate` yourself.
+make test-md2okf && make dist && make validate` locally means a green build.
 
 ## Validate the kit spec before you finish
 
 Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
 before you call the job done. It checks every kit spec against the schema bundled
-in your `sbx` binary. Since sbx 0.47 that needs a running sbx daemon and an
-active `sbx login` session, so run it on your signed-in host, not inside a
-sandbox. It first checks your `sbx` against the minimum below; upgrade through
-Homebrew or APT when it reports an older install.
+in your `sbx` binary, using `sbx kit validate --offline`, so it needs no running
+sbx daemon and no `sbx login`, and works on the host and inside a sandbox alike.
+It first checks your `sbx` against the minimum below; upgrade through Homebrew
+or APT when it reports an older install.
 
 ### The sbx minimum
 
@@ -66,8 +63,8 @@ The driver refuses an older `sbx` (the wheel carries the file, so an installed
 same. CI's `validate-kit` job installs exactly that release, verified by
 checksum, so the kits are always checked against one known schema. Local
 installations may be newer, and those newer releases are not tested by CI.
-The job is switched off for now (see above), but keep its checksum pinned to
-`SBX_VERSION` anyway, so re-enabling it is only a matter of deleting `if: false`.
+The job runs `make validate`, which uses `sbx kit validate --offline`, so it
+needs no daemon and no `sbx login`.
 
 To raise the minimum, change all of these together:
 

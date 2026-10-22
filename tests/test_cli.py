@@ -102,7 +102,8 @@ def test_dry_run_prints_the_command_lines_that_would_run(tmp_path, capsys, isola
     assert "  agent:  pi\n" in out
     assert f"sbx run --detach --name {PI_SANDBOX} " in out
     assert f"{resources.kit_dir('pi')} " in out
-    assert f"sbx exec {PI_SANDBOX} -- md2okf-agent pi --mode json 'Load the compile-okf skill" in out
+    pi_argv = "md2okf-agent pi --mode json --no-mcp --tools -tool_search"
+    assert f"sbx exec {PI_SANDBOX} -- {pi_argv} 'Load the compile-okf skill" in out
     assert doc.name in out  # the staged basename is embedded in the pi prompt
     assert fake_sbx.calls == []
 
