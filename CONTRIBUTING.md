@@ -50,10 +50,10 @@ make test-md2okf && make dist && make validate` locally means a green build.
 
 Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
 before you call the job done. It checks every kit spec against the schema bundled
-in your `sbx` binary. Since sbx 0.47 that needs a running sbx daemon and an
-active `sbx login` session, so run it on your signed-in host, not inside a
-sandbox. It first checks your `sbx` against the minimum below; upgrade through
-Homebrew or APT when it reports an older install.
+in your `sbx` binary, using `sbx kit validate --offline`, so it needs no running
+sbx daemon and no `sbx login`, and works on the host and inside a sandbox alike.
+It first checks your `sbx` against the minimum below; upgrade through Homebrew
+or APT when it reports an older install.
 
 ### The sbx minimum
 
