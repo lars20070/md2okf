@@ -8,22 +8,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-### Changed
-
-- **md2okf now requires sbx 0.49.2 (was 0.48.0).** `SBX_VERSION`, CI's pinned
-  checksum and the README move together. sbx 0.49.2 is a security release that
-  rebuilds its built-in template images with updated CA certificates, after a
-  certificate authority compromise; it changes no kit-spec or CLI
-  flags. The kit fingerprint hashes the sbx version, so every existing sandbox
-  is rebuilt once, automatically, on its first use after the upgrade, and the
-  rebuild is what picks up the new images.
-
-### Upgrading
-
-- Upgrade sbx to 0.49.2 or newer first (`brew upgrade sbx`): md2okf refuses an
-  older one. To rebuild a sandbox at once instead, run `md2okf --fresh` or
-  `sbx rm --force md2okf-<agent>`.
-
 ## [0.3.2] - 2026-10-22
 
 ### Added
@@ -60,6 +44,16 @@ and this project adheres to
 
 ### Changed
 
+- **md2okf now requires sbx 0.49.2 (was 0.48.0).** `SBX_VERSION`, CI's pinned
+  checksum and the README move together. sbx 0.49.2 is a security release that
+  rebuilds its built-in template images with updated CA certificates, after a
+  certificate authority compromise; it changes no kit-spec or CLI
+  flags. The kit fingerprint hashes the sbx version, so every existing sandbox
+  is rebuilt once, automatically, on its first use after the upgrade, and the
+  rebuild is what picks up the new images.
+- `make lint` skips a `tmp/` folder: markdownlint and cspell leave tracked
+  Markdown under it alone, and cspell ignores `tmp/**`. For scratch notes and
+  plans.
 - **Pi `1.4.0`, up from `0.86.1`.** Pi now comes prebuilt in Docker's own Pi
   image, `docker.io/sbx/pi-image`
   ([`docker/sbx-kits-contrib`](https://github.com/docker/sbx-kits-contrib/tree/main/pi)),
@@ -111,6 +105,9 @@ and this project adheres to
 
 ### Upgrading
 
+- Upgrade sbx to 0.49.2 or newer first (`brew upgrade sbx`): md2okf refuses an
+  older one. To rebuild a sandbox at once instead, run `md2okf --fresh` or
+  `sbx rm --force md2okf-<agent>`.
 - The next run rebuilds `md2okf-pi` on its own, because the kit changed.
 - A `github` secret you already set globally, for another sbx kit, binds to
   `md2okf-pi` at that rebuild. Check with `sbx secret ls`, and read the
