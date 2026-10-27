@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **md2okf now requires sbx 0.50.0 (was 0.49.2).** `SBX_VERSION`, CI's pinned
+  checksum and the README move together. sbx 0.50.0 is a security and kits
+  release (hardened `sbx cp`, host git and helper execution; local source kits
+  rebuild once); it changes no kit-spec or CLI flags the kits rely on. The kit
+  fingerprint hashes the sbx version, so every existing sandbox is rebuilt once,
+  automatically, on its first use after the upgrade. `sbx exec` now exits 125
+  when it cannot run the command; the driver already treats any nonzero status
+  as a failure.
+
 ## [0.3.2] - 2026-10-22
 
 ### Added
