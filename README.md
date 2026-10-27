@@ -141,7 +141,7 @@ The first flag opens a shell inside the sandbox, at the wiki root; the second op
 
 ## Install sbx
 
-Install the `sbx` command-line tool, version 0.49.2 or newer, and sign in.
+Install the `sbx` command-line tool, version 0.50.0 or newer, and sign in.
 `md2okf` refuses an older `sbx`.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)

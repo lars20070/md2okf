@@ -175,7 +175,7 @@ jobs:
           set -euo pipefail
           sbx_version="$(<SBX_VERSION)"
           archive=/tmp/DockerSandboxes-linux.tar.gz
-          expected_sha256=a3f363998cd9f6caa7b02323a5d671987a9887a278fb888aca20fa9f80851e87
+          expected_sha256=bca9f2ff2bd9cab845d05d057964905da93990e68661efb6c46267e96c794949
           curl -fsSL \
             "https://github.com/docker/sbx-releases/releases/download/v${sbx_version}/DockerSandboxes-linux.tar.gz" \
             -o "${archive}"
