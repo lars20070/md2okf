@@ -40,6 +40,89 @@ Pi's kit is itself the workload, so its directory is the positional argument. Th
 
 The override must go with a temporary `XDG_STATE_HOME`. The workbench, and with it the ownership marker, is keyed by agent rather than by name: the usual name over new state is refused as unowned, and a new name over the usual state would reuse the real workbench. [[tests/test-sandbox.sh]] asks the driver for the name and every path, so it honours both.
 
+## Sandbox lifecycle
+
+Every run that needs a sandbox goes through [[src/md2okf/workbench.py#ensure_sandbox]]. It ends in one of four outcomes: ready, refused as unowned, a failed create, or a credential that is not ready.
+
+<!-- cspell:disable -->
+
+```mermaid
+---
+config:
+  layout: dagre
+  flowchart:
+    nodeSpacing: 35
+    rankSpacing: 45
+    wrappingWidth: 260
+---
+flowchart TD
+  START(["ensure_sandbox<br/>stages the CLIs and SPEC.md"])
+
+  subgraph OWN[" "]
+    EXISTS{{"sandbox under this name?"}}
+    MARKER{{"ownership marker recorded?"}}
+    TOKEN{{"live token matches marker?"}}
+  end
+
+  subgraph KEEP[" "]
+    FRESH{{"--fresh?"}}
+    FP{{"fingerprint matches?"}}
+    PROBE{{"wiki mount visible?"}}
+  end
+
+  CREATE["create<br/>clear marker · sbx rm --force<br/>sbx run · write owner token<br/>record marker"]
+
+  subgraph CRED[" "]
+    READYQ{{"agent credential ready?"}}
+    SHELL{{"--shell?"}}
+  end
+
+  READY(["sandbox ready"])
+  WARN(["warn, then open the shell"])
+  UNOWNED(["UnownedSandboxError<br/>exit 2, never deleted"])
+  FAILED(["SandboxError<br/>exit 2"])
+  REMEDY(["exit 2<br/>with the agent's remedy"])
+
+  START ==> EXISTS
+  EXISTS ==>|"yes"| MARKER
+  EXISTS -->|"no"| CREATE
+  MARKER ==>|"yes"| TOKEN
+  MARKER -->|"no"| UNOWNED
+  TOKEN ==>|"yes"| FRESH
+  TOKEN -->|"no"| UNOWNED
+  FRESH ==>|"no"| FP
+  FRESH -->|"yes"| CREATE
+  FP ==>|"yes"| PROBE
+  FP -->|"no"| CREATE
+  PROBE ==>|"yes: reuse"| READYQ
+  PROBE -->|"no"| CREATE
+  CREATE -->|"succeeds"| READYQ
+  CREATE -.->|"fails"| FAILED
+  READYQ ==>|"yes"| READY
+  READYQ -->|"no"| SHELL
+  SHELL -->|"yes"| WARN
+  SHELL -.->|"no"| REMEDY
+
+  classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
+  classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
+  classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
+  classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
+  classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
+  class START,CREATE host
+  class EXISTS,MARKER,TOKEN,FRESH,FP,PROBE,READYQ,SHELL ext
+  class READY,WARN helper
+  class UNOWNED,FAILED,REMEDY agent
+  style OWN fill:none,stroke:lightslategray,stroke-width:1.5px,stroke-dasharray:4 3
+  style KEEP fill:none,stroke:lightslategray,stroke-width:1.5px,stroke-dasharray:4 3
+  style CRED fill:none,stroke:lightslategray,stroke-width:1.5px,stroke-dasharray:4 3
+```
+
+<!-- cspell:enable -->
+
+*The driver's own steps are amber and its decisions grey. The three dashed groups prove ownership, decide whether to reuse, and check the credential. The bold path is the common one, reusing a sandbox that matches. Outcomes are teal where the sandbox is usable and red where the run is refused with exit 2.*
+
+Ownership is settled before anything is destroyed, so the only paths that reach `sbx rm --force` start from a sandbox md2okf can prove it created, or from no sandbox at all. The marker is recorded as soon as the create succeeds, before the credential check, so a sandbox refused for its credential is still recognised as owned next time. [[sandbox#Create or reuse]] gives each branch with its test, [[sandbox#Ownership token]] the marker, and [[sandbox#Credential check]] the last step.
+
 ## Create or reuse
 
 [[src/md2okf/workbench.py#resolve_sandbox_state]] decides what happens to the agent's sandbox (see [[sandbox#Sandbox name]]). Ownership is proven before anything is reused or destroyed.

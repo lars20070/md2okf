@@ -60,4 +60,4 @@ The root project reads [[VERSION]] directly. Every other project carries a liter
 
 [[SBX_VERSION]] is the minimum the driver's preflight accepts and the exact release CI installs to validate the kits. Raising it touches more than that file.
 
-CI runs lint, each pytest suite, the mount test, the package build and kit validation as separate jobs in [[.github/workflows/ci.yml]]. Pushing a `vX.Y.Z` tag runs [[.github/workflows/release.yml]]. It checks the tag against `VERSION`, runs `make lint`, builds both artifacts once, publishes them to PyPI by trusted publishing, and creates a GitHub Release with the matching changelog section as its notes. [[CONTRIBUTING.md]] has the release steps.
+CI runs lint, each pytest suite, the package build and kit validation as separate jobs in [[.github/workflows/ci.yml]]. Pushing a `vX.Y.Z` tag runs [[.github/workflows/release.yml]]. It checks the tag against `VERSION`, runs `make lint`, builds both artifacts once, publishes them to PyPI by trusted publishing, and creates a GitHub Release with the matching changelog section as its notes. [[CONTRIBUTING.md]] has the release steps.

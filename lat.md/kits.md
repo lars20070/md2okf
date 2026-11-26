@@ -35,6 +35,83 @@ The kit adds the OKF toolchain (Node from the Docker Hardened Images repository,
 
 Like the Claude Code kit, it adds the toolchain, an `agent-context@2` body, which the workload writes to `~/.codex/AGENTS.md`, and `agent-skill@1` bundles, which land in `~/.agents/skills`. Its overlay also ships an empty, agent-owned `~/.codex`, so the transcript mount beneath it cannot leave that directory root-owned before the workload's agent-user hook writes `config.toml`. It configures no MCP of its own. See [[kits/codex/README.md]].
 
+## Assembled sandbox
+
+What a Claude Code sandbox is made of, and where each part comes from: the host's workbench, the kit's overlay or the pinned workload. Codex differs only in paths.
+
+<!-- cspell:disable -->
+
+```mermaid
+---
+config:
+  layout: dagre
+  flowchart:
+    nodeSpacing: 35
+    rankSpacing: 45
+    wrappingWidth: 260
+---
+flowchart LR
+  subgraph HOST["host"]
+    direction TB
+    OKF["work/okf<br/>the wiki"]
+    INPUTS["work/md, work/scripts<br/>work/SPEC.md"]
+    SESSIONS["sessions/<br/>transcripts"]
+    KIT["kits/claude<br/>descriptor and recipe"]
+  end
+
+  subgraph IMAGE["sandbox image"]
+    direction TB
+    OVERLAY["md2okf-claude overlay<br/>skills under /usr/share<br/>mq, okfctl"]
+    WORKLOAD["pinned claude workload<br/>Claude Code, credential"]
+  end
+
+  subgraph VM["sbx microVM"]
+    direction TB
+    WIKI["wiki root<br/>= WORKSPACE_DIR"]
+    SIBLINGS["../md, ../scripts, ../SPEC.md<br/>read-only"]
+    TRACE["~/.claude/projects"]
+    PROFILE["~/.claude/CLAUDE.md"]
+    SKILLS["~/.claude/skills"]
+    GATE["compile-okf gate"]
+    SHIMS["~/.local/bin shims"]
+  end
+
+  OKF ==>|"same path"| WIKI
+  INPUTS ==>|"same paths, :ro"| SIBLINGS
+  SESSIONS ==>|"PATH:TARGET"| TRACE
+  KIT -->|"--kit, built"| OVERLAY
+  OVERLAY -.->|"requires"| WORKLOAD
+  WORKLOAD -->|"agent-context@2"| PROFILE
+  OVERLAY -->|"agent-context@2"| PROFILE
+  WORKLOAD -->|"agent-skills@1 path"| SKILLS
+  OVERLAY -->|"agent-skill@1"| SKILLS
+  OVERLAY -->|"install hook"| SHIMS
+  SKILLS -.-> GATE
+  GATE -.->|"WORKSPACE_DIR/../SPEC.md"| SIBLINGS
+  SHIMS -.->|"uv tool run"| SIBLINGS
+
+  classDef data    fill:aliceblue,stroke:steelblue,stroke-width:2px,color:#10314F
+  classDef host    fill:antiquewhite,stroke:darkgoldenrod,stroke-width:2px,color:#4A2E05
+  classDef helper  fill:#E3F2F1,stroke:#0E7C86,stroke-width:2px,color:#0B3D40
+  classDef agent   fill:mistyrose,stroke:firebrick,stroke-width:2px,color:#5A1710
+  classDef ext     fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px,color:#3A4250
+  class OKF,INPUTS,SESSIONS,WIKI,SIBLINGS,TRACE,PROFILE data
+  class KIT host
+  class OVERLAY,SKILLS,GATE,SHIMS helper
+  class WORKLOAD agent
+  style HOST fill:none,stroke:darkgoldenrod,stroke-width:1.5px,stroke-dasharray:4 3
+  style IMAGE fill:none,stroke:lightslategray,stroke-width:1.5px,stroke-dasharray:4 3
+  style VM fill:whitesmoke,stroke:lightslategray,stroke-width:1.5px
+```
+
+<!-- cspell:enable -->
+
+*Host-side kit files are amber, data and its guest paths blue, and the toolchain the overlay adds teal. The workload, which brings the agent itself, is red. Bold arrows are the workbench mounts and dotted arrows lookups at run time.*
+
+Three things in it are easy to get wrong. Only `sessions/` changes path on the way in; the four `work/` mounts keep their host paths, because the driver names them in the prompt, the hash and the probe (see [[workbench#Layout and mounts]]). The skills reach `~/.claude/skills` through the runtime rather than as files in that directory, which the host's shared store would cover. And the profile is written by sbx from two bodies, the workload's notes first, not shipped by either kit.
+
+Codex differs in paths only: `~/.codex/sessions`, `~/.agents/skills` and `~/.codex/AGENTS.md`. Pi's kit is itself the workload, so it has no overlay and no pinned workload: its image carries Pi, the skills and `~/.pi/agent/AGENTS.md` in Pi's own home, and only the mounts, the shims and the gate work as drawn.
+
 ## Content and placement
 
 A mixin's overlay lands on a filesystem it has never seen, so what it ships and where is constrained.
