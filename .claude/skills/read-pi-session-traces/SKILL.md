@@ -13,7 +13,7 @@ large fields, and caps total output at 20,000 characters unless `--unlimited`
 is explicit.
 
 This skill is pinned to Pi `1.4.0`, the version in `md2okf-pi`'s image
-(`kits/pi/spec.yaml`). Unknown
+(`kits/pi/md2okf-pi.dockerfile`). Unknown
 entry, role, and block types are metadata only. Read
 [`references/schema.md`](references/schema.md) when field-level interpretation
 matters or the repository's Pi pin changes.

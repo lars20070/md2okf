@@ -7,17 +7,22 @@
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (kits/pi/spec.yaml).
+#                 project; the pin matches the sandbox (kits/*/md2okf-*.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
 #                 projects), so ephemeral and pinned like ruff.
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
+#   LAT           lat.md launcher, for `lat check` on the lat.md/ knowledge graph.
+#                 Local and CI: `npx --yes lat.md@0.13.11`, pinned so a new lat
+#                 release cannot change what passes. `make lint LAT=lat` uses a
+#                 global install instead.
 MARKDOWNLINT ?= markdownlint-cli2
 RUFF ?= uv tool run ruff@0.16.2
 PYTEST ?= uv run --project extras/web2md --group test pytest -c extras/web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
+LAT ?= npx --yes lat.md@0.13.11
 
 # A venv is not portable across platforms, and a direct-mode sandbox shares this
 # tree with the macOS host, so Linux gets its own environment directory and the
@@ -29,12 +34,13 @@ export UV_PROJECT_ENVIRONMENT ?= .venv-linux
 endif
 
 .DEFAULT_GOAL := lint
-.PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
+.PHONY: lint check-okf validate test test-web2md test-clis test-md2okf \
 	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
-# Python, and check that VERSION agrees with both CHANGELOG.md's latest release
-# and every subproject's declared version (scripts/sync-versions.sh --check).
+# Python, validate the lat.md/ knowledge graph, and check that VERSION agrees
+# with both CHANGELOG.md's latest release and every subproject's declared
+# version (scripts/sync-versions.sh --check).
 # Driving every check off `git ls-files` means a newly added file is covered the
 # moment it is tracked, rather than when someone remembers to extend a
 # hand-maintained list here.
@@ -47,6 +53,10 @@ endif
 #                      (front matter, no H1), which markdownlint reads as errors.
 #   SPEC.md            upstream OKF spec, not project prose.
 #   CLAUDE.md          one-line `@AGENTS.md` pointer, not a document.
+#   .agents/skills/lat-md/, .codex/skills/lat-md/
+#                      the lat-md skill `lat init` writes for Codex and Pi: vendored
+#                      tool output (a later `lat init` replaces it), not ours to
+#                      restyle. Claude's copy is already under .claude/.
 # cspell runs on owned Markdown only (same exclusions as markdownlint).
 #
 # ruff runs once per tracked subproject rather than once over the tree, because
@@ -55,15 +65,24 @@ endif
 # The bare 'pyproject.toml' pattern adds the root md2okf project alongside the
 # '*/pyproject.toml' subprojects; its own [tool.ruff] scopes that walk away
 # from md/, okf/, and everything else that isn't its source.
+#
+# `lat check` validates lat.md/: wiki links into the code, the `# @lat:`
+# back-references in src/md2okf/, index files and section leading paragraphs.
+# It is the one check here that reads the working tree rather than
+# `git ls-files`. The tracked lat.md/*.md pages also go through markdownlint
+# and cspell above.
 lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
+		':!.agents/skills/lat-md/' ':!.codex/skills/lat-md/' \
 		| xargs -0 $(MARKDOWNLINT)
 	git ls-files -z -- '*.json' | xargs -0 -n1 jq empty
 	git ls-files -z -- '*.yaml' '*.yml' | xargs -0 $(YAMLLINT)
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
+		':!.agents/skills/lat-md/' ':!.codex/skills/lat-md/' \
 		| xargs -0 $(CSPELL) --no-progress
 	git ls-files -- 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
+	$(LAT) check
 	if [ ! -f VERSION ]; then \
 		echo "lint: VERSION is missing" >&2; exit 1; \
 	fi; \
@@ -90,21 +109,17 @@ lint:
 check-okf:
 	kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
-# Validate every sandbox kit spec with an sbx version meeting SBX_VERSION.
+# Build every sandbox kit with docker buildx and check the artifact with
+# kit-tck (scripts/validate-spec.sh). Needs Docker and kit-tck; KIT_PLATFORMS
+# narrows the build to one platform for a quick local run, e.g.
+# `make validate KIT_PLATFORMS=linux/arm64`.
 validate:
 	./scripts/validate-spec.sh
 
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-shell test-web2md test-clis test-md2okf test-sandbox
-
-# Host-side shell test for the guest's session bind helper, which is POSIX sh
-# run inside the VM and so cannot be exercised from pytest. State-path
-# selection moved to tests/test_workbench.py with the driver. The real bind
-# cases skip on hosts without password-free mount capability.
-test-shell:
-	./tests/test-mount-state.sh
+test: test-web2md test-clis test-md2okf test-sandbox
 
 # Unit-test the web2md scraper (extras/web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
@@ -127,8 +142,8 @@ test-clis:
 		scripts/merkleokf/tests
 
 # Unit-test the md2okf driver itself. pytest's default discovery already
-# collects only tests/test_*.py, leaving the tests/*.sh shell suites (run by
-# test-shell and test-sandbox) untouched. Offline: every sbx call goes
+# collects only tests/test_*.py, leaving the tests/*.sh shell suite (run by
+# test-sandbox) untouched. Offline: every sbx call goes
 # through the one seam in md2okf.sandbox, which these tests replace with a
 # fake.
 test-md2okf:
@@ -175,7 +190,7 @@ dist:
 	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
 
 # Check that each agent's sandbox delivers the toolchain, agent config and
-# credential that kits/<agent>/spec.yaml promises. AGENTS lists the registered
+# credential that kits/<agent>/ promises. AGENTS lists the registered
 # agents (md2okf.agents.AGENTS); `make test-sandbox AGENT=pi` checks just one.
 # The agent is always passed explicitly: test-sandbox.sh has no default, so
 # nothing silently falls back to Pi.

@@ -3,7 +3,7 @@
 Captured output of `pi --mode json`, the format `md2okf.protocols.pi` parses.
 Real output from the real Pi binary, not hand-written.
 
-Captured on 2026-10-22 with Pi `1.4.0`, the binary in the image `kits/pi/spec.yaml`
+Captured on 2026-10-22 with Pi `1.4.0`, the binary in the image `kits/pi/md2okf-pi.dockerfile`
 pins (`docker.io/sbx/pi-image@sha256:134b48cf…a1d2d5`, linux/arm64), run
 directly with `docker run` rather than in an `md2okf-pi` sandbox. The flags
 were the compile's own, from `md2okf.agents.PI`, with stdin closed:
@@ -35,7 +35,7 @@ Stderr was empty. Both requests offered the model exactly `read`, `bash`,
 starting (its binary was not even installed in the container).
 
 To do: replace or extend this with a capture from a live `md2okf-pi`
-sandbox against OpenRouter, through `md2okf-agent`, and with a failing run.
+sandbox against OpenRouter, run as the driver runs it, and with a failing run.
 No captured stream yet shows an event that means "this turn failed".
 
 ## Redactions

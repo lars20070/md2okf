@@ -29,3 +29,13 @@ web2md/cache/
 # okf output folder
 okf/*
 
+# lat.md (`lat init`). Anchored to the repository root: a bare `.pi` matches
+# at any depth and would ignore the Pi kit's own config under
+# kits/pi/files/home/.pi/.
+/.lat-build
+/.pi/
+# lat.md/.gitignore ignores these too, but hatchling reads only this root file
+# when it builds the sdist, so without these lines lat's local search index and
+# per-machine config would ship in it.
+/lat.md/.cache/
+/lat.md/config.local.yaml

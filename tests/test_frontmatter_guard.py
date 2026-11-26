@@ -55,7 +55,9 @@ def _spec(path: Path, version: str) -> Path:
 
 
 def _run(guard: Path, bundle: Path, **env: str) -> subprocess.CompletedProcess[str]:
-    environment = {key: value for key, value in os.environ.items() if key not in {"SPEC_MD", "WORKDIR"}}
+    # Stripped, so a test run inside a sandbox, where sbx sets WORKSPACE_DIR, sees only what each test passes.
+    inherited = {"SPEC_MD", "WORKDIR", "WORKSPACE_DIR"}
+    environment = {key: value for key, value in os.environ.items() if key not in inherited}
     environment.update(env)
     return subprocess.run(
         [sys.executable, str(guard), str(bundle)],
@@ -73,7 +75,7 @@ def _guard_at(path: Path) -> Path:
 
 
 def _sandbox_guard(tmp_path: Path) -> Path:
-    """The guard where the kit copies it in the sandbox: under the home directory, outside any kit tree."""
+    """The guard where Pi's kit puts it in the sandbox: under the home directory, outside any kit tree."""
     return _guard_at(tmp_path / "home/agent/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py")
 
 
@@ -133,7 +135,7 @@ def test_in_the_sandbox_the_spec_beside_the_workspace_decides(tmp_path, declared
     _spec(tmp_path / "elsewhere" / "SPEC.md", PLANTED_VERSION)
     wiki = _bundle(tmp_path / "elsewhere" / "wiki", declared)
 
-    result = _run(guard, wiki, WORKDIR=str(workspace))
+    result = _run(guard, wiki, WORKSPACE_DIR=str(workspace))
 
     assert result.returncode == expected, result.stdout + result.stderr
 
@@ -146,13 +148,37 @@ def test_a_spec_in_the_sandbox_home_does_not_override_the_workspace_mount(tmp_pa
     workspace = _workspace(tmp_path, CANONICAL_VERSION)
     wiki = _bundle(tmp_path / "elsewhere" / "wiki", declared)
 
-    result = _run(guard, wiki, WORKDIR=str(workspace))
+    result = _run(guard, wiki, WORKSPACE_DIR=str(workspace))
 
     assert result.returncode == expected, result.stdout + result.stderr
 
 
+@pytest.mark.parametrize(("declared", "expected"), [(CANONICAL_VERSION, 0), (PLANTED_VERSION, 1)])
+def test_a_mixin_guard_under_usr_share_reads_the_workspace_spec(tmp_path, declared, expected):
+    """The Claude Code and Codex kits install their skills under /usr/share, outside any kit tree."""
+    guard = _guard_at(tmp_path / "usr/share/md2okf-claude/skills/compile-okf/scripts/frontmatter-guard.py")
+    workspace = _workspace(tmp_path, CANONICAL_VERSION)
+    wiki = _bundle(tmp_path / "elsewhere" / "wiki", declared)
+
+    result = _run(guard, wiki, WORKSPACE_DIR=str(workspace))
+
+    assert result.returncode == expected, result.stdout + result.stderr
+
+
+def test_the_retired_workdir_variable_is_not_read(tmp_path):
+    """Regression: sbx v2 set WORKDIR; v3 sets WORKSPACE_DIR, and the gate found no spec at all."""
+    guard = _sandbox_guard(tmp_path)
+    workspace = _workspace(tmp_path, CANONICAL_VERSION)
+    wiki = _bundle(tmp_path / "elsewhere" / "wiki", CANONICAL_VERSION)
+
+    result = _run(guard, wiki, WORKDIR=str(workspace))
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "$WORKSPACE_DIR" in result.stderr
+
+
 def test_the_package_spec_decides_on_the_host(tmp_path):
-    """Inside the kit tree, neither an ancestor spec nor WORKDIR is consulted."""
+    """Inside the kit tree, neither an ancestor spec nor WORKSPACE_DIR is consulted."""
     package = tmp_path / "outer" / "md2okf"
     guard = _package_guard(package)
     _spec(package / "SPEC.md", CANONICAL_VERSION)
@@ -160,7 +186,7 @@ def test_the_package_spec_decides_on_the_host(tmp_path):
     workspace = _workspace(tmp_path, PLANTED_VERSION)
     wiki = _bundle(tmp_path / "data" / "wiki", CANONICAL_VERSION)
 
-    result = _run(guard, wiki, WORKDIR=str(workspace))
+    result = _run(guard, wiki, WORKSPACE_DIR=str(workspace))
 
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -173,7 +199,7 @@ def test_a_missing_package_spec_is_exit_2_not_a_search_further_up(tmp_path):
     workspace = _workspace(tmp_path, CANONICAL_VERSION)
     wiki = _bundle(tmp_path / "data" / "wiki", CANONICAL_VERSION)
 
-    result = _run(guard, wiki, WORKDIR=str(workspace))
+    result = _run(guard, wiki, WORKSPACE_DIR=str(workspace))
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert f"cannot find md2okf's SPEC.md at {package.resolve() / 'SPEC.md'}" in result.stderr

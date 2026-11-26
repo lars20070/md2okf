@@ -128,6 +128,7 @@ def _check_display_path(display: str) -> None:
         raise UsageError(f"path contains a tab or newline: {display!r}")
 
 
+# @lat: [[compile-loop#Document resolution]]
 def resolve_documents(
     paths: list[str], *, stdin_is_tty: Callable[[], bool] = lambda: sys.stdin.isatty()
 ) -> list[Document]:
@@ -199,6 +200,7 @@ def _parse_hash(output: str) -> str:
     return digest
 
 
+# @lat: [[compile-loop#Convergence]]
 def wiki_root_hash(name: str, work_okf: Path) -> str:
     """The wiki root's hash, validated -- a missing or malformed hash is never convergence."""
     result = sandbox.exec_capture(name, ["merkleokf", "--nolog", "-L", "0", str(work_okf)])
@@ -207,6 +209,7 @@ def wiki_root_hash(name: str, work_okf: Path) -> str:
     return _parse_hash(result.stdout)
 
 
+# @lat: [[compile-loop#Ralph loop]]
 def compile_document(
     agent: Agent,
     name: str,

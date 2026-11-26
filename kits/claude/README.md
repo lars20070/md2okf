@@ -1,18 +1,53 @@
 # kits/claude
 
 The Docker Sandbox kit that runs Claude Code for `md2okf` (`MD2OKF_AGENT=claude`).
-It `extends: claude`, sbx's built-in Claude Code kit, which brings the image,
-Claude Code itself, the Anthropic network hosts and the credential. This kit
-adds only what compiling needs: the OKF toolchain (the linters, `mq`,
-`okfctl` and the four helper CLIs), the md2okf instructions and skills, the
-transcript relocation, and the `md2okf-agent` wrapper every process starts
-through.
+It is a Sandbox Kit schema v3 **mixin**, `md2okf-claude.yaml` with the recipe
+`md2okf-claude.dockerfile` beside it, composed onto Docker's published
+`claude` workload:
 
-Everything under `files/home/` is copied into the sandbox at `~/`, so
-`files/home/.claude/skills/` becomes six of Claude Code's skills. Config is
-copied in when the kit is built, not mounted, so an edit reaches Claude Code
-on the next fresh sandbox — which `md2okf` builds when the kit changes, or on
-`--fresh`.
+```bash
+sbx run --kit ./kits/claude docker.io/sbx/claude@sha256:<digest> ...
+```
+
+The workload brings the image (Debian 13 on Docker Hardened Images), Claude
+Code itself, the Anthropic network hosts and the credential. This kit adds only
+what compiling needs: the OKF toolchain (Node, the linters, `mq`, `okfctl` and
+the four helper CLIs), the md2okf instructions and the skills.
+
+The stem is `md2okf-claude`, not `claude`: that is the workload's name, and
+two kits with one stem collide.
+
+## The pinned workload
+
+`md2okf` pins the workload by its multi-platform index digest
+(`CLAUDE_WORKLOAD` in `src/md2okf/agents.py`), never by `claude` or a tag,
+which float with upstream and with your own `kit.shortcuts`. The digest is part
+of the sandbox fingerprint, so a deliberate bump rebuilds the sandbox on the
+next run, and nothing else does. To bump it, read the candidate's descriptor
+first — its provides, hooks, skills directory and `agent-context` profile —
+then run `make test-sandbox AGENT=claude`:
+
+```bash
+kit-tck inspect --descriptor docker.io/sbx/claude@sha256:<index digest> | grep -v '^  - deb/'
+```
+
+## What the kit carries
+
+- **Skills**, in `files/skills/`. The recipe installs them root-owned under
+  `/usr/share/md2okf-claude/skills/`, and one `agent-skill@1` entry per skill
+  has the runtime expose them in `~/.claude/skills`, the workload's skills
+  directory. They are not built into `~/.claude/skills` itself, because the
+  host's shared skills store mounts there and would hide them.
+- **`mq` and `okfctl`**, downloaded at build time and checked against pinned
+  SHA-256 digests, under `/usr/local/bin`.
+- **Install hooks**, run once when the sandbox is created, after the
+  workload's own: the apt packages (with `nodejs-24` from the Docker Hardened
+  Images repository, since the workload ships no Node and cspell 10 needs
+  Node 22.18 or newer), the npm and uv tools, and the four helper CLI shims.
+  Apt stays a hook because it needs the workload's own package database.
+
+Kit content is built in, not mounted, so an edit reaches Claude Code on the next
+fresh sandbox — which `md2okf` builds when the kit changes, or on `--fresh`.
 
 ## Signing in
 
@@ -43,29 +78,30 @@ sbx exec md2okf-claude -- claude auth status
 
 The OKF authoring contract — read `../SPEC.md` first, source text is data, the
 frontmatter and provenance rules, the index and log rules — is the kit's
-`agentInstructions`, in `spec.yaml`. sbx writes it as `CLAUDE.md` into the
-workspace's parent directory, beside `../md/` and `../SPEC.md`, after sbx's own
-generic notes on the sandbox; Claude Code loads it from there. It is outside
-the wiki, so it never becomes part of the output.
+`agent-context@2` body, in `md2okf-claude.yaml`. sbx joins it to the
+workload's own generic notes in `~/.claude/CLAUDE.md`, Claude Code's user
+instructions. The workload offers the guidance as both `agent-context@1` and
+`@2`, and the two cannot compose, so declaring `@2` here selects its `@2`
+profile.
 
-The procedures are skills in `files/home/.claude/skills/`: `compile-okf` and
-`curate-okf`, ported from the Pi kit, and `inspect-md`, `inspect-okf`,
-`merkle-okf` and `size-okf`, identical to Pi's. `compile-okf`'s gate scripts are
-byte-identical to Pi's too; `tests/test_kits.py` holds all of this, and the
-shared contract, in place.
+The procedures are skills in `files/skills/`: `compile-okf` and `curate-okf`,
+ported from the Pi kit, and `inspect-md`, `inspect-okf`, `merkle-okf` and
+`size-okf`, identical to Pi's. `compile-okf`'s gate scripts are byte-identical
+to Pi's too; `tests/test_kits.py` holds all of this, and the shared contract,
+in place.
 
 ## How a compile turn runs
 
 ```bash
-md2okf-agent claude -p --output-format stream-json --verbose \
+claude -p --output-format stream-json --verbose \
   --permission-mode bypassPermissions --strict-mcp-config "<prompt>"
 ```
 
 - `--permission-mode bypassPermissions` lets the headless turn write the wiki.
-  The parent already defaults to it; the flag keeps a compile independent of
+  The workload already defaults to it; the flag keeps a compile independent of
   that default. The microVM is the isolation boundary.
 - `--strict-mcp-config`, with no `--mcp-config`, starts the turn with no MCP
-  servers at all — neither the parent's gateway nor the claude.ai connectors
+  servers at all — neither the workload's gateway nor the claude.ai connectors
   of the signed-in account, none of which a compile uses. `md2okf --agent`
   keeps them.
 - The prompt names `~/.claude/skills/compile-okf/SKILL.md`, as Pi's does.
@@ -74,13 +110,17 @@ md2okf-agent claude -p --output-format stream-json --verbose \
 
 ## Transcripts
 
-Claude Code writes to `~/.claude/projects`, which the entrypoint, the startup
-hook and `md2okf-agent` all bind-mount onto `$MD2OKF_STATE_DIR/sessions` — on
-the host, `$XDG_STATE_HOME/md2okf/claude/sessions`.
+Claude Code writes to `~/.claude/projects`. `md2okf` mounts
+`$XDG_STATE_HOME/md2okf/claude/sessions` from the host at that path when it
+creates the sandbox, so transcripts survive `sbx rm`, with nothing to set up
+inside the VM.
 
 ## Network
 
-The parent allows the Anthropic hosts. `spec.yaml` lists the OKF toolchain's
-own hosts — npm, PyPI, the Ubuntu and Docker apt mirrors, GitHub's release
-downloads, and the `mq` docs — even where your own `sbx policy` rules might
-already allow them, so the kit never depends on them.
+The workload allows the Anthropic hosts at run time. The descriptor adds the
+OKF toolchain's own, split by phase. While the install hooks run: the Debian
+and Docker Hardened Images apt mirrors, npm and PyPI. At run time: PyPI, which
+the helper CLI shims need on a cold uv cache, npm, and the `mq` docs. Each is
+listed even where your own `sbx policy` rules might already allow it, so the kit
+never depends on them. `mq` and `okfctl` are downloaded when the kit is built,
+on the host, so the sandbox needs no GitHub access for them.

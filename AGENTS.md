@@ -67,6 +67,16 @@ the `make` pipeline.
 also the PyPI long description, so its links into `docs/` are absolute GitHub
 URLs; links between the docs pages stay relative.
 
+`lat.md/` is the design knowledge graph for working on this repository: why
+each part is built the way it is, cross-linked into the code and the tests
+that pin each guarantee, with `# @lat:` back-references from `src/md2okf/`.
+It records decisions and invariants; option lists, credential setup and
+release steps stay in `docs/` and CONTRIBUTING.md, and the graph links to
+them. `make lint` validates it with `lat check` (via `npx`). The Claude Code
+and Codex hooks and the `lat` MCP server call a bare `lat`, so they need
+`npm install -g lat.md@0.13.11`. Keep it a current-state snapshot, updated in
+the same change as the behaviour it describes.
+
 `extras/web2md/` is one upstream step: a deterministic scraper that fetches a
 website into a single file under `md/`, driven by `make scrape`. Which site and
 which output filename live in two constants at the top of `extras/web2md/src/web2md.py`
@@ -78,7 +88,7 @@ either directory; the suite is offline and needs no network.
 
 `scripts/inspectmd/` is a third independent uv project: an installable CLI that prints a
 Markdown heading map (line ranges, word counts, kebab-case slugs). The sandbox
-exposes the same `inspectmd` command via a `setup.files` shim. Own
+exposes the same `inspectmd` command via a shim its kit writes at create. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `extras/web2md/` or
 `extras/pdf2md/`.
 
@@ -93,7 +103,7 @@ Markdown content **word counts** per file and per folder (recursive), **excludin
 YAML frontmatter**. Same `-L`/`--level` depth cap as the inspect CLIs. It carries
 its own `strip_frontmatter` rather than importing `inspectmd`'s, under the
 zero-overlap rule; the two are pinned by tests on both sides. The sandbox
-exposes `sizeokf` through the same `setup.files` shim. Own `pyproject.toml`,
+exposes `sizeokf` through the same kind of shim. Own `pyproject.toml`,
 `uv.lock`, ruff and pytest.
 
 `scripts/merkleokf/` is a sixth independent uv project: an installable CLI that prints a
@@ -103,7 +113,7 @@ other CLIs; also accepts a single file. It hashes **raw bytes**, deliberately th
 opposite of `scripts/sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
 change", `sizeokf` answers "how much prose is here", and they share no code.
 Digests display as 12 hex characters; full digests are computed internally. The
-sandbox exposes `merkleokf` through the same `setup.files` shim. Own
+sandbox exposes `merkleokf` through the same kind of shim. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest.
 
 Host install for these four CLIs is `make install-clis`; run `make test-clis`
@@ -112,27 +122,36 @@ after touching any of them.
 The agent framework is selected by `MD2OKF_AGENT` (`src/md2okf/agents.py`);
 `pi` (the default), `claude` and `codex` are registered. Where each agent
 reads its instructions differs, and was measured, not assumed: Pi from
-`~/.pi/agent/AGENTS.md`, Claude Code from the kit's `agentInstructions` (sbx
-writes `../CLAUDE.md`), Codex from `~/.codex/AGENTS.md` (it ignores files
-outside a git project). Each kit's `README.md` says why. Each agent has its own kit
+`~/.pi/agent/AGENTS.md`, which its kit ships; Claude Code from
+`~/.claude/CLAUDE.md` and Codex from `~/.codex/AGENTS.md` (it ignores files
+outside a git project), both written by sbx from the kit's `agent-context@2`
+body. Each kit's `README.md` says why. Each agent has its own kit
 (`kits/<agent>/`), sandbox (`md2okf-<agent>`) and workbench
 (`$XDG_STATE_HOME/md2okf/<agent>/`); everything agent-specific — command lines,
 first-turn prompt, credential check, event-stream parser
 (`src/md2okf/protocols/<agent>.py`) — lives on its `Agent`, never in the
 generic modules. An agent is registered only once its kit ships.
 
-Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `kits/pi/`.
-Its spec is `kits/pi/spec.yaml` and its Pi config (`AGENTS.md`,
-`settings.json`, `models.json`, `mcp.json`, `skills/`) lives in
-`kits/pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
-its own output and dates its log entries, and the OpenRouter key stays outside
-the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
-only land in a fresh sandbox — which `md2okf` builds when the kit's hash stops
-matching the running sandbox's, or at once on `--fresh`. The `files/`
-level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
-kit uses the finalized kit-spec v2 grammar. Every agent uses the repository-wide
-sbx minimum in `SBX_VERSION`; CI validates the kits with exactly that release,
-while local runs accept newer versions.
+Every kit is a Sandbox Kit schema v3 source kit: a descriptor
+`kits/<agent>/md2okf-<agent>.yaml` (capabilities: network policy per phase,
+credentials, install hooks, skills, instructions) and a recipe
+`md2okf-<agent>.dockerfile` beside it, which builds the kit's content from
+`files/`. The stem is never the bare agent name, which would collide with the
+workload of that name. Pi's kit is a **workload**, the whole sandbox, built
+on Docker's Pi image pinned by digest. Claude Code's and Codex's are
+**mixins** composed onto Docker's published `claude` and `codex` workloads,
+which `agents.py` pins by index digest (`workload_ref`).
+
+Pi's config (`AGENTS.md`, `settings.json`, `models.json`, `mcp.json`,
+`skills/`) lives in `kits/pi/files/home/.pi/agent/`. The two mixins carry
+their skills in `files/skills/`, installed under `/usr/share` and exposed in
+the agent's skills directory through `agent-skill@1`, and their instructions
+inline in the descriptor. The agent has `bash`, so it lints its own output and
+dates its log entries, and every credential stays outside the VM
+(proxy-managed by sbx). Kit content is built in, so edits only land in a fresh
+sandbox — which `md2okf` builds when the kit's hash stops matching the running
+sandbox's, or at once on `--fresh`. Every agent uses the repository-wide sbx
+minimum in `SBX_VERSION`; local runs accept newer versions.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
@@ -145,28 +164,26 @@ a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds the driver's pytest suite (offline: `conftest.py` fakes the one
 `sbx` seam; `test_kits.py` holds every `kits/*/` to the shared authoring
-contract, its own provenance and byte-identical helpers) and two shell suites
+contract, its own provenance and the shared shim hook) and one shell suite
 that pytest cannot replace — the paired live-sandbox check (`test-sandbox.sh`,
 which asks the driver for a sandbox, runs `test-sandbox-guest-<agent>.sh` inside
-the VM, then checks from the host what only the host can see) and
-`test-mount-state.sh` for the guest-side bind helper and the `md2okf-agent`
-wrapper.
+the VM, then checks from the host what only the host can see).
 
 Every agent process the driver starts — each compile turn and `md2okf --agent`
-— runs through the kit's `md2okf-agent` wrapper
-(`files/home/.local/lib/md2okf/md2okf-agent.sh`, identical in every kit, put on
-PATH by a per-kit `setup.files` shim naming the agent's native trace
-directory). `sbx exec` bypasses the kit entrypoint, so per-process setup goes in
-the wrapper, never the entrypoint. The agent's flags stay in `agents.py`.
+— is a plain `sbx exec` of the agent itself. `sbx exec` bypasses the kit
+entrypoint, so nothing per-process may live there. The agent's traces need no
+setup either: the driver mounts the workbench's `sessions/` at the agent's
+native trace directory (`Agent.trace_target`) as an additional workspace. The
+agent's flags stay in `agents.py`.
 
 ## Commands
 
 ```bash
-make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
-                         # subproject (scripts/sync-versions.sh --check)
-make validate            # validate every sandbox kit spec (runs scripts/validate-spec.sh)
-make test-shell          # host test for the session bind helper and md2okf-agent
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff,
+                         # lat check; also VERSION ↔ CHANGELOG.md and VERSION ↔
+                         # every subproject (scripts/sync-versions.sh --check)
+make validate            # build every sandbox kit and check it with kit-tck
+                         # (scripts/validate-spec.sh; needs Docker + kit-tck)
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
 make test-md2okf         # pytest, the md2okf driver suite (offline, fake sbx)
@@ -246,29 +263,32 @@ by trusted publishing, and then creates a GitHub Release whose notes are the
 matching `CHANGELOG.md` section and whose assets are those same artifacts. See
 [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
-## Always validate the sandbox kit spec before finishing
+## Always validate the sandbox kits before finishing
 
 Whenever you change anything under `kits/` or `scripts/*.sh`, you MUST validate the
-Sandbox Kit specs before considering the task complete:
+Sandbox Kits before considering the task complete:
 
 ```bash
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema
-after enforcing the minimum in `SBX_VERSION`. It runs `sbx kit validate
---offline`, which needs neither a daemon nor an `sbx login`
-([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685),
-fixed in sbx 0.49.2), so it works inside a sandbox, on the host and in CI,
-where the `validate-kit` job (`.github/workflows/ci.yml`) runs it. Do not
-finish a task until it passes. If the `sbx` CLI is
-not installed, install it with `brew install docker/tap/sbx`; upgrade an older
-installation through Homebrew or APT.
+This builds every `kits/*/md2okf-*.yaml` with `docker buildx` and checks the
+built artifact with `kit-tck` (3.0.0-m.12, the spec sbx 0.54.0 bundles).
+`sbx kit validate` cannot read a schema v3 source kit, so the build is the
+check: the kit frontend validates the descriptor first, then kit-tck judges
+annotations, layers, image config and overlay ownership. It needs Docker with
+Buildx and `kit-tck`, but no `sbx` daemon and no login, so it works inside a
+sandbox, on the host and in CI, where the `validate-kit` job
+(`.github/workflows/ci.yml`) runs it for both architectures. A cold build pulls
+the frontend and base images. `KIT_PLATFORMS=linux/arm64` (or `linux/amd64`)
+builds only your own platform when QEMU is absent. Do not finish a task until
+it passes.
 
-`make validate` only checks the spec against the schema. If you changed what the sandbox
-installs or what it carries in `kits/pi/files/`, also run `sbx rm --force md2okf-pi &&
-make test-sandbox AGENT=pi` — on its own `make test-sandbox` reuses whatever sandbox
-is running, which may predate your edit.
+`make validate` checks each kit alone; it cannot see how a mixin composes onto
+its workload. If you changed what a sandbox installs or carries, also run
+`sbx rm --force md2okf-<agent> && make test-sandbox AGENT=<agent>` — on its
+own `make test-sandbox` reuses whatever sandbox is running, which may predate
+your edit.
 
 ## Skills
 
@@ -276,3 +296,136 @@ is running, which may predate your edit.
   against one.
 - `debug-third-party` — check for a known upstream bug before working around
   an error that looks like it's from a dependency.
+
+<!-- markdownlint-disable MD022 MD025 -->
+
+%% lat:begin %%
+# Before starting work
+
+Use Lat's knowledge graph to ground each task before changing code.
+
+- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
+
+# Post-task checklist (REQUIRED — do not skip)
+
+After EVERY task, before responding to the user:
+
+- [ ] Update `lat.md/` if you added or changed meaningful implemented functionality, architecture, tests, or behavior. Keep it a focused snapshot of the current implemented state, not a journal/changelog. Plans may be drafted in `lat.md/` alongside implementation, with the intent that by commit time they describe what was implemented. Otherwise, keep proposals, hypothetical designs, and future work outside `lat.md/` unless the user explicitly requests them there.
+- [ ] Run `lat check` — all validations must pass
+- [ ] Do not skip these steps. Do not consider your task done until both are complete.
+
+---
+
+# What is lat.md?
+
+Lat.md is the project's structured knowledge graph for architecture, design decisions, behavior, and tests.
+
+The graph lives in `lat.md/` as cross-linked Markdown describing **what** the project does and **why**. Use it to ground work in actual architecture, and keep it a focused snapshot of the current implemented state rather than a journal or changelog.
+
+Project-specific lat documentation belongs in `lat.md/`. Do not modify this generated instruction file or a generated `lat-md` `SKILL.md` to record project guidance: both are owned by lat tooling and may be replaced by a later `lat init`.
+
+# Commands
+
+Use these commands to navigate and validate the project knowledge graph.
+
+```bash
+lat locate "Section Name"      # find a section by name (exact, fuzzy)
+lat refs "file#Section"        # find what references a section
+lat search "natural language"  # semantic search across all sections
+lat external show <handle>      # inspect a pinned external source before cloning it
+lat check                      # run full graph and documentation validation
+```
+
+Run `lat --help` when in doubt about available commands or options.
+
+If `lat search` fails because no API key is configured, explain to the user that semantic search requires a key provided via `LAT_LLM_KEY` (direct value), `LAT_LLM_KEY_FILE` (path to key file), or `LAT_LLM_KEY_HELPER` (command that prints the key). Supported key prefixes: `sk-...` (OpenAI) or `vck_...` (Vercel). If the user doesn't want to set it up, use `lat locate` for direct lookups instead.
+
+# Syntax primer
+
+Lat uses stable section ids, wiki links, source links, and code references to connect documentation with implementation.
+
+- **Section ids**: `lat.md/path/to/file#Heading#SubHeading` — full form uses project-root-relative path (e.g. `lat.md/tests/search#RAG Replay Tests`). Short form uses bare file name when unique (e.g. `search#RAG Replay Tests`, `cli#search#Indexing`).
+- **Wiki links**: `[[target]]` or `[[target|alias]]` — cross-references between sections. Can also reference repository paths or source code: `[[schema.sql]]`, `[[src/components]]`, `[[src/foo.ts#myFunction]]`.
+- **Link specificity**: When documenting implemented behavior, prefer the narrowest relevant source-symbol link over a whole-file link. Use whole-file or directory links when discussing the module or resource as a whole, or when no supported symbol represents the target. If prose names a symbol, link that symbol directly.
+- **Repository path links**: Wiki links without a `#` fragment may target any existing file or directory inside the project. Unsupported formats validate but cannot be opened by Lat; fragments require a `lat.md/` section or supported source file.
+- **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in supported source files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). When prose names an implementation symbol or a behavior governed by one, link the symbol instead of using a bare code span or copying its literal value. Prefer `[[src/config.ts#DEFAULT_TIMEOUT]]` (or an aliased form) over a bare identifier or copied value. `lat check` validates these exist.
+- **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C/PHP) or `# @lat: [[section-id]]` (Python/PHP) — ties source code to concepts
+
+# Diagrams
+
+Default to prose. Reserve Mermaid diagrams for concepts involving more than seven interacting subjects (such as components, states, or stages) with complex sequencing, branching, or dependencies that prose alone makes hard to follow.
+
+The subject count alone does not justify a diagram; omit diagrams for simple sequences or relationships that a short paragraph or list explains clearly. A diagram should give users and later agents an overview of the interactions.
+
+Keep each diagram focused on one process, use readable labels, and explain the important decisions in surrounding prose with precise source-symbol links. Prefer a small overview or several focused diagrams over one dense diagram. Use fenced `mermaid` blocks and run `lat check` to validate syntax and readability.
+
+# Test specs
+
+Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
+
+```markdown
+---
+lat:
+  require-code-mention: true
+---
+# Tests
+
+Authentication and authorization test specifications.
+
+## User login
+
+Verify credential validation and error handling for the login endpoint.
+
+### Rejects expired tokens
+Tokens past their expiry timestamp are rejected with 401, even if otherwise valid.
+
+### Handles missing password
+Login request without a password field returns 400 with a descriptive error.
+```
+
+Every section MUST have a description — at least one sentence explaining what the test verifies and why. Empty sections with just a heading are not acceptable. (This is a specific case of the general leading paragraph rule below.)
+
+Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
+
+```python
+# @lat: [[tests#User login#Rejects expired tokens]]
+def test_rejects_expired_tokens():
+    ...
+
+# @lat: [[tests#User login#Handles missing password]]
+def test_handles_missing_password():
+    ...
+```
+
+Do not duplicate refs. One `@lat:` comment per spec section, placed at the test that covers it. `lat check` will flag any spec section not covered by a code reference, and any code reference pointing to a nonexistent section.
+
+# Section structure
+
+Concise opening paragraphs give every section a stable overview for validation and discovery.
+
+Every section in `lat.md/` **must** have a leading paragraph — at least one sentence immediately after the heading, before any child headings or other block content. The first paragraph must be ≤250 characters (excluding `[[wiki link]]` content). This paragraph serves as the section's overview and is used in search results, command output, and RAG context — keeping it concise guarantees the section's essence is always captured.
+
+```markdown
+# Good Section
+
+Brief overview of what this section documents and why it matters.
+
+More detail can go in subsequent paragraphs, code blocks, or lists.
+
+## Child heading
+
+Details about this child topic.
+```
+
+```markdown
+# Bad Section
+
+## Child heading
+
+Details about this child topic.
+```
+
+The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
+%% lat:end %%
+
+<!-- markdownlint-enable MD022 MD025 -->

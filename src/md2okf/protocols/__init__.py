@@ -17,6 +17,7 @@ from typing import NamedTuple, Protocol
 DISPLAY_WIDTH = 120
 
 
+# @lat: [[agents#Event record]]
 class Event(NamedTuple):
     """One raw line of agent output, and what the driver makes of it."""
 

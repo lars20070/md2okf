@@ -33,7 +33,7 @@ def test_only_agents_with_a_shipped_kit_are_registered():
     assert sorted(agents.AGENTS) == ["claude", "codex", "pi"]
     for name, agent in agents.AGENTS.items():
         assert agent.name == name
-        assert (_REPO_ROOT / "kits" / name / "spec.yaml").is_file()
+        assert (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").is_file()
 
 
 def test_resolve_returns_the_registered_agent():
@@ -69,9 +69,8 @@ def test_from_env_honours_an_explicit_value(monkeypatch):
 # --- Pi ----------------------------------------------------------------------
 
 
-def test_pi_compile_args_run_pi_json_mode_through_the_wrapper():
+def test_pi_compile_args_run_pi_json_mode():
     assert agents.PI.compile_args("do it") == [
-        "md2okf-agent",
         "pi",
         "--mode",
         "json",
@@ -94,23 +93,47 @@ def test_pi_compile_carries_no_mcp_tools_but_interactive_does():
     assert "--tools" not in agents.PI.interactive_args
 
 
-def test_pi_interactive_args_run_pi_through_the_wrapper():
-    assert agents.PI.interactive_args == ("md2okf-agent", "pi")
+def test_pi_interactive_args_run_bare_pi():
+    assert agents.PI.interactive_args == ("pi",)
 
 
 @pytest.mark.parametrize("name", sorted(agents.AGENTS))
-def test_every_agent_process_starts_with_the_wrapper(name):
-    """`sbx exec` bypasses the kit entrypoint; the wrapper is the trace-mount guard on every turn."""
+def test_every_agent_process_starts_with_the_agent_itself(name):
+    """No wrapper: the trace directory is a host mount, so nothing has to run before the agent."""
     agent = agents.AGENTS[name]
-    assert agent.compile_args("p")[0] == agents.WRAPPER
-    assert agent.interactive_args[0] == agents.WRAPPER
+    assert agent.compile_args("p")[0] == name
+    assert agent.interactive_args[0] == name
 
 
 @pytest.mark.parametrize("name", sorted(agents.AGENTS))
-def test_every_registered_kit_ships_the_wrapper_shim(name):
-    spec = (_REPO_ROOT / "kits" / name / "spec.yaml").read_text(encoding="utf-8")
-    assert f"path: /home/agent/.local/bin/{agents.WRAPPER}\n" in spec
-    assert (_REPO_ROOT / "kits" / name / "files" / "home" / ".local" / "lib" / "md2okf" / "md2okf-agent.sh").is_file()
+def test_every_trace_target_is_an_absolute_path_in_the_agents_home(name):
+    target = agents.AGENTS[name].trace_target
+    assert target.startswith("/home/agent/.")
+    assert ":" not in target, "a colon would split the PATH:TARGET workspace argument"
+
+
+@pytest.mark.parametrize("name", sorted(agents.AGENTS))
+def test_a_kit_is_a_workload_exactly_when_no_workload_is_pinned(name):
+    """Pi's kit is the whole sandbox; the others are mixins composed onto a pinned workload."""
+    agent = agents.AGENTS[name]
+    descriptor = (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
+    if agent.workload_ref is None:
+        assert "\nkind: workload\n" in descriptor
+    else:
+        assert "\nkind: mixin\n" in descriptor
+
+
+@pytest.mark.parametrize("name", sorted(n for n, a in agents.AGENTS.items() if a.workload_ref))
+def test_a_mixin_requires_the_workload_its_agent_pins(name):
+    """`requires` names the published workload, and the pin is a multi-platform index digest."""
+    ref = agents.AGENTS[name].workload_ref
+    assert ref is not None
+    repository, _, digest = ref.partition("@")
+    assert repository == f"docker.io/sbx/{name}"
+    assert len(digest) == len("sha256:") + 64
+    assert digest.startswith("sha256:")
+    descriptor = (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
+    assert f'\nrequires: ["{name}"]\n' in descriptor
 
 
 def test_pi_prompt_is_byte_identical_to_the_legacy_prompt():
@@ -183,7 +206,6 @@ def test_pi_remedy_ends_by_rebuilding_the_sandbox(fake_sbx):
 
 def test_claude_compile_args():
     assert agents.CLAUDE.compile_args("do it") == [
-        "md2okf-agent",
         "claude",
         "-p",
         "--output-format",
@@ -197,7 +219,7 @@ def test_claude_compile_args():
 
 
 def test_claude_interactive_args_keep_mcp_but_bypass_prompts():
-    assert agents.CLAUDE.interactive_args == ("md2okf-agent", "claude", "--permission-mode", "bypassPermissions")
+    assert agents.CLAUDE.interactive_args == ("claude", "--permission-mode", "bypassPermissions")
 
 
 def test_claude_prompt_names_a_skill_its_kit_installs():
@@ -205,8 +227,10 @@ def test_claude_prompt_names_a_skill_its_kit_installs():
     assert "read ~/.claude/skills/compile-okf/SKILL.md" in prompt
     assert "compile /state/md2okf/claude/work/md/doc.md directly into the workspace root" in prompt
     assert prompt.endswith(agents.WORKSPACE_ROOT_RULE)
-    skill = _REPO_ROOT / "kits" / "claude" / "files" / "home" / ".claude" / "skills" / "compile-okf" / "SKILL.md"
+    skill = _REPO_ROOT / "kits" / "claude" / "files" / "skills" / "compile-okf" / "SKILL.md"
     assert skill.is_file()
+    descriptor = (_REPO_ROOT / "kits" / "claude" / "md2okf-claude.yaml").read_text(encoding="utf-8")
+    assert "path: /usr/share/md2okf-claude/skills/compile-okf\n" in descriptor
 
 
 def test_claude_parses_claude_output():
@@ -266,7 +290,6 @@ def test_anything_but_a_clean_logged_in_status_is_not_ready(monkeypatch, returnc
 
 def test_codex_compile_args():
     assert agents.CODEX.compile_args("do it") == [
-        "md2okf-agent",
         "codex",
         "exec",
         "--json",
@@ -279,15 +302,17 @@ def test_codex_compile_args():
 
 
 def test_codex_interactive_args_keep_the_gateway():
-    assert agents.CODEX.interactive_args == ("md2okf-agent", "codex", "--dangerously-bypass-approvals-and-sandbox")
+    assert agents.CODEX.interactive_args == ("codex", "--dangerously-bypass-approvals-and-sandbox")
 
 
 def test_codex_prompt_activates_a_skill_its_kit_installs():
     prompt = agents.CODEX.compile_prompt(Path("/state/md2okf/codex/work/md/doc.md"))
     assert prompt.startswith("$compile-okf Compile /state/md2okf/codex/work/md/doc.md directly into")
     assert prompt.endswith(agents.WORKSPACE_ROOT_RULE)
-    skill = _REPO_ROOT / "kits" / "codex" / "files" / "home" / ".agents" / "skills" / "compile-okf" / "SKILL.md"
+    skill = _REPO_ROOT / "kits" / "codex" / "files" / "skills" / "compile-okf" / "SKILL.md"
     assert "name: compile-okf" in skill.read_text(encoding="utf-8")
+    descriptor = (_REPO_ROOT / "kits" / "codex" / "md2okf-codex.yaml").read_text(encoding="utf-8")
+    assert "path: /usr/share/md2okf-codex/skills/compile-okf\n" in descriptor
 
 
 def test_codex_parses_codex_output():

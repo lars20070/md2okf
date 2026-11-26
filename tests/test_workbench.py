@@ -177,15 +177,34 @@ def test_mounts_are_the_five_workspace_arguments_in_order(tmp_path):
     """
     wb = workbench.Workbench(root=tmp_path / "md2okf")
 
-    args = [mount.as_arg() for mount in wb.mounts()]
+    args = [mount.as_arg() for mount in wb.mounts("/home/agent/.pi/agent/sessions")]
 
     assert args == [
         str(wb.work_okf),
         f"{wb.work_md}:ro",
         f"{wb.work_scripts}:ro",
         f"{wb.work_spec}:ro",
-        str(wb.sessions),
+        f"{wb.sessions}:/home/agent/.pi/agent/sessions",
     ]
+
+
+def test_only_sessions_moves_in_the_guest(tmp_path):
+    """The work/ mounts keep their host paths, which the prompt, merkleokf and the probe all rely on."""
+    wb = workbench.Workbench(root=tmp_path / "md2okf")
+    mounts = wb.mounts("/home/agent/.claude/projects")
+    assert [mount.target for mount in mounts] == [None, None, None, None, "/home/agent/.claude/projects"]
+
+
+def test_sandbox_name_defaults_to_one_per_agent(monkeypatch):
+    monkeypatch.delenv(workbench.SANDBOX_NAME_ENV_VAR, raising=False)
+    assert workbench.sandbox_name("claude") == "md2okf-claude"
+
+
+def test_sandbox_name_override_is_for_piloting_beside_the_real_one(monkeypatch):
+    monkeypatch.setenv(workbench.SANDBOX_NAME_ENV_VAR, "md2okf-pilot")
+    assert workbench.sandbox_name("claude") == "md2okf-pilot"
+    monkeypatch.setenv(workbench.SANDBOX_NAME_ENV_VAR, "")
+    assert workbench.sandbox_name("claude") == "md2okf-claude"
 
 
 def test_ensure_roots_never_replaces_existing_roots(tmp_path):
@@ -534,7 +553,7 @@ def test_output_that_is_a_dangling_symlink_is_not_adoptable(tmp_path):
 def test_fingerprint_is_stable_for_the_same_inputs(tmp_path):
     kit_dir = tmp_path / "kit"
     kit_dir.mkdir()
-    (kit_dir / "spec.yaml").write_text("kit", encoding="utf-8")
+    (kit_dir / "kit.yaml").write_text("kit", encoding="utf-8")
     mounts = [sandbox.Mount(tmp_path / "work_okf"), sandbox.Mount(tmp_path / "work_md", readonly=True)]
 
     a = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
@@ -546,12 +565,12 @@ def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
     """Regression: editor droppings and bytecode must not move the fingerprint."""
     kit_dir = tmp_path / "kit"
     kit_dir.mkdir()
-    (kit_dir / "spec.yaml").write_text("kit", encoding="utf-8")
+    (kit_dir / "kit.yaml").write_text("kit", encoding="utf-8")
     mounts = [sandbox.Mount(tmp_path / "work_okf")]
     before = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
 
     (kit_dir / ".DS_Store").write_bytes(b"\x00finder noise")
-    (kit_dir / "._spec.yaml").write_bytes(b"\x00appledouble sidecar")
+    (kit_dir / "._kit.yaml").write_bytes(b"\x00appledouble sidecar")
     (kit_dir / "files" / "home" / ".pi").mkdir(parents=True)
     (kit_dir / "files" / "home" / ".pi" / ".DS_Store").write_bytes(b"\x00nested finder noise")
     (kit_dir / "scripts" / "__pycache__").mkdir(parents=True)
@@ -566,7 +585,7 @@ def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
     [
         "files/home/.pi/agent/AGENTS.md",
         "files/home/.pi/agent/skills/compile-okf/SKILL.md",
-        "files/home/.local/lib/md2okf/mount-state.sh",
+        "files/home/.local/bin/a-helper",
         "files/home/.claude/skills/compile-okf/SKILL.md",
         "files/home/.agents/skills/compile-okf/SKILL.md",
         "files/home/.codex/config.toml",
@@ -575,13 +594,13 @@ def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
 def test_fingerprint_changes_when_a_hidden_kit_file_changes(tmp_path, relative):
     """Regression: every dotted path used to be skipped as noise.
 
-    That left only README.md and spec.yaml in the hash, so an edited
+    That left only README.md and kit.yaml in the hash, so an edited
     AGENTS.md, skill or helper script never triggered a sandbox rebuild.
     """
     kit_dir = tmp_path / "kit"
     target = kit_dir / relative
     target.parent.mkdir(parents=True)
-    (kit_dir / "spec.yaml").write_text("kit", encoding="utf-8")
+    (kit_dir / "kit.yaml").write_text("kit", encoding="utf-8")
     target.write_text("v1", encoding="utf-8")
     mounts = [sandbox.Mount(tmp_path / "work_okf")]
     before = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
@@ -594,13 +613,34 @@ def test_fingerprint_changes_when_a_hidden_kit_file_changes(tmp_path, relative):
 def test_fingerprint_changes_when_the_kit_changes(tmp_path):
     kit_dir = tmp_path / "kit"
     kit_dir.mkdir()
-    (kit_dir / "spec.yaml").write_text("kit v1", encoding="utf-8")
+    (kit_dir / "kit.yaml").write_text("kit v1", encoding="utf-8")
     mounts = [sandbox.Mount(tmp_path / "work_okf")]
     before = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
 
-    (kit_dir / "spec.yaml").write_text("kit v2", encoding="utf-8")
+    (kit_dir / "kit.yaml").write_text("kit v2", encoding="utf-8")
     after = workbench.fingerprint(kit_dir, (0, 43, 0), mounts)
     assert before != after
+
+
+def test_fingerprint_changes_when_the_pinned_workload_changes(tmp_path):
+    """A bumped workload digest rebuilds the sandbox; the kit tree alone cannot see it."""
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    (kit_dir / "kit.yaml").write_text("kit", encoding="utf-8")
+    mounts = [sandbox.Mount(tmp_path / "work_okf")]
+    a = workbench.fingerprint(kit_dir, (0, 54, 0), mounts, "docker.io/sbx/claude@sha256:aaa")
+    b = workbench.fingerprint(kit_dir, (0, 54, 0), mounts, "docker.io/sbx/claude@sha256:bbb")
+    none = workbench.fingerprint(kit_dir, (0, 54, 0), mounts)
+    assert len({a, b, none}) == 3
+
+
+def test_fingerprint_changes_when_the_trace_target_changes(tmp_path):
+    kit_dir = tmp_path / "kit"
+    kit_dir.mkdir()
+    wb = workbench.Workbench(root=tmp_path / "md2okf")
+    a = workbench.fingerprint(kit_dir, (0, 54, 0), wb.mounts("/home/agent/.a"))
+    b = workbench.fingerprint(kit_dir, (0, 54, 0), wb.mounts("/home/agent/.b"))
+    assert a != b
 
 
 def test_ownership_marker_round_trips_atomically(tmp_path):
@@ -643,7 +683,7 @@ def test_resolve_sandbox_state_rejects_a_matching_fingerprint_with_wrong_identit
 def test_resolve_sandbox_state_reuses_when_everything_matches(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    token = sandbox.create("md2okf", tmp_path / "kit", [], {})
+    token = sandbox.create("md2okf", tmp_path / "kit", None, [])
     workbench.write_ownership_marker(wb, "fp", token)
     assert workbench.resolve_sandbox_state(wb, "md2okf", "fp") == "reuse"
 
@@ -651,7 +691,7 @@ def test_resolve_sandbox_state_reuses_when_everything_matches(tmp_path, fake_sbx
 def test_resolve_sandbox_state_recreates_on_fingerprint_change(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    token = sandbox.create("md2okf", tmp_path / "kit", [], {})
+    token = sandbox.create("md2okf", tmp_path / "kit", None, [])
     workbench.write_ownership_marker(wb, "old-fp", token)
     assert workbench.resolve_sandbox_state(wb, "md2okf", "new-fp") == "create"
 
@@ -659,7 +699,7 @@ def test_resolve_sandbox_state_recreates_on_fingerprint_change(tmp_path, fake_sb
 def test_resolve_sandbox_state_recreates_when_probe_fails(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    token = sandbox.create("md2okf", tmp_path / "kit", [], {})
+    token = sandbox.create("md2okf", tmp_path / "kit", None, [])
     workbench.write_ownership_marker(wb, "fp", token)
     fake_sbx.probe_ok = False
     assert workbench.resolve_sandbox_state(wb, "md2okf", "fp") == "create"
@@ -668,7 +708,7 @@ def test_resolve_sandbox_state_recreates_when_probe_fails(tmp_path, fake_sbx):
 def test_resolve_sandbox_state_fresh_recreates_an_owned_sandbox(tmp_path, fake_sbx):
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()
-    token = sandbox.create("md2okf", tmp_path / "kit", [], {})
+    token = sandbox.create("md2okf", tmp_path / "kit", None, [])
     workbench.write_ownership_marker(wb, "fp", token)
     assert workbench.resolve_sandbox_state(wb, "md2okf", "fp", fresh=True) == "create"
 
@@ -792,6 +832,7 @@ def test_the_credential_check_is_the_agents_own(tmp_path, fake_sbx):
         compile_prompt=lambda document: str(document),
         check_credentials=check,
         protocol=PI.protocol,
+        trace_target=PI.trace_target,
     )
     wb = workbench.Workbench(root=tmp_path / "state" / "md2okf")
     wb.ensure_roots()

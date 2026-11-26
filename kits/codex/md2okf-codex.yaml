@@ -1,0 +1,420 @@
+# syntax=docker/sandbox-kit:3@sha256:8561468d43a0466e24dd048e3c6c2115d878ee36d71c4571195f1de2a63c2b5b
+# md2okf's Codex kit: a schema v3 MIXIN over Docker's published `codex`
+# workload. md2okf composes it as
+#   sbx run --kit <this directory> docker.io/sbx/codex@sha256:<digest> ...
+# with the workload pinned by digest in md2okf.agents (CODEX.workload_ref).
+# The frontend above (kit-spec v3.0.0-m.12, the one sbx 0.54.0 bundles) builds
+# md2okf-codex.dockerfile beside this file into the mixin's one layer. It is
+# pinned by digest because it produces the published bytes.
+#
+# The stem is md2okf-codex, not codex: that is the workload this composes
+# onto, and two kits with one stem collide.
+#
+# MIGRATION NOTE (v2 -> v3): the v2 kit was `extends: codex` with its own
+# entrypoint, a startup hook and an `md2okf-agent` wrapper that bind-mounted
+# ~/.codex/sessions onto $MD2OKF_STATE_DIR/sessions inside the VM. v3 cannot
+# extend, and a mixin's entrypoint is ignored anyway. md2okf now mounts the
+# host sessions directory at ~/.codex/sessions as an additional workspace
+# (PATH:TARGET), so none of that in-VM plumbing is left.
+schemaVersion: "3"
+kind: mixin
+version: "1.0.0"
+displayName: md2okf for Codex
+description: >-
+  The OKF toolchain, skills and authoring contract md2okf compiles Markdown
+  with, layered onto Docker's codex workload.
+sourceUrl: https://github.com/lars20070/md2okf
+licenses: [MIT]
+# Refuses any other workload, and orders these install hooks after the
+# workload's own, which write ~/.codex/config.toml. The workload also brings
+# Codex itself, the OpenAI hosts, the `openai` credential (API key or ChatGPT
+# OAuth) and permissive defaults (approval_policy "never", sandbox_mode
+# "danger-full-access"), so none of those are declared here.
+requires: ["codex"]
+
+capabilities:
+  # The OKF toolchain's hosts. Listed even where a host may already be
+  # reachable through a global `sbx policy` rule, so the kit never depends on
+  # the user's own rules.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      # Only while the install hooks below run. The workload's own runtime
+      # grants (deb.debian.org, dhi.io) do not cover this phase. Package
+      # mirrors are portless, which is what apt needs.
+      install:
+        allow:
+          # apt: Debian trixie and the Docker Hardened Images repository.
+          - "deb.debian.org"
+          - "dhi.io"
+          # npm: markdownlint-cli2, cspell.
+          - "registry.npmjs.org:443"
+          # uv tool install: ruff, yamllint (index + wheels).
+          - "pypi.org:443"
+          - "files.pythonhosted.org:443"
+      runtime:
+        allow:
+          # The inspectmd/inspectokf/sizeokf/merkleokf shims are `uv tool
+          # run --from` the mounted projects, so a cold uv cache resolves
+          # their build backend (hatchling) from PyPI at run time.
+          - "pypi.org:443"
+          - "files.pythonhosted.org:443"
+          # npm, for the agent's own use of the Markdown linters' ecosystem,
+          # as the v2 kit allowed it.
+          - "registry.npmjs.org:443"
+          # mq docs and language reference (mqlang.org/book/), for the agent
+          # to consult at runtime. Host only: kit rules match hosts, not paths.
+          - "mqlang.org:443"
+          # MIGRATION NOTE: the v2 kit also allowed the Ubuntu apt mirrors and
+          # download.docker.com (the workload is Debian now), and github.com
+          # plus its release CDNs for the mq and okfctl downloads, which the
+          # recipe now does at build time on the host.
+
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      # Run once at create, in order, after the workload's hooks. Hook
+      # environments are deny-by-default: every variable a hook or its
+      # children read (the proxy for apt, npm and uv) is listed in `env`.
+      install:
+        # The workload ships no Node, and cspell 10 needs Node >= 22.18, so
+        # nodejs-24 comes from the Docker Hardened Images repository. The
+        # rest are the distro CLI tools the agent shells out to; curl, jq,
+        # ripgrep and tree are already in the workload and stay listed so the
+        # promise in the instructions does not hang on the workload's choice.
+        # Apt stays a hook: it needs the composed base's own package database.
+        - command: |
+            set -eu
+            apt_get() {
+              timeout 600 apt-get \
+                -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=30 \
+                -o Acquire::https::Timeout=30 \
+                "$@"
+            }
+            apt_get update
+            apt_get install -y --no-install-recommends \
+              curl \
+              fd-find \
+              jq \
+              nodejs-24 \
+              npm \
+              python3 \
+              ripgrep \
+              shellcheck \
+              tree
+            node -e '
+              const [major, minor] = process.versions.node.split(".").map(Number);
+              process.exit(major > 22 || (major === 22 && minor >= 18) ? 0 : 1);
+            ' || {
+              echo "md2okf: node $(node --version) is older than 22.18, which cspell 10 needs" >&2
+              exit 1
+            }
+          user: "0"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
+          description: Install Node and the distro CLI tools
+
+        # NPM_CONFIG_PREFIX is the workload's agent-owned global prefix, which
+        # is on PATH.
+        - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy, NPM_CONFIG_PREFIX]
+          description: Install Markdown and spelling linters
+
+        - command: |
+            set -eu
+            uv tool install ruff@0.16.2
+            uv tool install yamllint@1.38.0
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
+          description: Install Python linters
+
+        # The four helper CLIs are shims over the projects md2okf mounts
+        # read-only at ../scripts, beside the wiki, so they always run the
+        # mounted tree. Written here because `$VAR` stays literal in v3
+        # lifecycle files: the install hook bakes the path from WORKSPACE_DIR,
+        # which then needs no environment under a plain `sbx exec`.
+        # Identical in every md2okf kit (tests/test_kits.py).
+        - command: |
+            set -eu
+            : "${WORKSPACE_DIR:?is not set, so the helper CLI projects cannot be located}"
+            scripts="$(dirname "${WORKSPACE_DIR}")/scripts"
+            case "${scripts}" in
+            *"'"*)
+              echo "md2okf: cannot write a shim for a path with a single quote: ${scripts}" >&2
+              exit 1
+              ;;
+            esac
+            mkdir -p "${HOME}/.local/bin"
+            for cli in inspectmd inspectokf sizeokf merkleokf; do
+              printf '#!/bin/sh\nset -eu\nexec uv tool run --from '"'"'%s/%s'"'"' %s "$@"\n' \
+                "${scripts}" "${cli}" "${cli}" >"${HOME}/.local/bin/${cli}"
+              chmod 0755 "${HOME}/.local/bin/${cli}"
+            done
+          user: "1000"
+          env: [WORKSPACE_DIR]
+          description: Write the workspace-backed helper CLI shims
+
+  # The skills, shipped in the overlay under /usr/share and exposed by the
+  # runtime in the workload's skills directory (~/.agents/skills, declared by
+  # its agent-skills@1). Not baked into ~/.agents/skills itself: the host's
+  # shared skills store mounts there, and would hide them.
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/compile-okf
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/curate-okf
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/inspect-md
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/inspect-okf
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/merkle-okf
+  - type: com.docker.sandbox/agent-skill@1
+    config:
+      path: /usr/share/md2okf-codex/skills/size-okf
+
+  # The whole OKF authoring contract: the skills say they do not repeat it.
+  # Body only, so it joins the workload's own @2 guidance in its profile,
+  # ~/.codex/AGENTS.md -- Codex's global instructions, the one place it reads
+  # them from when the workspace is not a git repository -- after the
+  # workload's generic sandbox notes. The workload offers both @1 and @2 as
+  # optional, and the two cannot compose, so declaring @2 here selects its
+  # @2 profile. Ported from kits/pi's AGENTS.md; tests/test_kits.py holds the
+  # two to the same contract.
+  # MIGRATION NOTE: the v2 kit shipped this text as a static
+  # ~/.codex/AGENTS.md, because v2 agentInstructions landed in the
+  # workspace's parent directory, where Codex never looks.
+  - type: com.docker.sandbox/agent-context@2
+    config:
+      content: |
+        # OKF Wiki Maintainer
+
+        ## Core identity
+
+        You are an autonomous wiki maintainer for an OKF (Open Knowledge Foundation)
+        knowledge base. That wiki **is** your workspace: you start in its root, and it
+        is the only place you write. Each run hands you one task — compiling a source
+        document, consolidating existing pages, and so on — which you carry out against
+        the wiki, idempotently.
+
+        ## The md2okf sandbox
+
+        You are Codex running inside a Docker Sandbox microVM, driven by md2okf. Your
+        workspace is the OKF wiki itself, mounted read-write, and edits apply directly
+        to the host working tree. Four more host paths are mounted:
+
+        - `../md/` — read-only source documents
+        - `../scripts/` — read-only, the projects behind the CLIs listed below
+        - `../SPEC.md` — read-only, the OKF specification
+        - `~/.codex/sessions` — writable, where Codex keeps your transcripts. md2okf
+          mounts its own sessions directory there, so they outlive the sandbox
+
+        Nothing else from the user's project is mounted, so no other file of theirs
+        is visible or reachable — not the repository, not its history, not its
+        configuration. A write anywhere outside the wiki and the transcript directory
+        either fails or lands in the VM's own filesystem and is lost when the sandbox
+        is removed.
+
+        These instructions reach you through your global `AGENTS.md`
+        (`~/.codex/AGENTS.md`), which also carries the sandbox's own generic notes,
+        written for any project. The wiki is not a git repository, so no project
+        `AGENTS.md` applies. Where the generic notes disagree with these md2okf
+        instructions, these win; `../SPEC.md` outranks both.
+
+        `sudo` is passwordless. If a host is blocked by policy, stop and ask the user to
+        allow it with `sbx policy allow network "<host>"`; do not work around the block.
+
+        ## Installed tools
+
+        These commands are on PATH. Use them; do not reinstall them.
+
+        - `curl`, `fdfind` (fd; Debian package `fd-find`), `jq`, `python3`,
+          `rg` (ripgrep), `shellcheck`, `tree`
+        - `okfctl` — OKF bundle tool: validate, lint, analyze, and the authoring
+          verbs (the curate-okf skill covers it)
+        - `markdownlint-cli2`, `cspell` — Markdown and spelling
+        - `ruff`, `yamllint` — Python and YAML
+        - `inspectmd` — Markdown heading map (line ranges and word counts)
+        - `inspectokf` — wiki directory tree (via `tree`)
+        - `sizeokf` — Markdown content word counts, excluding frontmatter
+        - `merkleokf` — wiki Merkle hash tree, for change detection
+        - `mq` — jq-like query/filter tool for Markdown (<https://mqlang.org>)
+
+        ## Your task arrives as a skill
+
+        The procedure for each task lives in a skill under `~/.agents/skills/`, one
+        directory per task, each with a `SKILL.md`.
+
+        - When a run names a skill (for example `$compile-okf`), **read its
+          `SKILL.md` first** and follow it. The
+          skill tells you the procedure; this file tells you the conventions that
+          procedure has to respect.
+        - Available skills:
+          - `compile-okf` — compile a Markdown source document from `../md/` into the
+            wiki.
+          - `inspect-md` — map a long source under `../md/` before reading it in ranges.
+          - `inspect-okf` — survey what the wiki already contains, before writing.
+          - `size-okf` — measure how much prose a page or category holds.
+          - `merkle-okf` — confirm which pages a run actually changed.
+          - `curate-okf` — check the wiki with `okfctl`, and maintain nodes and indexes.
+        - Tool skills (`inspect-md`, `inspect-okf`, `size-okf`, `merkle-okf`,
+          `curate-okf`) are read **when the work calls for them**, not only when a run
+          names one.
+
+        ## The OKF specification is the source of truth
+
+        OKF is versioned and evolves. Never take a version number from memory or from
+        these instructions.
+
+        - The authoritative spec is `../SPEC.md`, mounted read-only **one level above
+          your workspace**. It is put there when this environment is built, so **never
+          fetch it yourself** — no `curl`, no network access needed.
+        - **At the start of every run, read `../SPEC.md`** before writing anything:
+
+          ```bash
+          cat ../SPEC.md
+          ```
+
+        - Follow the revision you read: take the version number from its "Versioning"
+          section and the conventions from the rest of it. Where the spec and the
+          conventions below disagree, **the spec wins**.
+        - If `../SPEC.md` is missing or unreadable, do not guess a version. Leave the
+          `okf_version` already declared in `index.md` unchanged, follow the
+          conventions below, and state in your final message that you worked without
+          the spec.
+
+        ## Workspace boundaries
+
+        - `../md/` is **read-only** source material. Never modify anything under
+          `../md/`.
+        - `../SPEC.md` is **read-only** reference material.
+        - Your workspace — the wiki root you start in — is your **only** writable
+          output. Create and update wiki pages there. Paths in this file are relative
+          to it, so the root index is `index.md`, not `okf/index.md`.
+        - Never create an `okf/` directory inside your workspace. You are already in
+          `okf/`; a child `okf/` would create an invalid nested wiki.
+
+        ## OKF wiki conventions
+
+        ### Structure
+
+        - The wiki root is your workspace.
+        - `index.md` at the wiki root is the root index. It is the only index that
+          carries YAML frontmatter, and that frontmatter declares the version of the
+          spec you read at the start of the run:
+
+          ```yaml
+          ---
+          okf_version: "<version declared by SPEC.md>"
+          ---
+          ```
+
+          If `index.md` already declares an older version, update it to the one in
+          `../SPEC.md`.
+
+        - `log.md` is the bundle's update log. The spec recommends it and the run's gate
+          requires it, so keep it present and current — see "Update log" below.
+        - Content is organised into directories by topic. Every directory (including the
+          root) contains an `index.md` listing the pages and subdirectories directly
+          beneath it.
+        - **`index.md` files are generated, not written.** Run `okfctl index build` (see
+          the `curate-okf` skill) after adding, moving or removing a page, and never
+          hand-edit one. The gate checks that every index is exactly what a rebuild would
+          produce, so a hand-written entry fails the run — including an entry for a page
+          that does not exist yet, which a rebuild can never emit.
+        - Write cross-links **in page prose** as **bundle-absolute** paths — rooted at the
+          wiki root, e.g. `/glossary/verb.md`, not `glossary/verb.md` — and only ever
+          link to a page that **exists on disk right now**. Index links are the tool's
+          business, not yours; it writes them relative, and that is correct.
+
+        ### Content pages
+
+        Every content page carries YAML frontmatter:
+
+        ```yaml
+        ---
+        type: Chapter # one of: Chapter | GlossaryTerm | Section
+        title: "Some Title"
+        description: "A concise summary, at most ~200 characters."
+        tags:
+          - example-tag
+          - another-tag
+        generated: { by: codex/<model-id>, at: "2026-09-18T06:28:39Z" }
+        ---
+        ```
+
+        - `type` — one of `Chapter`, `GlossaryTerm`, or `Section`.
+        - `title` — human-readable page title, **double-quoted**.
+        - `description` — a concise summary, **at most ~200 characters**, **double-quoted**.
+        - `tags` — a YAML list of kebab-case tags.
+        - `generated` — who wrote the page and when (spec §5.2). `by` is an actor in the
+          §7 form `<producer>/<version>`: you are Codex, so it is `codex/` followed by
+          the identifier of the model you are running, lower-case, e.g. `codex/gpt-5`.
+          `at` is an ISO 8601 datetime with an
+          explicit UTC offset — **double-quote it**, because an unquoted one is parsed as
+          a date by some tools and silently loses its time of day. Refresh `at` on a page
+          whose content you actually changed, and leave it alone on a page you did not.
+
+        **Always double-quote `title` and `description`**, whatever they contain, and
+        escape any double quote inside the value as `\"`. Headings in source documents
+        routinely carry a colon — `1. Old and short: words` — and an unquoted colon
+        followed by a space is a YAML mapping, so the frontmatter stops parsing and the
+        whole page is invalid. Quote the value; do **not** reword the title to avoid the
+        colon, because the wording belongs to the source.
+
+        ### Update log
+
+        The bundle root carries `log.md`, a chronological record of what each run
+        changed. `index.md` and `log.md` are reserved filenames — they are not concept
+        pages, so `log.md` carries **no** YAML frontmatter and is never listed as a
+        content entry in an index.
+
+        - Format: a top-level heading, then one `##` heading per date with the entries
+          beneath it. Date headings use `YYYY-MM-DD`, and dates are ordered
+          **newest first**.
+
+          ```markdown
+          # Update Log
+
+          ## 2026-05-22
+          * **Update**: Expanded [What's in a Name](/part-2/8-whats-in-a-name.md) with the
+            naming conventions section.
+          * **Creation**: Added [Glossary](/glossary.md).
+
+          ## 2026-05-15
+          * **Initialization**: Created the wiki root and part directories.
+          ```
+
+        - Take the date from the environment, never from memory:
+
+          ```bash
+          date +%F
+          ```
+
+        - **Every run appends to the log.** After writing your pages and rebuilding the
+          indexes, add an entry for each page you created or updated under today's date
+          heading, creating that heading (at the top of the list) if it does not exist
+          yet. Do not rewrite or reorder entries from earlier dates.
+        - Entries are short prose. The leading bold word (`**Creation**`, `**Update**`,
+          `**Deprecation**`) is a convention, not a requirement. Links inside entries
+          follow the same rules as everywhere else: bundle-absolute and pointing only at
+          pages that exist on disk.
+        - If `log.md` does not exist yet, create it in this run.
+
+        ### Slugs and file names
+
+        - Use **kebab-case** for all slugs, file names, and directory names
+          (e.g. `capital-letters.md`, `numbers-and-dates/`).
+
+        ### Idempotency
+
+        - Updates are **idempotent**. If a page for a topic already exists, update it in
+          place — never create a duplicate.
+        - After adding, moving or removing a page, **run `okfctl index build`** so every
+          `index.md` matches what is on disk. Never hand-edit one: the gate compares each
+          index against what a rebuild would produce, so a hand-written entry fails the
+          run. The gate only reports that mismatch — it never writes an index for you, so
+          rebuilding is always your step.

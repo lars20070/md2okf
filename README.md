@@ -35,7 +35,7 @@ flowchart LR
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
     STATE["session traces<br/>~/.local/state/md2okf/*/sessions"]
     DRV["host driver<br>md2okf -o okf/ md/"]
-    KIT["kits/*/spec.yaml<br/>kits/*/files/"]
+    KIT["kits/*/md2okf-*.yaml<br/>kits/*/files/"]
   end
 
   subgraph VM["sbx microVM"]
@@ -86,15 +86,18 @@ flowchart LR
 
 <!-- cspell:enable -->
 
-<br>*Host tooling (amber) builds the microVM from the kit and drives it with one
-`sbx exec` per source document. Inside, the coding agent (red) runs the
+<br>*Host tooling (amber) builds the microVM from the kit and drives it one source
+document at a time, with one `sbx exec` per agent turn: it repeats the turn,
+up to `-n` times (default 10), until the wiki stops changing. Inside, the coding agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
 only content it may change. Skills and the linter (teal) support it — four of
-them survey the source markdown and wiki, `curate-okf` maintains its nodes and
-indexes, and the linter must pass before a run ends. Session
+them survey the source markdown and wiki, `/curate-okf` maintains its nodes and
+indexes, and the agent is instructed to pass the linter before it finishes. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx credential proxy (teal), which
-injects the API key; OpenRouter routes them to DeepInfra or other providers (gray).*
+injects the API key. Pi's default model, `deepseek/deepseek-v4-pro`, goes through
+OpenRouter pinned to DeepInfra with fallbacks off; other providers (gray) need a
+[kit edit](https://github.com/lars20070/md2okf/blob/master/docs/configuration.md#models-and-providers).*
 
 ## Contents
 
@@ -141,7 +144,7 @@ The first flag opens a shell inside the sandbox, at the wiki root; the second op
 
 ## Install sbx
 
-Install the `sbx` command-line tool, version 0.49.2 or newer, and sign in.
+Install the `sbx` command-line tool, version 0.54.0 or newer, and sign in.
 `md2okf` refuses an older `sbx`.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)
@@ -152,7 +155,7 @@ brew install docker/tap/sbx
 sbx login
 ```
 
-[Linux:](https://docs.docker.com/ai/sandboxes/install/#linux)
+[Linux (Debian, Ubuntu and other apt-based systems):](https://docs.docker.com/ai/sandboxes/install/#linux)
 
 ```bash
 curl -fsSL https://get.docker.com | sudo REPO_ONLY=1 sh
@@ -165,17 +168,25 @@ sbx login
 
 `sbx` keeps the key out of the virtual machine. It holds the real key on the
 host and swaps it into requests at its proxy, so inside the sandbox
-`$OPENROUTER_API_KEY` reads `proxy-managed`. Store the key with `sbx` once:
+`$OPENROUTER_API_KEY` reads `proxy-managed`. Store the key with `sbx` once; it
+prompts for the value, which keeps the key out of your shell history:
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-...
-echo "$OPENROUTER_API_KEY" | sbx secret set openrouter
+sbx secret set openrouter
 ```
 
+If the key already lives in a secret manager or an environment variable, pipe
+it in instead: `echo "$OPENROUTER_API_KEY" | sbx secret set openrouter`.
+
 The secret is global, so it reaches `md2okf-pi`, the sandbox Pi runs in; each
-agent gets its own, called `md2okf-<agent>`. The `export` only passes the key
-to the `sbx` command: `md2okf` reads it from `sbx secret`, never from your
-shell environment.
+agent gets its own, called `md2okf-<agent>`. `md2okf` reads the key only through
+`sbx`, never from your shell environment. `sbx` hands a credential to a sandbox
+only when it creates it, so if `md2okf-pi` already exists from an earlier run,
+remove it and the next run rebuilds it with the key:
+
+```bash
+sbx rm --force md2okf-pi
+```
 
 ## Further documentation
 
@@ -189,3 +200,6 @@ shell environment.
 ## License
 
 Released under the [MIT License](https://github.com/lars20070/md2okf/blob/master/LICENSE).
+The bundled `SPEC.md` is the OKF specification, redistributed unchanged under
+the Apache License 2.0; see
+[NOTICE-OKF-SPEC.md](https://github.com/lars20070/md2okf/blob/master/NOTICE-OKF-SPEC.md).

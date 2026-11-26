@@ -7,7 +7,7 @@ tone_instructions: "Be concise and focus on critical issues only. Do not comment
 early_access: false
 enable_free_tier: true
 reviews:
-  profile: quiet
+  profile: chill
   request_changes_workflow: false
   high_level_summary: true
   high_level_summary_in_walkthrough: false
@@ -28,19 +28,26 @@ reviews:
   in_progress_fortune: false
   poem: false
   abort_on_close: true
-  # Generated, gitignored, or manually maintained content that is not reviewed:
-  # the wiki's input and output, the lockfile, the optional PDF step, and
-  # SPEC.md, which is the upstream OKF revision this repo builds against
-  # rather than code of ours to review.
+  # Generated, gitignored, vendored or manually maintained content that is not
+  # reviewed: the wiki's input and output, every project's lockfile, the
+  # optional PDF step, the lat-md skill `lat init` writes (vendored tool
+  # output, which `make lint` skips too), local MCP and plan files, and
+  # SPEC.md, the upstream OKF revision this repo builds against rather than
+  # code of ours to review.
   path_filters:
     - "!SPEC.md"
-    - "!uv.lock"
+    - "!**/uv.lock"
     - "!md/**"
     - "!okf/**/*.md"
     - "!extras/pdf2md/**"
+    - "!.mcp.json"
     - "!.cursor/mcp.json"
+    - "!.vscode/mcp.json"
     - "!.cursor/plans/**"
     - "!.claude/plans/**"
+    - "!.agents/skills/lat-md/**"
+    - "!.claude/skills/lat-md/**"
+    - "!.codex/skills/lat-md/**"
   path_instructions:
     - path: "**/*.sh"
       instructions: |
@@ -50,22 +57,63 @@ reviews:
         directory, validate prerequisites early and exit non-zero with a clear
         message on stderr, clean up temporary resources with traps, keep
         secrets out of arguments and logs, and require ShellCheck-clean code.
-    - path: "**/spec.yaml"
+        A file whose shebang is #!/bin/sh (the tests/test-sandbox-guest-*.sh
+        scripts) runs under dash inside the sandbox: keep it POSIX, and do not
+        suggest arrays, [[ ]] or other bashisms there.
+    - path: "kits/*/md2okf-*.yaml"
       instructions: |
-        For Docker Sandbox Kit specs, treat schema conformance as load-bearing:
-        flag renamed or restructured keys that a schema check would reject, and
-        say so rather than asserting the spec is valid. Keep capabilities
+        These are Docker Sandbox Kit schema v3 descriptors, built by the
+        frontend their `# syntax=` line pins. Treat schema conformance as
+        load-bearing: decoding is strict, so flag unknown or renamed keys, and
+        say so rather than asserting the descriptor is valid. Keep capabilities
         least-privilege and network access default-deny with a stated reason
-        for every allowed host, keep credentials proxy-managed and real secrets
-        out of the file, pin installed versions, make setup commands
-        idempotent, and bound retries and timeouts.
+        for every allowed host, split by install and runtime phase; keep
+        credentials proxy-managed and real secrets out of the file; list every
+        variable a lifecycle hook reads in its `env`; pin installed versions,
+        make hooks idempotent, and bound retries and timeouts. What the kits
+        share must change in every kit at once: the helper-shim install hook,
+        the compile-okf gate scripts, the mq and okfctl digests, and the two
+        mixins' install hooks and network policy. tests/test_kits.py enforces
+        this, so flag an edit made to one kit only.
+        Do not flag these deliberate choices: unversioned apt packages in
+        install hooks (apt resolves them against the workload's own package
+        database); an unversioned `requires: ["claude"]` or `["codex"]` (the
+        workload is pinned by digest in src/md2okf/agents.py); portless apt
+        mirror hosts (apt needs whichever port the mirror answers on); and Pi's
+        optional `openrouter` credential (a required one would stop
+        `md2okf --shell` opening; the driver checks the key itself).
+    - path: "kits/*/md2okf-*.dockerfile"
+      instructions: |
+        These are kit content recipes. Pin downloads by SHA-256, keep build
+        tools out of the final stage, and set owners explicitly: a mixin
+        overlay must keep /home root-owned and /home/agent owned by uid 1000,
+        and every other entry owned by root or uid 1000. Do not flag the
+        unpinned `debian:trixie-slim` build stages: nothing from them reaches
+        the final image except files checked against a pinned SHA-256, and the
+        final stage is `scratch` or the digest-pinned Pi image.
     - path: ".github/workflows/**"
       instructions: |
         Apply GitHub Actions best practices: pin third-party actions and
         downloaded binaries to a version, keep workflow permissions
         least-privilege, avoid running untrusted input with elevated
         privileges, fail loudly on download and script errors, and never echo
-        secrets into logs. Keep duplicated trigger configuration in sync.
+        secrets into logs. Keep duplicated trigger configuration in sync. Pin
+        every npx package version used for linting, and keep the sbx and
+        kit-tck downloads pinned to exact versions with SHA-256 checks. Do not
+        flag `ubuntu-latest`: runner updates are accepted on purpose.
+    - path: "CHANGELOG.md"
+      instructions: |
+        Follows Keep a Changelog 1.1.0 (Added, Changed, Deprecated, Removed,
+        Fixed, Security), plus this project's own Upgrading section. Flag a
+        user-visible change in the diff that has no entry, an entry that the
+        diff contradicts, and a release heading that disagrees with VERSION.
+    - path: "lat.md/**"
+      instructions: |
+        lat.md/ is the design knowledge graph: a current-state description of
+        the code, not a journal. Flag sections this diff has made untrue, and
+        changelog-style notes that do not belong here. `lat check` already
+        validates links, section structure and Mermaid syntax, so do not
+        review those.
     - path: "**/*.md"
       instructions: |
         Review documentation against the rest of the diff rather than for prose
@@ -76,7 +124,7 @@ reviews:
       instructions: |
         Review Python code for:
         - PEP 8, type hints, docstrings, error handling, and performance. Flag mutable default arguments.
-        - Blocking calls inside async functions (use asyncio equivalents)
+        - A new runtime dependency in src/md2okf/: the driver is stdlib-only by design.
         - API keys or secrets accidentally logged or exposed in error messages
         - Missing context managers for network/file resources
         - Unbounded retries or missing timeouts on external calls
@@ -85,11 +133,12 @@ reviews:
       instructions: |
         Review test code for:
         - Check pytest best practices, fixture usage, test isolation, and edge case coverage.
-        - Async test functions must have @pytest.mark.asyncio decorator
+        - The driver suite (tests/) must stay offline: tests/conftest.py fakes the
+          one sbx seam, so flag a test that would run a real sbx or reach the network.
         - Tests creating files/directories must have cleanup fixtures
         - Prefer tmp_path over manual temp directories, and monkeypatch over
           direct mutation of module state, so tests stay isolated.
-        - Tests must not perform real network I/O; HTTP belongs behind
+        - Tests must not perform real network I/O; in web2md, HTTP belongs behind
           httpx.MockTransport.
   auto_review:
     enabled: true
@@ -98,8 +147,6 @@ reviews:
       - "DO NOT REVIEW"
       - "WIP"
     drafts: false
-  # The web2md scraper (extras/web2md/src/) and its pytest suite (extras/web2md/tests/) are the
-  # only first-party code here.
   finishing_touches:
     docstrings:
       enabled: true
@@ -140,12 +187,19 @@ reviews:
     # the reviewer not to raise, so leave this off rather than filtering it.
     languagetool:
       enabled: false
+    # The schema allows only `enabled` here; a `timeout_ms` key is invalid.
     github-checks:
       enabled: true
-      timeout_ms: 900000
+    # No config_file: each of the seven projects carries its own [tool.ruff],
+    # and ruff picks the nearest one, as `make lint` runs it per project.
     ruff:
       enabled: true
-      config_file: "extras/web2md/pyproject.toml"
+    # Ruff is the Python linter here. Both of these default to on, and would
+    # apply rules the projects' ruff configs do not, line length included.
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
 chat:
   art: false
   auto_reply: true

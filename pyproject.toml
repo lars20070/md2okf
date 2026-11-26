@@ -86,13 +86,15 @@ packages = ["src/md2okf"]
 # here would be a footgun for no gain at this size. Subtracting is different:
 # the two agent-tool directories carry vendored third-party skills with licences
 # of their own, and republishing those under this project's name is not
-# something a source distribution should do silently.
+# something a source distribution should do silently. The same goes for the
+# lat-md skill that `lat init` writes for Codex and Pi under .codex/ and
+# .agents/; only that skill is excluded there, not the whole directory.
 [tool.hatch.build.targets.sdist]
 # Anchored with a leading slash: a bare ".claude" is a gitignore-style pattern
-# that matches at any depth, and would also strip a kit's own
-# files/home/.claude/ agent config out of the sdist -- and so out
-# of the wheel `uv build` makes from it.
-exclude = ["/.claude", "/.cursor"]
+# that matches at any depth, and the same mistake with ".pi" would strip
+# kits/pi's files/home/.pi/ agent config out of the sdist -- and so out of the
+# wheel `uv build` makes from it.
+exclude = ["/.claude", "/.cursor", "/.agents/skills/lat-md", "/.codex/skills/lat-md"]
 
 [dependency-groups]
 test = ["pytest>=8.4"]

@@ -1,0 +1,3 @@
+config.local.yaml
+# Search index and parse cache, rebuilt locally by lat.
+.cache/

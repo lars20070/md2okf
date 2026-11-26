@@ -41,8 +41,9 @@ Compile Markdown into an OKF wiki with a coding agent: Pi (the default),
 Claude Code or Codex, each running in its own sbx sandbox.""",
         # Held to 79 columns so it renders in a standard terminal; the epilog is
         # printed verbatim. These are the only three variables a user of the
-        # command can set -- md2okf injects MD2OKF_STATE_DIR, and sbx sets
-        # WORKDIR. tests/test_cli.py checks every registered agent is named here.
+        # command sets; MD2OKF_SANDBOX_NAME is maintainer-only (CONTRIBUTING.md)
+        # and sbx sets WORKSPACE_DIR itself. tests/test_cli.py checks every
+        # registered agent is named here.
         epilog="""\
 Environment:
   MD2OKF_AGENT        the agent that compiles: pi (Pi, the default), claude
@@ -124,6 +125,7 @@ def _resolve_inputs(
     return documents, output_dir, wb
 
 
+# @lat: [[cli#Dry run]]
 def _print_dry_run(
     agent: agents.Agent,
     documents: list[compile_mod.Document],
@@ -138,7 +140,7 @@ def _print_dry_run(
     for doc in documents:
         print(f"    {doc.display} -> work/md/{doc.basename}")
     print("  mounts:")
-    for mount in wb.mounts():
+    for mount in wb.mounts(agent.trace_target):
         print(f"    {mount.as_arg()}")
     print("  commands:")
     print(f"    {_format_sbx_run(agent, wb)}")
@@ -151,12 +153,16 @@ def _format_sbx_run(agent: agents.Agent, wb: workbench.Workbench) -> str:
 
     Whether it actually runs depends on sandbox reuse -- a live decision
     --dry-run must not make (that would mean querying `sbx`). This shows
-    what *would* run if a (re)creation turns out to be necessary.
+    what *would* run if a (re)creation turns out to be necessary, built by
+    the same function sandbox.create() runs.
     """
-    mount_args = " ".join(mount.as_arg() for mount in wb.mounts())
-    return (
-        f"sbx run --detach --name {workbench.sandbox_name(agent.name)} "
-        f"-e MD2OKF_STATE_DIR={wb.root} {resources.kit_dir(agent.name)} {mount_args}"
+    return shlex.join(
+        sandbox.run_argv(
+            workbench.sandbox_name(agent.name),
+            resources.kit_dir(agent.name),
+            agent.workload_ref,
+            wb.mounts(agent.trace_target),
+        )
     )
 
 
@@ -220,6 +226,7 @@ def _reject_compile_only_options(args: argparse.Namespace, parser: argparse.Argu
     return None
 
 
+# @lat: [[cli#Interactive sessions]]
 def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser, agent: agents.Agent) -> int:  # noqa: RET503
     """Make the sandbox current, then hand this terminal over to it.
 
@@ -335,6 +342,7 @@ def _run(
     return 0
 
 
+# @lat: [[cli#Exit codes]]
 def main(argv: list[str] | None = None) -> int:
     """Parse argv, run, and return a process exit code."""
     parser = _build_parser()

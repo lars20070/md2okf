@@ -152,11 +152,12 @@ def test_a_successful_result_renders_as_nothing():
 
 STUB = agents.Agent(
     name="claude",
-    compile_args=lambda prompt: ["md2okf-agent", "claude", "-p", prompt],
-    interactive_args=("md2okf-agent", "claude"),
+    compile_args=lambda prompt: ["claude", "-p", prompt],
+    interactive_args=("claude",),
     compile_prompt=lambda document: f"compile {document}",
     check_credentials=lambda _name: None,
     protocol=claude,
+    trace_target="/home/agent/.claude/projects",
 )
 NAME = workbench.sandbox_name(STUB.name)
 

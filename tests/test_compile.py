@@ -253,7 +253,6 @@ def test_continuation_prompt_appended_from_iteration_two(fake_sbx, tmp_path):
 
     first, second = fake_sbx.turn_argvs
     assert first == [
-        "md2okf-agent",
         "pi",
         "--mode",
         "json",
@@ -548,6 +547,7 @@ STUB = agents.Agent(
     compile_prompt=lambda document: f"compile {document}",
     check_credentials=lambda _name: None,
     protocol=_StubProtocol(),
+    trace_target="/home/agent/.stub/sessions",
 )
 STUB_NAME = workbench.sandbox_name(STUB.name)
 
@@ -650,6 +650,7 @@ def test_a_line_the_protocol_hides_stays_out_of_the_failure_message(fake_sbx, tm
         compile_prompt=lambda document: str(document),
         check_credentials=lambda _name: None,
         protocol=_Hiding(),
+        trace_target="/home/agent/.hider/sessions",
     )
     name = workbench.sandbox_name(agent.name)
     fake_sbx.register(name)

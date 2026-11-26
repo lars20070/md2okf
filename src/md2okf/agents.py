@@ -33,6 +33,7 @@ class UnknownAgentError(Exception):
     """MD2OKF_AGENT names no registered agent -- exit 2."""
 
 
+# @lat: [[agents#Agent contract]]
 @dataclass(frozen=True)
 class Agent:
     """One agent framework: how to run it, prompt it, check it and parse it."""
@@ -59,6 +60,19 @@ class Agent:
 
     protocol: EventProtocol
     """The parser for this agent's streamed output."""
+
+    trace_target: str
+    """The agent's native trace directory in the guest, where the workbench's sessions/ is mounted."""
+
+    workload_ref: str | None = None
+    """The published workload this agent's kit is a mixin for, pinned by index digest.
+
+    None when the kit is itself the workload (Pi). Otherwise the kit is
+    composed onto this reference with `sbx run --kit`. Pinned rather than a
+    bare agent name, which resolves through the user's `kit.shortcuts` and
+    floats with upstream: the digest is part of the sandbox fingerprint, so a
+    deliberate bump rebuilds the sandbox and nothing else does.
+    """
 
 
 def _pi_compile_prompt(document: Path) -> str:
@@ -138,11 +152,12 @@ def _claude_check_credentials(name: str) -> str | None:
     )
 
 
-# Every in-sandbox argv starts with the kit's `md2okf-agent` wrapper, not the
-# agent itself: `sbx exec` bypasses the kit entrypoint, so the wrapper is what
-# guarantees the agent's traces land on host-backed state (see
-# kits/<agent>/files/home/.local/lib/md2okf/md2okf-agent.sh).
-WRAPPER = "md2okf-agent"
+# The published workloads the Claude Code and Codex kits are mixins for, by
+# multi-platform index digest. Bumping one is a deliberate change: it rebuilds
+# every sandbox of that agent on its next use (see Agent.workload_ref). Check
+# a candidate's descriptor before bumping, as kits/claude/README.md describes.
+CLAUDE_WORKLOAD = "docker.io/sbx/claude@sha256:a91195e9e3b6f316fda9afd5228b26d65abd486dc6e627682c2aabbd59747886"
+CODEX_WORKLOAD = "docker.io/sbx/codex@sha256:eb621d203636085c03be079c27439c805c8e46927c27f5daf6210ed8e6c62cd8"
 
 PI = Agent(
     name="pi",
@@ -152,22 +167,22 @@ PI = Agent(
     # deferred tools, leaving the compile the tool set Pi 0.86 gave it. This
     # removes MCP *tools*, not GitHub access: a bound `github` secret still
     # reaches `gh` and `git` through bash (see kits/pi/README.md).
-    compile_args=lambda prompt: [WRAPPER, "pi", "--mode", "json", "--no-mcp", "--tools", "-tool_search", prompt],
-    interactive_args=(WRAPPER, "pi"),
+    compile_args=lambda prompt: ["pi", "--mode", "json", "--no-mcp", "--tools", "-tool_search", prompt],
+    interactive_args=("pi",),
     compile_prompt=_pi_compile_prompt,
     check_credentials=_pi_check_credentials,
     protocol=pi_protocol,
+    trace_target="/home/agent/.pi/agent/sessions",
 )
 
 CLAUDE = Agent(
     name="claude",
-    # --permission-mode: the parent already defaults to bypassPermissions, but
-    # a compile must not depend on a parent default. --strict-mcp-config with
-    # no --mcp-config: no MCP servers at all -- neither the parent's gateway
+    # --permission-mode: the workload already defaults to bypassPermissions, but
+    # a compile must not depend on a workload default. --strict-mcp-config with
+    # no --mcp-config: no MCP servers at all -- neither the workload's gateway
     # nor the logged-in account's claude.ai connectors, none of which a
     # compile uses.
     compile_args=lambda prompt: [
-        WRAPPER,
         "claude",
         "-p",
         "--output-format",
@@ -178,10 +193,12 @@ CLAUDE = Agent(
         "--strict-mcp-config",
         prompt,
     ],
-    interactive_args=(WRAPPER, "claude", "--permission-mode", "bypassPermissions"),
+    interactive_args=("claude", "--permission-mode", "bypassPermissions"),
     compile_prompt=_claude_compile_prompt,
     check_credentials=_claude_check_credentials,
     protocol=claude_protocol,
+    trace_target="/home/agent/.claude/projects",
+    workload_ref=CLAUDE_WORKLOAD,
 )
 
 
@@ -197,7 +214,7 @@ def _codex_compile_prompt(document: Path) -> str:
 def _codex_check_credentials(name: str) -> str | None:
     """`codex login status` must exit 0 and report "Logged in".
 
-    Local, non-interactive and unpaid. The codex parent routes the host's
+    Local, non-interactive and unpaid. The codex workload routes the host's
     `openai` secret through sbx's own model provider and leaves a placeholder
     login behind at create time, which this sees; without the secret there is
     nothing to see.
@@ -217,13 +234,12 @@ def _codex_check_credentials(name: str) -> str | None:
 CODEX = Agent(
     name="codex",
     # Neither --skip-git-repo-check nor --dangerously-bypass-... was
-    # load-bearing in the spike (the parent's config already allows both), but
-    # a compile must not depend on a parent default. The -c override switches
-    # off the parent's MCP gateway, which a compile does not use -- the
+    # load-bearing in the spike (the workload's config already allows both), but
+    # a compile must not depend on a workload default. The -c override switches
+    # off the workload's MCP gateway, which a compile does not use -- the
     # counterpart of Claude's --strict-mcp-config (measured: `-c
     # mcp_servers={}` does not remove it, `enabled=false` does).
     compile_args=lambda prompt: [
-        WRAPPER,
         "codex",
         "exec",
         "--json",
@@ -233,10 +249,12 @@ CODEX = Agent(
         "mcp_servers.mcp-gateway.enabled=false",
         prompt,
     ],
-    interactive_args=(WRAPPER, "codex", "--dangerously-bypass-approvals-and-sandbox"),
+    interactive_args=("codex", "--dangerously-bypass-approvals-and-sandbox"),
     compile_prompt=_codex_compile_prompt,
     check_credentials=_codex_check_credentials,
     protocol=codex_protocol,
+    trace_target="/home/agent/.codex/sessions",
+    workload_ref=CODEX_WORKLOAD,
 )
 
 AGENTS: dict[str, Agent] = {PI.name: PI, CLAUDE.name: CLAUDE, CODEX.name: CODEX}

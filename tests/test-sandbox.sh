@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check that one agent's sandbox delivers what kits/<agent>/spec.yaml promises:
-# the installed toolchain, the agent config copied in from kits/<agent>/files/,
-# a ready credential, and the driver's mount invariants. The checks themselves
-# live in tests/test-sandbox-guest-common.sh, which every agent shares, and
+# Check that one agent's sandbox delivers what kits/<agent>/ promises: the
+# installed toolchain, the agent config from kits/<agent>/files/, a ready
+# credential, and the driver's mount invariants. The checks themselves live in
+# tests/test-sandbox-guest-common.sh, which every agent shares, and
 # tests/test-sandbox-guest-<agent>.sh, which defines what differs.
 #
 # Usage: test-sandbox.sh AGENT      (e.g. pi; `make test-sandbox` runs them all)
@@ -15,6 +15,10 @@ set -euo pipefail
 # Reuses the agent's existing sandbox, creating one only if missing (minutes),
 # so it may be testing a sandbox older than your last kits/<agent>/ edit. To
 # force a fresh one: sbx rm --force md2okf-pi && ./tests/test-sandbox.sh pi
+#
+# To pilot a kit change beside a working sandbox, set both MD2OKF_SANDBOX_NAME
+# and a temporary XDG_STATE_HOME (see CONTRIBUTING.md); every path and name
+# below comes from the driver, so both are honoured.
 
 if [[ "$#" -ne 1 || -z "$1" ]]; then
 	echo "Usage: $0 AGENT   (e.g. pi)" >&2
@@ -32,8 +36,6 @@ if [[ ! -f "${guest_script}" ]]; then
 	exit 2
 fi
 
-sandbox_name="md2okf-${agent}" # workbench.sandbox_name()
-
 if ! command -v sbx >/dev/null 2>&1; then
 	echo "Error: 'sbx' CLI not found in PATH." >&2
 	echo "Please install it with: brew install docker/tap/sbx" >&2
@@ -48,8 +50,26 @@ fi
 # existing sandbox when it is ours and its configuration still matches.
 MD2OKF_AGENT="${agent}" uv run python -m md2okf.sandbox
 
-# `sh -l` must be a LOGIN shell: the uv tools land in ~/.local/bin and the npm
-# globals in the user prefix, neither of which is on a non-login PATH. `-s`
+# Every name and path from the driver itself, not a copy of its rules: one
+# per line, in one interpreter start.
+{
+	read -r sandbox_name
+	read -r sessions_dir
+	read -r wiki_dir
+} < <(
+	MD2OKF_AGENT="${agent}" uv run python -c 'from md2okf import agents, workbench
+agent = agents.from_env()
+wb = workbench.Workbench.default(agent.name)
+print(workbench.sandbox_name(agent.name), wb.sessions, wb.work_okf, sep="\n")'
+)
+if [[ -z "${sandbox_name:-}" || -z "${sessions_dir:-}" || -z "${wiki_dir:-}" ]]; then
+	echo "Error: could not read the sandbox name and paths from the driver." >&2
+	exit 2
+fi
+
+# `sh -l` is a LOGIN shell, as an interactive session would be; the host-side
+# checks below repeat what matters under a plain `sbx exec`, which is how the
+# driver runs everything. `-s`
 # reads the script from stdin, because tests/ is not one of the sandbox's
 # mounts and so cannot be named as a path inside the VM: the agent's file
 # (definitions only) and then the common file, as one script. `cat` closes
@@ -75,26 +95,54 @@ trap 'rm -f "${guest_log}"' EXIT
 # What only the host can see, or only a plain `sbx exec` reproduces.
 host_failures=0
 
-# The wrapper, run exactly as the driver runs every agent process: a plain,
-# non-login `sbx exec`, so it must be on that PATH -- not only on the login
-# shell's the guest script above ran in -- and must hand its arguments to the
-# command untouched.
-wrapped="$(sbx exec "${sandbox_name}" -- md2okf-agent printf '%s|' 'two words' last </dev/null)" || true
-if [[ "${wrapped}" == "two words|last|" ]]; then
-	echo "ok md2okf-agent runs a command under a plain sbx exec, arguments intact"
+# A plain, non-login `sbx exec`, exactly as the driver starts every agent
+# turn: it must start in the wiki root, and a shim must run on that PATH
+# against the wiki at the host path the driver names (compile.wiki_root_hash).
+plain_pwd="$(sbx exec "${sandbox_name}" -- pwd -P </dev/null)" || true
+if [[ "${plain_pwd}" == "${wiki_dir}" ]]; then
+	echo "ok a plain sbx exec starts in the wiki root, at its host path"
 else
-	echo "BROKEN md2okf-agent under a plain sbx exec printed '${wrapped}'"
+	echo "BROKEN a plain sbx exec starts in '${plain_pwd}', not ${wiki_dir}"
 	host_failures=$((host_failures + 1))
+fi
+# The compile-okf gate finds ../SPEC.md through WORKSPACE_DIR.
+# shellcheck disable=SC2016 # expanded by the guest shell
+plain_workspace="$(sbx exec "${sandbox_name}" -- sh -c 'printf %s "${WORKSPACE_DIR-}"' </dev/null)" || true
+if [[ "${plain_workspace}" == "${wiki_dir}" ]]; then
+	echo "ok WORKSPACE_DIR is the wiki root under a plain sbx exec"
+else
+	echo "BROKEN WORKSPACE_DIR is '${plain_workspace}' under a plain sbx exec, not ${wiki_dir}"
+	host_failures=$((host_failures + 1))
+fi
+if sbx exec "${sandbox_name}" -- merkleokf --nolog -L 0 "${wiki_dir}" </dev/null >/dev/null 2>&1; then
+	echo "ok merkleokf runs under a plain sbx exec on the wiki's host path"
+else
+	echo "BROKEN merkleokf failed under a plain sbx exec on ${wiki_dir}"
+	host_failures=$((host_failures + 1))
+fi
+
+# Pi only: the GitHub credential under the same plain exec. Never print the
+# value; the inner shell reports a verdict.
+if [[ "${agent}" == pi ]]; then
+	# shellcheck disable=SC2016 # expanded by the inner shell
+	verdict="$(sbx exec "${sandbox_name}" -- sh -c '
+		if [ "${SBX_CRED_GITHUB_MODE:-none}" = none ]; then echo unbound
+		elif [ "${GITHUB_TOKEN-}" = proxy-managed ]; then echo ok
+		else echo bad; fi' </dev/null)" || true
+	case "${verdict}" in
+	ok) echo "ok GITHUB_TOKEN is the sentinel under a plain sbx exec" ;;
+	unbound) echo "ok skipped: no GitHub secret bound" ;;
+	*)
+		echo "BROKEN GITHUB_TOKEN is not the sentinel under a plain sbx exec"
+		host_failures=$((host_failures + 1))
+		;;
+	esac
 fi
 
 # The guest wrote a token through the agent's native trace path; it must be
 # in this agent's workbench sessions/ on the host, which is the whole point of
-# the bind. The path comes from the driver itself, not a copy of its rules.
+# the mount.
 token="$(sed -n 's/^trace-probe //p' "${guest_log}" | tail -n 1)"
-sessions_dir="$(
-	MD2OKF_AGENT="${agent}" uv run python -c \
-		'from md2okf import agents, workbench; print(workbench.Workbench.default(agents.from_env().name).sessions)'
-)"
 host_probe="${sessions_dir}/.md2okf-host-probe"
 if [[ -n "${token}" && -f "${host_probe}" && "$(<"${host_probe}")" == "${token}" ]]; then
 	echo "ok a trace written in the sandbox reached ${sessions_dir} on the host"

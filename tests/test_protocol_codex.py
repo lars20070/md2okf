@@ -120,11 +120,12 @@ def test_lifecycle_events_render_as_nothing(event_type):
 
 STUB = agents.Agent(
     name="codex",
-    compile_args=lambda prompt: ["md2okf-agent", "codex", "exec", "--json", prompt],
-    interactive_args=("md2okf-agent", "codex"),
+    compile_args=lambda prompt: ["codex", "exec", "--json", prompt],
+    interactive_args=("codex",),
     compile_prompt=lambda document: f"compile {document}",
     check_credentials=lambda _name: None,
     protocol=codex,
+    trace_target="/home/agent/.codex/sessions",
 )
 NAME = workbench.sandbox_name(STUB.name)
 
