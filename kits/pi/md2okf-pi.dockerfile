@@ -53,7 +53,9 @@ fetch "https://github.com/cwest/okfctl/releases/download/v0.4.0/okfctl_0.4.0_lin
 tar xzf okfctl.tar.gz okfctl
 install -m 0755 okfctl /out/usr/local/bin/okfctl
 # github-mcp-server 1.12.2, which Pi runs over stdio (files/home/.pi/agent/
-# mcp.json). The same SHA-256 values sbxagent pins for these archives.
+# mcp.json). Like mq and okfctl, checked against the digests pinned above
+# rather than the release's own checksums file, so a re-uploaded asset fails
+# the build.
 fetch "https://github.com/github/github-mcp-server/releases/download/v1.12.2/github-mcp-server_${gms_asset}.tar.gz" \
 	gms.tar.gz "${gms_sha256}"
 tar xzf gms.tar.gz github-mcp-server
