@@ -96,6 +96,7 @@ def state_home() -> Path:
     return Path.home() / ".local" / "state"
 
 
+# @lat: [[workbench#Run lock]]
 @contextlib.contextmanager
 def lock(*, survive_exec: bool = False):
     """Acquire the non-blocking, per-user sandbox lock.
@@ -144,6 +145,7 @@ def lock(*, survive_exec: bool = False):
         os.close(fd)
 
 
+# @lat: [[workbench#Layout and mounts]]
 @dataclass(frozen=True)
 class Workbench:
     """The fixed staging layout for one agent on one host, at state_home()/md2okf/<agent>."""
@@ -394,6 +396,7 @@ def restage(
         raise WorkbenchError(f"staging the workbench failed: {exc}") from exc
 
 
+# @lat: [[workbench#Output adoption]]
 def is_adoptable_output(output_dir: Path) -> bool:
     """Whether -o DIR may be adopted: missing, empty, or a recognised OKF bundle root.
 
@@ -477,6 +480,7 @@ def _hash_tree(root: Path) -> str:
     return digest.hexdigest()
 
 
+# @lat: [[sandbox#Fingerprint]]
 def fingerprint(kit_dir: Path, sbx_version: tuple[int, int, int] | None, mounts: Iterable[sandbox.Mount]) -> str:
     """A configuration fingerprint: kit tree hash + tool version + mount set."""
     parts = [
@@ -508,6 +512,7 @@ def read_ownership_marker(wb: Workbench) -> tuple[str, str] | None:
     return fingerprint_value, identity_value
 
 
+# @lat: [[sandbox#Create or reuse]]
 def resolve_sandbox_state(wb: Workbench, name: str, fingerprint_value: str, *, fresh: bool = False) -> str:
     """Decide "create" or "reuse" for `name`, proving ownership before reuse.
 
@@ -587,6 +592,7 @@ def stage_tooling(wb: Workbench) -> None:
         raise WorkbenchError(f"staging the sandbox tooling failed: {exc}") from exc
 
 
+# @lat: [[sandbox#Credential check]]
 def ensure_sandbox(wb: Workbench, agent: Agent, *, fresh: bool = False) -> str:
     """Reuse or (re)create `agent`'s sandbox. Returns "reuse" or "created".
 

@@ -33,6 +33,7 @@ class UnknownAgentError(Exception):
     """MD2OKF_AGENT names no registered agent -- exit 2."""
 
 
+# @lat: [[agents#Agent contract]]
 @dataclass(frozen=True)
 class Agent:
     """One agent framework: how to run it, prompt it, check it and parse it."""

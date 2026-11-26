@@ -105,6 +105,7 @@
     "newgrp",
     "okfctl",
     "okflintrc",
-    "cwest"
+    "cwest",
+    "fstat"
   ]
 }

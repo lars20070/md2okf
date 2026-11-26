@@ -18,6 +18,12 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       }
+    },
+    "lat": {
+      "command": "lat",
+      "args": [
+        "mcp"
+      ]
     }
   }
 }

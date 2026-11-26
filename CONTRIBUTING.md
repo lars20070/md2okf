@@ -12,8 +12,9 @@ links to files in this repository.
 ## Commands
 
 ```bash
-make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff;
-                         # also VERSION ↔ CHANGELOG.md and VERSION ↔ every
+make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff,
+                         # lat check (the lat.md/ knowledge graph); also
+                         # VERSION ↔ CHANGELOG.md and VERSION ↔ every
                          # subproject (scripts/sync-versions.sh --check)
 make validate            # check every kits/*/spec.yaml against the Sandbox Kit schema
 make test-shell          # host test for the guest's session bind helper
@@ -37,7 +38,10 @@ md2okf -o wikis/handbook docs/handbook/ # once `make install` has run
 ```
 
 markdownlint needs `brew install markdownlint-cli2`; yamllint and ruff run via
-`uv tool run` and cspell via `npx`, so none of them needs a separate install.
+`uv tool run`, and cspell and lat (`lat.md@0.13.11`) via `npx`, so none of them
+needs a separate install. The lat hooks for Claude Code and Codex and the `lat`
+MCP server are different: they call a bare `lat`, so install it once with
+`npm install -g lat.md@0.13.11` if you use them.
 `make check-okf` needs `okfctl`: `brew install cwest/tap/okfctl`.
 
 CI (`.github/workflows/ci.yml`) runs seven jobs on every pull request: `lint`,
@@ -45,6 +49,16 @@ CI (`.github/workflows/ci.yml`) runs seven jobs on every pull request: `lint`,
 `validate-kit`. Each one reuses the matching make target, so a green
 `make lint && make test-shell && make test-web2md && make test-clis &&
 make test-md2okf && make dist && make validate` locally means a green build.
+
+## Keep the knowledge graph current
+
+`lat.md/` records why md2okf is built the way it is, linked into the code and
+the tests. `make lint` runs `lat check`, which proves every link resolves, but
+not that the prose is still true, and it does not notice a deleted
+`# @lat:` back-reference. When you change a behaviour, rename a section or move
+one, follow the review steps in `lat.md/development.md`, "Keeping the graph
+current": `lat refs` finds the sections and back-references the change
+touches.
 
 ## Validate the kit spec before you finish
 

@@ -34,7 +34,7 @@ jobs:
   # so the lint definition lives in one place (the Makefile). markdownlint runs
   # via npx; yamllint and ruff run ephemerally at a pinned version via
   # `uv tool run`, belonging to no project, so this job installs neither
-  # project's dependencies. cspell runs via npx. shellcheck and jq are both
+  # project's dependencies. cspell and lat run via npx. shellcheck and jq are both
   # pre-installed on ubuntu-latest. The JSON check is syntax only (`jq empty`)
   # — no schema validation.
   lint:
@@ -53,7 +53,7 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Lint (markdownlint, jq, yamllint, shellcheck, cspell, ruff)
+      - name: Lint (markdownlint, jq, yamllint, shellcheck, cspell, ruff, lat)
         run: make lint MARKDOWNLINT='npx --yes markdownlint-cli2'
 
   # Unit-test the web2md scraper. Reuses `make test-web2md` so the definition

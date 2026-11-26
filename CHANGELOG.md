@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A design knowledge graph in `lat.md/`, for contributors and development
+  agents.** It records why the driver, the kits and the helper CLIs are built
+  the way they are, with wiki links into the code and the tests that pin each
+  guarantee, and `# @lat:` back-references from `src/md2okf/`. `make lint`, and
+  so CI, now runs `lat check` (`lat.md` 0.13.11 via `npx`) to keep every link
+  resolving. Claude Code and Codex get `lat` hooks, an MCP server and a
+  `lat-md` skill from `lat init`. Nothing changes for users of `md2okf`: the
+  wheel does not carry the graph.
+
 ### Changed
 
 - **md2okf now requires sbx 0.50.0 (was 0.49.2).** `SBX_VERSION`, CI's pinned

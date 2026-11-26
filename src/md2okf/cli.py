@@ -124,6 +124,7 @@ def _resolve_inputs(
     return documents, output_dir, wb
 
 
+# @lat: [[cli#Dry run]]
 def _print_dry_run(
     agent: agents.Agent,
     documents: list[compile_mod.Document],
@@ -220,6 +221,7 @@ def _reject_compile_only_options(args: argparse.Namespace, parser: argparse.Argu
     return None
 
 
+# @lat: [[cli#Interactive sessions]]
 def _enter_sandbox(args: argparse.Namespace, parser: argparse.ArgumentParser, agent: agents.Agent) -> int:  # noqa: RET503
     """Make the sandbox current, then hand this terminal over to it.
 
@@ -335,6 +337,7 @@ def _run(
     return 0
 
 
+# @lat: [[cli#Exit codes]]
 def main(argv: list[str] | None = None) -> int:
     """Parse argv, run, and return a process exit code."""
     parser = _build_parser()

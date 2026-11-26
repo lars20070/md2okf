@@ -18,6 +18,7 @@ class ResourcesError(Exception):
     """md2okf cannot locate its own kits, spec, or helper CLI sources."""
 
 
+# @lat: [[development#Packaging#Lookup order]]
 def _installed_root() -> Path | None:
     """The installed package's own directory, if it carries the bundled kits.
 

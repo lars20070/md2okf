@@ -13,11 +13,16 @@
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
 #                 projects), so ephemeral and pinned like ruff.
 #   CSPELL        cspell launcher. Local and CI: `npx --yes cspell`.
+#   LAT           lat.md launcher, for `lat check` on the lat.md/ knowledge graph.
+#                 Local and CI: `npx --yes lat.md@0.13.11`, pinned so a new lat
+#                 release cannot change what passes. `make lint LAT=lat` uses a
+#                 global install instead.
 MARKDOWNLINT ?= markdownlint-cli2
 RUFF ?= uv tool run ruff@0.16.2
 PYTEST ?= uv run --project extras/web2md --group test pytest -c extras/web2md/pyproject.toml
 YAMLLINT ?= uv tool run yamllint@1.38.0
 CSPELL ?= npx --yes cspell
+LAT ?= npx --yes lat.md@0.13.11
 
 # A venv is not portable across platforms, and a direct-mode sandbox shares this
 # tree with the macOS host, so Linux gets its own environment directory and the
@@ -33,8 +38,9 @@ endif
 	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
-# Python, and check that VERSION agrees with both CHANGELOG.md's latest release
-# and every subproject's declared version (scripts/sync-versions.sh --check).
+# Python, validate the lat.md/ knowledge graph, and check that VERSION agrees
+# with both CHANGELOG.md's latest release and every subproject's declared
+# version (scripts/sync-versions.sh --check).
 # Driving every check off `git ls-files` means a newly added file is covered the
 # moment it is tracked, rather than when someone remembers to extend a
 # hand-maintained list here.
@@ -47,6 +53,10 @@ endif
 #                      (front matter, no H1), which markdownlint reads as errors.
 #   SPEC.md            upstream OKF spec, not project prose.
 #   CLAUDE.md          one-line `@AGENTS.md` pointer, not a document.
+#   .agents/skills/lat-md/, .codex/skills/lat-md/
+#                      the lat-md skill `lat init` writes for Codex and Pi: vendored
+#                      tool output (a later `lat init` replaces it), not ours to
+#                      restyle. Claude's copy is already under .claude/.
 # cspell runs on owned Markdown only (same exclusions as markdownlint).
 #
 # ruff runs once per tracked subproject rather than once over the tree, because
@@ -55,15 +65,24 @@ endif
 # The bare 'pyproject.toml' pattern adds the root md2okf project alongside the
 # '*/pyproject.toml' subprojects; its own [tool.ruff] scopes that walk away
 # from md/, okf/, and everything else that isn't its source.
+#
+# `lat check` validates lat.md/: wiki links into the code, the `# @lat:`
+# back-references in src/md2okf/, index files and section leading paragraphs.
+# It is the one check here that reads the working tree rather than
+# `git ls-files`. The tracked lat.md/*.md pages also go through markdownlint
+# and cspell above.
 lint:
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
+		':!.agents/skills/lat-md/' ':!.codex/skills/lat-md/' \
 		| xargs -0 $(MARKDOWNLINT)
 	git ls-files -z -- '*.json' | xargs -0 -n1 jq empty
 	git ls-files -z -- '*.yaml' '*.yml' | xargs -0 $(YAMLLINT)
 	git ls-files -z -- '*.sh' | xargs -0 shellcheck
 	git ls-files -z -- '*.md' ':!md/' ':!.claude/' ':!.cursor/' ':!CLAUDE.md' ':!SPEC.md' ':!tmp/*' \
+		':!.agents/skills/lat-md/' ':!.codex/skills/lat-md/' \
 		| xargs -0 $(CSPELL) --no-progress
 	git ls-files -- 'pyproject.toml' '*/pyproject.toml' | xargs -n1 dirname | xargs $(RUFF) check
+	$(LAT) check
 	if [ ! -f VERSION ]; then \
 		echo "lint: VERSION is missing" >&2; exit 1; \
 	fi; \

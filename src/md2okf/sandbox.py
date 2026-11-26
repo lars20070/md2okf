@@ -50,6 +50,7 @@ class SandboxError(Exception):
     """A checked failure talking to `sbx`."""
 
 
+# @lat: [[sandbox#The sbx seam]]
 def _run(argv: list[str], *, stdin: int | None = subprocess.DEVNULL) -> subprocess.CompletedProcess[str]:
     """Run `argv` and capture it. The only place this module calls subprocess.run."""
     return subprocess.run(argv, stdin=stdin, capture_output=True, text=True, check=False)  # noqa: S603
@@ -137,6 +138,7 @@ class Mount:
         return f"{self.path}:ro" if self.readonly else str(self.path)
 
 
+# @lat: [[sandbox#Ownership token]]
 def create(name: str, kit_dir: Path, mounts: Iterable[Mount], env: dict[str, str]) -> str:
     """Recreate `name` over `mounts`, and return its fresh owner token.
 
