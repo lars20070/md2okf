@@ -118,7 +118,9 @@ split each document. All file and folder names are kebab-case.
   indexes use relative links.
 
 `md2okf` never changes your source documents; the agent reads read-only
-copies. Each run adds to the wiki already in the output directory. The agent
+copies. Its instructions tell it to keep the source prose verbatim: it splits
+the text into pages, links them and adds frontmatter, but does not paraphrase
+or summarise. Each run adds to the wiki already in the output directory. The agent
 is told to update an existing page rather than create a duplicate, so
 compiling a document again revises the wiki instead of repeating it. The
 agent treats `SPEC.md` as outranking every other instruction it receives.
@@ -131,7 +133,11 @@ cat okf/index.md
 
 The wiki is a plain folder of Markdown files; nothing is included to serve or
 display it. Read it, keep it under version control, or hand it to your own
-coding agent. A line like this in your agent's `AGENTS.md` or `CLAUDE.md`
+coding agent. For version control, put the output directory inside a
+repository, such as `okf/` in your project, rather than running `git init` in
+it: `md2okf` mirrors everything in the output directory, so a `.git/` inside it
+would be copied into the sandbox and back (see
+[Output directory rules](#output-directory-rules)). A line like this in your agent's `AGENTS.md` or `CLAUDE.md`
 points it at the wiki instead of the raw source documents:
 
 ```markdown
@@ -150,11 +156,12 @@ the sandbox with `merkleokf --nolog -L 0`. This gives one hash per Markdown
 file and per folder, so a change to any page changes the root hash. `--nolog`
 leaves out the top-level `log.md`, so an iteration that only adds a log entry
 counts as no change. When the root hash is the same after an iteration as
-before it, the document is done.
+before it, the document is done. Each iteration is a separate agent session
+with its own model calls, so one document can cost several paid turns.
 
 `md2okf` stops with an error when:
 
-- the wiki is still changing after `-n` iterations (default 10);
+- the wiki is still changing after `-n` iterations (default 10, minimum 1);
 - an iteration fails: the agent exits with an error or reports a failure;
 - an iteration makes no tool calls, which means the agent did not follow its
   instructions;
@@ -181,12 +188,27 @@ The output directory, set with `-o` (default `./okf`), must be one of these:
   `okf_version`.
 
 Anything else — a file, a symbolic link, or a folder with other content — is
-refused, so `md2okf` never overwrites unrelated files.
+refused.
+
+The check for an earlier wiki looks only at the root `index.md`. Once a folder
+passes it, `md2okf` manages the whole folder: it copies everything in it,
+hidden files included, into the sandbox, where the agent can read, change or
+delete any of it, and copies the result back. Use a folder that holds only the
+wiki.
 
 After every completed iteration, `md2okf` copies the wiki to the output
 directory, which then matches the sandbox's copy exactly: a page the agent
-deleted is deleted there too. If you interrupt a run with Ctrl-C, the output
-directory keeps the result of the last completed iteration.
+deleted is deleted there too. Each copy first clears the output directory, so
+an edit made there while a compile is running is overwritten at the next copy.
+
+If you interrupt a run with Ctrl-C while the agent is working, the output
+directory keeps the result of the last completed iteration. If the interrupt
+lands while the wiki is being copied, the output directory can be partial or
+empty. The complete wiki is then still in the workbench, at
+`$XDG_STATE_HOME/md2okf/<agent>/work/okf` (by default
+`~/.local/state/md2okf/pi/work/okf`). Copy it out **before** you start another
+compile, because the next compile refills the workbench from the output
+directory.
 
 ## Getting Markdown in
 
@@ -199,10 +221,12 @@ model: a local Ollama model or a cloud model through OpenRouter. The step is
 manual; check its output before compiling. See
 [the pdf2md guide](../extras/pdf2md/README.md).
 
-**From a website.** `make scrape` runs `web2md`, which walks a documentation
-site and writes it into one Markdown file in `md/`. No language model is
-involved, so the result is deterministic, and the fetched pages are cached.
-See [the web2md guide](../extras/web2md/README.md).
+**From a website.** `make scrape` runs `web2md`, which fetches the
+[Google developer documentation style guide](https://developers.google.com/style)
+and writes it into one Markdown file in `md/`. No language model is involved,
+so the result is deterministic, and the fetched pages are cached. Pointing it
+at another site means changing its source URL and also its page selectors and
+sanity checks; see [the web2md guide](../extras/web2md/README.md).
 
 ## Inspecting the sandbox
 
@@ -246,11 +270,18 @@ unless it is left at its default. Both need a terminal on standard input.
 
 ## Exit codes
 
+For a compile:
+
 | Code | Meaning |
 | --- | --- |
 | `0` | every document compiled |
 | `1` | the run started and then failed: a document did not compile, staging or copying the wiki failed, or you pressed Ctrl-C |
 | `2` | `md2okf` refused before starting work: bad arguments or inputs, an unknown `MD2OKF_AGENT`, `sbx` missing or too old, another run holding the lock, a credential that is not ready, or a sandbox that could not be created, reused or proved to be `md2okf`'s own |
+
+A successful `--dry-run` also exits with `0`. `--shell` and `--agent` exit
+with `2` if they refuse before the session opens; after that, `md2okf` hands
+over to `sbx exec`, and the exit code is the session's own, which can be any
+value.
 
 ## Locking
 

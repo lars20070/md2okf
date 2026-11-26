@@ -32,7 +32,8 @@ Instead, `md2okf` stages each run through a fixed *workbench* under
 3. It runs the agent on each document in turn.
 4. After every completed agent turn, it copies the wiki back to the `-o`
    directory, which then matches the workbench exactly: pages the agent
-   deleted are deleted there too.
+   deleted are deleted there too. The copy clears the `-o` directory first,
+   then writes it file by file.
 
 Because the mount paths never change, one sandbox serves any input and output
 folder. `md2okf` rebuilds a sandbox only when the kit it was built from, the
@@ -40,28 +41,35 @@ folder. `md2okf` rebuilds a sandbox only when the kit it was built from, the
 fails, or when you pass `--fresh`.
 
 For each document, `md2okf` runs the agent repeatedly — a *Ralph loop* — until
-the wiki stops changing. After each turn it hashes the wiki with
+the wiki stops changing. Each turn is a separate agent session, started with
+its own `sbx exec`, so one document can take up to `-n` paid turns. After each turn it hashes the wiki with
 `merkleokf --nolog -L 0`, inside the sandbox. `merkleokf` builds a Merkle hash
 tree, with one hash per Markdown file and per directory, so a change to any
 page changes the root hash. `--nolog` leaves out the wiki's top-level
 `log.md`, so a turn that only adds a log entry does not count as a change.
 When the root hash is the same after a turn as before it, the document is
-done. That includes a first turn that changes nothing: the document was
-already in the wiki.
+done. That includes a first turn that changes nothing: the agent found
+nothing to change.
 
 The loop stops with an error when the document needs more than `-n` turns
 (default 10), when a turn fails, when a turn makes no tool calls, or when the
 wiki is still empty at the end. An error stops the whole run, so later
 documents are not compiled. Since `md2okf` copies the wiki back only after a
-completed turn, an interrupted run leaves the `-o` directory as it was after
-the last completed turn.
+completed turn, a run interrupted during a turn leaves the `-o` directory as
+it was after the last completed turn. A run interrupted during the copy can
+leave it partial or empty; see
+[Output directory rules](usage.md#output-directory-rules) for recovering the
+wiki from the workbench.
 
-The agent can write only to the wiki and to its own transcripts. Its
-instructions tell it to read `SPEC.md` first, which outranks every other
-instruction, and to pass the [okfctl](https://github.com/cwest/okfctl) checks
-before it stops. `md2okf` itself never runs `okfctl`. A stable hash means only
-that the agent stopped changing the wiki, not that the wiki is complete or
-correct.
+Of your machine's files, the agent can write only to the wiki and to its own
+transcripts, the two writable mounts; inside the VM it also has the guest's
+own filesystem. Its instructions tell it to read `SPEC.md` first, which
+outranks every other instruction, and to pass the
+[okfctl](https://github.com/cwest/okfctl) checks before it stops. `md2okf`
+itself never runs `okfctl`: after a turn it checks only the agent's exit
+status, reported failures, whether it made tool calls, and the hash. A stable
+hash means only that the agent stopped changing the wiki, not that the wiki is
+complete or correct.
 
 A default run prints two progress lines per turn: the document and turn
 number, then the root hash before and after. `-v` also streams the agent's tool
@@ -71,7 +79,8 @@ calls and messages. Either way, the agent writes a full transcript (see
 ## What the sandbox can reach
 
 The sandbox gets neither your repository nor your own folders. `sbx` mounts
-five paths into it, all inside the workbench. Nothing else from your machine
+five host paths into it, all inside the workbench, and two of them are
+writable. Nothing else from your machine
 is visible inside the microVM: not `.git`, not the `Makefile`, not the kit
 directory. (The kit's configuration is copied into the sandbox when it is
 built; the kit directory itself is never mounted.)
@@ -86,8 +95,10 @@ Paths are relative to the workbench, `$XDG_STATE_HOME/md2okf/<agent>/`:
 | `work/SPEC.md` | read-only | the OKF specification, which outranks every other instruction |
 | `sessions` | read-write | the agent's transcripts |
 
-The agent therefore never sees one of your paths: it edits the staged wiki in
-`work/okf`, and `md2okf` copies the result to your `-o` directory. The
+The agent therefore never sees your input or output paths: it edits the
+staged wiki in `work/okf`, and `md2okf` copies the result to your `-o`
+directory. The workbench's own absolute paths, which include your home
+directory, are visible inside the VM. The
 workbench root itself is not mounted, because it also holds the record that
 proves the sandbox belongs to `md2okf` (see [Session state](#session-state)).
 No read-write mount contains a read-only one, so `work/md` and `work/SPEC.md`
@@ -174,7 +185,7 @@ looking around, not for editing the wiki:
 | `kits/<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): the sandbox definition and the configuration it copies in |
 | `tests/` | the driver's pytest suite and the shell tests for the sandbox |
 | `Makefile` | developer tasks: lint, validate, tests and installs |
-| `docs/` | reference pages: this page and [usage](usage.md) |
+| `docs/` | reference pages: [usage](usage.md), [configuration](configuration.md) and this page |
 | `SPEC.md` | the [OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format) the wiki is built against, vendored verbatim under Apache-2.0; see [NOTICE-OKF-SPEC.md](../NOTICE-OKF-SPEC.md) |
 | `AGENTS.md` | instructions for coding agents working *on this repository*, not for the agents `md2okf` drives |
 | `CONTRIBUTING.md` | how to develop, test and release `md2okf` |

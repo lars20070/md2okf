@@ -39,13 +39,12 @@ For example, to compile the folder `md/`
 into `okf/` with Claude Code instead of Pi:
 
 ```bash
-MD2OKF_AGENT=claude md2okf md/ -o okf/        # for this one command
-export MD2OKF_AGENT=claude                    # or for the rest of the shell session
-md2okf md/ -o okf/
+MD2OKF_AGENT=claude md2okf md/ -o okf/
 ```
 
-Setting the variable in front of the command applies it to that run only;
-`export` keeps it for every later `md2okf` command in the same shell. Either
+Setting the variable in front of the command applies it to that run only. To
+keep it for every later `md2okf` command in the same shell, run
+`export MD2OKF_AGENT=claude` once instead. Either
 way, the run uses Claude Code's own sandbox, `md2okf-claude`, which the first
 run builds, so Claude Code needs its credential first (see
 [Claude Code](#claude-code)). Pi's sandbox is left untouched, and unsetting
@@ -113,11 +112,25 @@ sbx secret set openai            # or an OpenAI API key
 ## Models and providers
 
 `md2okf` has no `--model` flag and no configuration file. The model is set in
-each agent's kit. To choose another OpenRouter model for Pi, or to point Pi at
-a different provider, see [the Pi kit guide](../kits/pi/README.md). The Claude
+each agent's kit. Pi's default is `deepseek/deepseek-v4-pro` through
+OpenRouter, pinned to DeepInfra with fallbacks to other providers turned off.
+To choose another OpenRouter model for Pi, or to point Pi at a different
+provider, see [the Pi kit guide](../kits/pi/README.md). The Claude
 Code and Codex kits set no model, so those agents use their own defaults; see
 the [Claude Code](../kits/claude/README.md) and
 [Codex](../kits/codex/README.md) kit guides.
+
+Two things to know before editing a kit:
+
+- **A PyPI install uses the kits bundled with it.** Edits to a clone take
+  effect only when you run that clone, with `uv run md2okf` from inside it, or
+  install it with `uv tool install .` (see
+  [Other ways to install](#other-ways-to-install)).
+- **Pi still needs the OpenRouter secret when it uses another provider.**
+  `md2okf`'s credential check for Pi looks for a proxy-managed
+  `OPENROUTER_API_KEY`, whatever provider the kit selects. If you switch Pi to
+  a gateway, keep the `openrouter` secret set as well, or every run stops with
+  exit code 2.
 
 The OKF specification is fixed as well: `md2okf` always compiles against its
 own `SPEC.md`, and the checks the agent runs compare the wiki against that
