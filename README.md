@@ -90,7 +90,7 @@ flowchart LR
 `sbx exec` per source document. Inside, the coding agent (red) runs the
 `/compile-okf` skill: it reads the source documents and `SPEC.md` (blue) and writes the wiki into `okf/` (blue), the
 only content it may change. Skills and the linter (teal) support it — four of
-them survey the source markdown and wiki, `curate-okf` maintains its nodes and
+them survey the source markdown and wiki, `/curate-okf` maintains its nodes and
 indexes, and the linter must pass before a run ends. Session
 state (blue) is mounted from the host, so transcripts outlive the sandbox.
 Model calls leave the VM only through the sbx credential proxy (teal), which
