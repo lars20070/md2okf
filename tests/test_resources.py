@@ -10,7 +10,7 @@ from md2okf import agents, resources
 @pytest.mark.parametrize("agent", sorted(agents.AGENTS))
 def test_checkout_fallback_finds_every_registered_agents_kit(agent):
     """A registered agent without a kit would pass MD2OKF_AGENT and then fail late."""
-    assert resources.kit_dir(agent) == resources._CHECKOUT_ROOT / "kits" / agent
+    assert resources.kit_dir(agent) == resources._CHECKOUT_ROOT / "kits" / f"md2okf-{agent}"
     assert (resources.kit_dir(agent) / f"md2okf-{agent}.yaml").is_file()
     assert (resources.kit_dir(agent) / f"md2okf-{agent}.dockerfile").is_file()
 
@@ -24,14 +24,14 @@ def test_checkout_fallback_finds_the_spec_and_clis():
 
 def test_installed_root_preferred_when_it_carries_the_kits(tmp_path: Path, monkeypatch):
     fake_root = tmp_path / "installed" / "md2okf"
-    (fake_root / "kits" / "pi").mkdir(parents=True)
+    (fake_root / "kits" / "md2okf-pi").mkdir(parents=True)
     (fake_root / "clis").mkdir()
     (fake_root / "SPEC.md").write_text("fake spec\n", encoding="utf-8")
 
     monkeypatch.setattr(resources, "_installed_root", lambda: fake_root)
 
-    assert resources.kit_dir("pi") == fake_root / "kits" / "pi"
-    assert resources.kit_dir("claude") == fake_root / "kits" / "claude"
+    assert resources.kit_dir("pi") == fake_root / "kits" / "md2okf-pi"
+    assert resources.kit_dir("claude") == fake_root / "kits" / "md2okf-claude"
     assert resources.spec_md() == fake_root / "SPEC.md"
     assert resources.clis_dir() == fake_root / "clis"
     assert resources.sbx_version_file() == fake_root / "SBX_VERSION"
@@ -43,7 +43,7 @@ def test_installed_root_is_none_without_bundled_kits(tmp_path: Path, monkeypatch
     monkeypatch.setattr(resources, "files", lambda _name: bare)
 
     assert resources._installed_root() is None
-    assert resources.kit_dir("pi") == resources._CHECKOUT_ROOT / "kits" / "pi"
+    assert resources.kit_dir("pi") == resources._CHECKOUT_ROOT / "kits" / "md2okf-pi"
 
 
 def test_the_old_singular_kit_layout_is_not_an_installed_bundle(tmp_path: Path, monkeypatch):

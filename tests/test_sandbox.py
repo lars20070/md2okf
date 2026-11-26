@@ -109,9 +109,9 @@ def test_create_composes_a_mixin_kit_onto_the_pinned_workload(fake_sbx):
 
 def test_run_argv_passes_a_relative_kit_directory_as_an_absolute_path():
     """A bare relative name means an agent or sandbox name to sbx, not a local kit."""
-    argv = sandbox.run_argv("md2okf", Path("kits/pi"), None, [])
+    argv = sandbox.run_argv("md2okf", Path("kits/md2okf-pi"), None, [])
     assert Path(argv[-1]).is_absolute()
-    assert argv[-1].endswith("/kits/pi")
+    assert argv[-1].endswith("/kits/md2okf-pi")
 
 
 @pytest.mark.parametrize(

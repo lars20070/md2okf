@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **The kit directories are now `kits/md2okf-pi`, `kits/md2okf-claude` and
+  `kits/md2okf-codex`.** They were `kits/pi`, `kits/claude` and `kits/codex`.
+  Each directory now has the same name as its descriptor
+  (`md2okf-<agent>.yaml`) and its sandbox, and no longer the bare name of the
+  `claude` and `codex` workloads that the mixins compose onto. The wheel carries
+  them under `md2okf/kits/md2okf-<agent>/`, and `make validate` and the kit
+  tests reject a kit directory not named this way. Agent names and `MD2OKF_AGENT`
+  values, sandbox names and workbench paths do not change. The kits' own files
+  changed with the rename, so each managed sandbox built from a previous kit is
+  rebuilt once, on its next use.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added

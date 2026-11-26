@@ -84,7 +84,7 @@ A bound token is usable by every process in the Pi sandbox, compile turns
 included: the `sbx` proxy injects it into every request to GitHub, and a
 compile turn has a shell. So use a fine-grained, read-only token scoped to the
 repositories you need, or leave it unbound; a compile does not use it. See
-[GitHub MCP server](../kits/pi/README.md#github-mcp-server) in the Pi kit
+[GitHub MCP server](../kits/md2okf-pi/README.md#github-mcp-server) in the Pi kit
 guide.
 
 ### Claude Code
@@ -116,10 +116,10 @@ sbx secret set openai            # or an OpenAI API key
 each agent's kit. Pi's default is `deepseek/deepseek-v4-pro` through
 OpenRouter, pinned to DeepInfra with fallbacks to other providers turned off.
 To choose another OpenRouter model for Pi, or to point Pi at a different
-provider, see [the Pi kit guide](../kits/pi/README.md). The Claude
+provider, see [the Pi kit guide](../kits/md2okf-pi/README.md). The Claude
 Code and Codex kits set no model, so those agents use their own defaults; see
-the [Claude Code](../kits/claude/README.md) and
-[Codex](../kits/codex/README.md) kit guides.
+the [Claude Code](../kits/md2okf-claude/README.md) and
+[Codex](../kits/md2okf-codex/README.md) kit guides.
 
 Two things to know before editing a kit:
 

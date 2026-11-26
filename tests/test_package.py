@@ -1,7 +1,7 @@
 """Tests for what the built wheel carries.
 
 An installed md2okf has no checkout to fall back on: resources.py looks for
-kits/<agent>/, SPEC.md, SBX_VERSION and clis/ beside itself, and only the wheel's
+kits/md2okf-<agent>/, SPEC.md, SBX_VERSION and clis/ beside itself, and only the wheel's
 force-include puts them there. That mapping is easy to get subtly wrong and
 impossible to notice from a checkout, where every lookup finds the real tree
 anyway -- so this builds the wheel for real and reads it back.
@@ -31,12 +31,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _REQUIRED = (
     "md2okf/cli.py",
     "md2okf/workbench.py",
-    "md2okf/kits/pi/md2okf-pi.yaml",
-    "md2okf/kits/pi/md2okf-pi.dockerfile",
-    "md2okf/kits/pi/files/home/.pi/agent/AGENTS.md",
-    "md2okf/kits/claude/md2okf-claude.yaml",
-    "md2okf/kits/claude/md2okf-claude.dockerfile",
-    "md2okf/kits/codex/files/skills/compile-okf/scripts/check-okf.sh",
+    "md2okf/kits/md2okf-pi/md2okf-pi.yaml",
+    "md2okf/kits/md2okf-pi/md2okf-pi.dockerfile",
+    "md2okf/kits/md2okf-pi/files/home/.pi/agent/AGENTS.md",
+    "md2okf/kits/md2okf-claude/md2okf-claude.yaml",
+    "md2okf/kits/md2okf-claude/md2okf-claude.dockerfile",
+    "md2okf/kits/md2okf-codex/files/skills/compile-okf/scripts/check-okf.sh",
     "md2okf/SPEC.md",
     "md2okf/SBX_VERSION",
     "md2okf/clis/merkleokf/pyproject.toml",
@@ -81,18 +81,18 @@ def _is_host_clutter(path: Path) -> bool:
 def test_wheel_carries_every_file_of_every_registered_kit(wheel_names, agent):
     """Every tracked file, hidden ones included: Pi's whole runtime config lives under files/home/.pi."""
     tracked = subprocess.run(  # noqa: S603
-        ["git", "ls-files", "-z", "--", f"kits/{agent}"],  # noqa: S607
+        ["git", "ls-files", "-z", "--", f"kits/md2okf-{agent}"],  # noqa: S607
         cwd=_REPO_ROOT,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.split("\0")
     expected = [
-        f"md2okf/kits/{agent}/{Path(name).relative_to(f'kits/{agent}').as_posix()}"
+        f"md2okf/kits/md2okf-{agent}/{Path(name).relative_to(f'kits/md2okf-{agent}').as_posix()}"
         for name in tracked
         if name and not _is_host_clutter(Path(name))
     ]
-    assert expected, f"kits/{agent} tracks no files; this test proves nothing"
+    assert expected, f"kits/md2okf-{agent} tracks no files; this test proves nothing"
     if agent == "pi":
         assert any("/." in name for name in expected), "the Pi kit has no hidden files; this test proves nothing"
     missing = [name for name in expected if name not in wheel_names]

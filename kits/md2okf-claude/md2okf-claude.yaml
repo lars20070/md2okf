@@ -7,8 +7,8 @@
 # md2okf-claude.dockerfile beside this file into the mixin's one layer. It is
 # pinned by digest because it produces the published bytes.
 #
-# The stem is md2okf-claude, not claude: that is the workload this composes
-# onto, and two kits with one stem collide.
+# The directory and the stem are md2okf-claude, not claude: that is the workload
+# this composes onto, and two kits with one stem collide.
 #
 # MIGRATION NOTE (v2 -> v3): the v2 kit was `extends: claude` with its own
 # entrypoint, a startup hook and an `md2okf-agent` wrapper that bind-mounted
@@ -180,7 +180,7 @@ capabilities:
   # Body only, so it joins the workload's own @2 guidance in its profile,
   # ~/.claude/CLAUDE.md, after the workload's generic sandbox notes. The
   # workload offers both @1 and @2 as optional, and the two cannot compose,
-  # so declaring @2 here selects its @2 profile. Ported from kits/pi's
+  # so declaring @2 here selects its @2 profile. Ported from kits/md2okf-pi's
   # AGENTS.md; tests/test_kits.py holds the two to the same contract.
   # MIGRATION NOTE: v2 agentInstructions landed in ../CLAUDE.md.
   - type: com.docker.sandbox/agent-context@2

@@ -1,4 +1,4 @@
-# kits/claude
+# kits/md2okf-claude
 
 The Docker Sandbox kit that runs Claude Code for `md2okf` (`MD2OKF_AGENT=claude`).
 It is a Sandbox Kit schema v3 **mixin**, `md2okf-claude.yaml` with the recipe
@@ -6,7 +6,7 @@ It is a Sandbox Kit schema v3 **mixin**, `md2okf-claude.yaml` with the recipe
 `claude` workload:
 
 ```bash
-sbx run --kit ./kits/claude docker.io/sbx/claude@sha256:<digest> ...
+sbx run --kit ./kits/md2okf-claude docker.io/sbx/claude@sha256:<digest> ...
 ```
 
 The workload brings the image (Debian 13 on Docker Hardened Images), Claude
@@ -14,8 +14,8 @@ Code itself, the Anthropic network hosts and the credential. This kit adds only
 what compiling needs: the OKF toolchain (Node, the linters, `mq`, `okfctl` and
 the four helper CLIs), the md2okf instructions and the skills.
 
-The stem is `md2okf-claude`, not `claude`: that is the workload's name, and
-two kits with one stem collide.
+The directory and the stem are `md2okf-claude`, not `claude`: that is the
+workload's name, and two kits with one stem collide.
 
 ## The pinned workload
 

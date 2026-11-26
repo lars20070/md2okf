@@ -33,7 +33,7 @@ def test_only_agents_with_a_shipped_kit_are_registered():
     assert sorted(agents.AGENTS) == ["claude", "codex", "pi"]
     for name, agent in agents.AGENTS.items():
         assert agent.name == name
-        assert (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").is_file()
+        assert (_REPO_ROOT / "kits" / f"md2okf-{name}" / f"md2okf-{name}.yaml").is_file()
 
 
 def test_resolve_returns_the_registered_agent():
@@ -116,7 +116,7 @@ def test_every_trace_target_is_an_absolute_path_in_the_agents_home(name):
 def test_a_kit_is_a_workload_exactly_when_no_workload_is_pinned(name):
     """Pi's kit is the whole sandbox; the others are mixins composed onto a pinned workload."""
     agent = agents.AGENTS[name]
-    descriptor = (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
+    descriptor = (_REPO_ROOT / "kits" / f"md2okf-{name}" / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
     if agent.workload_ref is None:
         assert "\nkind: workload\n" in descriptor
     else:
@@ -132,7 +132,7 @@ def test_a_mixin_requires_the_workload_its_agent_pins(name):
     assert repository == f"docker.io/sbx/{name}"
     assert len(digest) == len("sha256:") + 64
     assert digest.startswith("sha256:")
-    descriptor = (_REPO_ROOT / "kits" / name / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
+    descriptor = (_REPO_ROOT / "kits" / f"md2okf-{name}" / f"md2okf-{name}.yaml").read_text(encoding="utf-8")
     assert f'\nrequires: ["{name}"]\n' in descriptor
 
 
@@ -144,7 +144,8 @@ def test_pi_prompt_is_byte_identical_to_the_legacy_prompt():
 def test_pi_prompt_names_a_skill_its_kit_installs():
     """The prompt tells the agent to read a file; the kit must actually carry it."""
     assert "~/.pi/agent/skills/compile-okf/SKILL.md" in agents.PI.compile_prompt(Path("/x.md"))
-    skill = _REPO_ROOT / "kits" / "pi" / "files" / "home" / ".pi" / "agent" / "skills" / "compile-okf" / "SKILL.md"
+    skill = _REPO_ROOT / "kits" / "md2okf-pi" / "files" / "home" / ".pi" / "agent" / "skills" / "compile-okf"
+    skill = skill / "SKILL.md"
     assert skill.is_file()
 
 
@@ -227,9 +228,9 @@ def test_claude_prompt_names_a_skill_its_kit_installs():
     assert "read ~/.claude/skills/compile-okf/SKILL.md" in prompt
     assert "compile /state/md2okf/claude/work/md/doc.md directly into the workspace root" in prompt
     assert prompt.endswith(agents.WORKSPACE_ROOT_RULE)
-    skill = _REPO_ROOT / "kits" / "claude" / "files" / "skills" / "compile-okf" / "SKILL.md"
+    skill = _REPO_ROOT / "kits" / "md2okf-claude" / "files" / "skills" / "compile-okf" / "SKILL.md"
     assert skill.is_file()
-    descriptor = (_REPO_ROOT / "kits" / "claude" / "md2okf-claude.yaml").read_text(encoding="utf-8")
+    descriptor = (_REPO_ROOT / "kits" / "md2okf-claude" / "md2okf-claude.yaml").read_text(encoding="utf-8")
     assert "path: /usr/share/md2okf-claude/skills/compile-okf\n" in descriptor
 
 
@@ -309,9 +310,9 @@ def test_codex_prompt_activates_a_skill_its_kit_installs():
     prompt = agents.CODEX.compile_prompt(Path("/state/md2okf/codex/work/md/doc.md"))
     assert prompt.startswith("$compile-okf Compile /state/md2okf/codex/work/md/doc.md directly into")
     assert prompt.endswith(agents.WORKSPACE_ROOT_RULE)
-    skill = _REPO_ROOT / "kits" / "codex" / "files" / "skills" / "compile-okf" / "SKILL.md"
+    skill = _REPO_ROOT / "kits" / "md2okf-codex" / "files" / "skills" / "compile-okf" / "SKILL.md"
     assert "name: compile-okf" in skill.read_text(encoding="utf-8")
-    descriptor = (_REPO_ROOT / "kits" / "codex" / "md2okf-codex.yaml").read_text(encoding="utf-8")
+    descriptor = (_REPO_ROOT / "kits" / "md2okf-codex" / "md2okf-codex.yaml").read_text(encoding="utf-8")
     assert "path: /usr/share/md2okf-codex/skills/compile-okf\n" in descriptor
 
 

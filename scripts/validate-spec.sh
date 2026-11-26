@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Build every Docker Sandbox kit (kits/<kit>/md2okf-<kit>.yaml, with the
-# md2okf-<kit>.dockerfile recipe beside it) and check the built artifact with
+# Build every Docker Sandbox kit (kits/md2okf-<agent>/md2okf-<agent>.yaml, with
+# the md2okf-<agent>.dockerfile recipe beside it) and check the built artifact with
 # kit-tck, the Sandbox Kit conformance suite.
 #
 # Why a build: these are schema v3 source kits, and `sbx kit validate` cannot
@@ -95,8 +95,8 @@ if [[ -z "${registered}" ]]; then
 	exit 1
 fi
 for kit in ${registered}; do
-	if [[ ! -f "${repo_root}/kits/${kit}/md2okf-${kit}.yaml" ]]; then
-		echo "Error: registered kit kits/${kit}/md2okf-${kit}.yaml is missing." >&2
+	if [[ ! -f "${repo_root}/kits/${kit}/${kit}.yaml" ]]; then
+		echo "Error: registered kit kits/${kit}/${kit}.yaml is missing." >&2
 		status=1
 	fi
 done
@@ -105,7 +105,22 @@ found=0
 for kit_dir in "${repo_root}"/kits/*/; do
 	kit_dir="${kit_dir%/}"
 	kit="$(basename "${kit_dir}")"
-	stem="md2okf-${kit}"
+	# Git keeps a removed kit's directory while it still holds an ignored file,
+	# so a macOS checkout that predates kits/md2okf-<agent>/ keeps kits/<agent>/
+	# full of .DS_Store and __pycache__. Host clutter alone is no kit; anything
+	# else in a misnamed directory is still an error below.
+	if [[ -z "$(find "${kit_dir}" -type f ! -name .DS_Store ! -name .localized ! -name '._*' \
+		! -path '*/__pycache__/*' -print -quit)" ]]; then
+		echo "Note: skipping kits/${kit}/, which holds only host clutter (safe to delete)."
+		continue
+	fi
+	# The directory is named after its descriptor: kits/md2okf-<agent>/md2okf-<agent>.yaml.
+	stem="${kit}"
+	if [[ "${kit}" != md2okf-* ]]; then
+		echo "Error: kits/${kit}/ must be named md2okf-<agent>, like its descriptor." >&2
+		status=1
+		continue
+	fi
 	if [[ -f "${kit_dir}/spec.yaml" ]]; then
 		echo "Error: kits/${kit}/spec.yaml is a v2 spec; kits are schema v3 (${stem}.yaml)." >&2
 		status=1
@@ -154,7 +169,7 @@ for kit_dir in "${repo_root}"/kits/*/; do
 done
 
 if [[ "${found}" -eq 0 ]]; then
-	echo "Error: no kits/*/md2okf-*.yaml found under ${repo_root}." >&2
+	echo "Error: no kits/md2okf-*/md2okf-*.yaml found under ${repo_root}." >&2
 	exit 1
 fi
 exit "${status}"

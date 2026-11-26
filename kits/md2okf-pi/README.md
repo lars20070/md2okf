@@ -1,4 +1,4 @@
-# kits/pi
+# kits/md2okf-pi
 
 The Docker Sandbox kit that runs Pi: a Sandbox Kit schema v3 **workload**, the
 whole sandbox, in two files. `md2okf-pi.yaml`, the descriptor, declares what

@@ -6,7 +6,7 @@ Everything that differs between Pi, Claude Code and Codex lives on one `Agent` r
 
 [[src/md2okf/agents.py#Agent]] has eight fields: name, compile command line, interactive command line, first-turn prompt, credential check, event protocol, trace target and the workload its kit composes onto.
 
-The generic modules, [[cli]], [[compile-loop]], [[workbench]] and [[sandbox]], never branch on an agent's name. The name also names the agent's kit (`kits/<name>`), its sandbox (`md2okf-<name>`) and its workbench. A new agent is therefore one new record, one protocol module and one kit.
+The generic modules, [[cli]], [[compile-loop]], [[workbench]] and [[sandbox]], never branch on an agent's name. The name also names the agent's kit, `kits/md2okf-<name>` (looked up by [[src/md2okf/resources.py#kit_dir]]), its sandbox (`md2okf-<name>`) and its workbench. A new agent is therefore one new record, one protocol module and one kit.
 
 ## Registry
 

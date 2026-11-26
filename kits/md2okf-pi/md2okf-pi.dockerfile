@@ -4,7 +4,7 @@
 # The pinned release binaries, downloaded and checksummed in a throwaway
 # stage. Pinning the digests here, rather than reading each release's
 # checksums file, means a re-uploaded asset fails the build too. The mq and
-# okfctl half is identical in kits/claude and kits/codex.
+# okfctl half is identical in kits/md2okf-claude and kits/md2okf-codex.
 FROM debian:trixie-slim AS fetch
 ARG TARGETARCH
 RUN apt-get update \

@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parents[1]
-_GUARD = _REPO / "kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py"
+_GUARD = _REPO / "kits/md2okf-pi/files/home/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py"
 _CANONICAL = re.search(r"^\*\*Version\s+(\d+\.\d+)\*\*", (_REPO / "SPEC.md").read_text(encoding="utf-8"), re.M)
 CANONICAL_VERSION = _CANONICAL.group(1) if _CANONICAL else ""
 PLANTED_VERSION = "9.9"
@@ -80,8 +80,8 @@ def _sandbox_guard(tmp_path: Path) -> Path:
 
 
 def _package_guard(package: Path) -> Path:
-    """The guard where a checkout or an installed md2okf keeps it: inside kits/<agent>/files/."""
-    return _guard_at(package / "kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py")
+    """The guard where a checkout or an installed md2okf keeps it: inside kits/md2okf-<agent>/files/."""
+    return _guard_at(package / "kits/md2okf-pi/files/home/.pi/agent/skills/compile-okf/scripts/frontmatter-guard.py")
 
 
 def _workspace(root: Path, version: str) -> Path:
