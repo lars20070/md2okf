@@ -165,8 +165,13 @@ def run_argv(name: str, kit_dir: Path, workload_ref: str | None, mounts: Iterabl
 
 
 def _diagnostic(result: subprocess.CompletedProcess[str]) -> str:
-    """What sbx said about a failure: stderr, else stdout, else the exit code."""
-    return result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
+    """Everything sbx said about a failure, or its exit code when it said nothing.
+
+    Both streams, because sbx sends update notices to stderr: preferring one
+    stream could show a notice and hide the actual error.
+    """
+    said = [text for text in (result.stderr.strip(), result.stdout.strip()) if text]
+    return "\n".join(said) or f"exit status {result.returncode}"
 
 
 # @lat: [[sandbox#Ownership token]]

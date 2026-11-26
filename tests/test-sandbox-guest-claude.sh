@@ -16,6 +16,7 @@ AGENT_CONFIG_DIR="${HOME}/.claude"
 # kit's OKF contract.
 AGENT_INSTRUCTIONS="${HOME}/.claude/CLAUDE.md"
 skills="${HOME}/.claude/skills"
+AGENT_SKILLS_DIR="${skills}"
 # Only md2okf's own skills: ~/.claude/skills may also hold the host's shared
 # store, which is not this kit's to police.
 AGENT_RUNTIME_PATHS="${AGENT_INSTRUCTIONS} ${skills}/compile-okf/ ${skills}/curate-okf/ ${skills}/inspect-md/ ${skills}/inspect-okf/ ${skills}/merkle-okf/ ${skills}/size-okf/"

@@ -6,7 +6,7 @@ is a Sandbox Kit schema v3 **mixin**, `md2okf-codex.yaml` with the recipe
 workload:
 
 ```bash
-sbx run --kit kits/codex docker.io/sbx/codex@sha256:<digest> ...
+sbx run --kit ./kits/codex docker.io/sbx/codex@sha256:<digest> ...
 ```
 
 The workload brings the image (Debian 13 on Docker Hardened Images), Codex

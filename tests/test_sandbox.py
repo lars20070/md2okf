@@ -141,6 +141,22 @@ def test_a_failed_create_carries_the_sbx_diagnostic(fake_sbx, monkeypatch):
         sandbox.create("md2okf", Path("/kit"), None, [])
 
 
+def test_a_failed_create_keeps_stdout_beside_an_update_notice(fake_sbx, monkeypatch):
+    """Update notices go to stderr, and the error itself must not be lost behind one."""
+    real_run = fake_sbx.run
+
+    def noisy(argv, **kwargs):
+        if argv[:3] == ["sbx", "run", "--detach"]:
+            return __import__("subprocess").CompletedProcess(argv, 1, "kit build failed\n", "A new sbx is out\n")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(sandbox.subprocess, "run", noisy)
+    with pytest.raises(sandbox.SandboxError) as excinfo:
+        sandbox.create("md2okf", Path("/kit"), None, [])
+    assert "kit build failed" in str(excinfo.value)
+    assert "A new sbx is out" in str(excinfo.value)
+
+
 def test_create_removes_any_prior_sandbox_first(fake_sbx):
     sandbox.create("md2okf", Path("/kit"), None, [])
     sandbox.create("md2okf", Path("/kit"), None, [])

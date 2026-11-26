@@ -6,7 +6,7 @@ It is a Sandbox Kit schema v3 **mixin**, `md2okf-claude.yaml` with the recipe
 `claude` workload:
 
 ```bash
-sbx run --kit kits/claude docker.io/sbx/claude@sha256:<digest> ...
+sbx run --kit ./kits/claude docker.io/sbx/claude@sha256:<digest> ...
 ```
 
 The workload brings the image (Debian 13 on Docker Hardened Images), Claude

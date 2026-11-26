@@ -17,6 +17,7 @@ AGENT_CONFIG_DIR="${HOME}/.codex"
 # workload's agent-context@2 profile, which the kit's body joins.
 AGENT_INSTRUCTIONS="${HOME}/.codex/AGENTS.md"
 skills="${HOME}/.agents/skills"
+AGENT_SKILLS_DIR="${skills}"
 AGENT_RUNTIME_PATHS="${AGENT_INSTRUCTIONS} ${skills}/compile-okf/ ${skills}/curate-okf/ ${skills}/inspect-md/ ${skills}/inspect-okf/ ${skills}/merkle-okf/ ${skills}/size-okf/"
 
 agent_checks() {

@@ -272,6 +272,23 @@ def test_every_shipped_skill_is_declared_and_every_declaration_shipped(agent):
     assert shipped == declared == sorted(_ALL_SKILLS)
 
 
+def _capability(agent: str, kind: str) -> str:
+    """One capability entry of a descriptor, as text: from its type line to the next entry."""
+    match = re.search(
+        rf"^  - type: com\.docker\.sandbox/{re.escape(kind)}\n.*?(?=^  (?:- type: |#)|\Z)",
+        _descriptor(agent),
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match, f"kits/{agent} declares no {kind}"
+    return match.group(0)
+
+
+@pytest.mark.parametrize("kind", ["network-policy@1", "lifecycle@1"])
+def test_the_two_mixins_install_and_allow_the_same(kind):
+    """The Claude Code and Codex kits add the same toolchain; only their skills and instructions differ."""
+    assert _capability("claude", kind) == _capability("codex", kind)
+
+
 def test_the_mixin_recipes_fetch_the_same_pinned_binaries():
     """The mq and okfctl digests are pinned in three recipes; one bump must reach all of them."""
 

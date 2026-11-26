@@ -20,9 +20,10 @@ own SPEC.md, never one found beside the wiki being checked, and there is no
 override. On the host, this script sits in md2okf's kit tree,
 kits/<agent>/files/, and the spec is the SPEC.md beside that kits/ directory:
 the repository root in a checkout, the packaged copy in an installed md2okf. In
-the sandbox, where the kit's files are copied into the home directory, it is the
-read-only mount beside the workspace, `$WORKDIR/../SPEC.md`, which md2okf
-stages from that same file. Nothing else is searched: a missing spec is an
+the sandbox, where the kit's files are built in outside that tree, it is the
+read-only mount beside the workspace, `$WORKSPACE_DIR/../SPEC.md`, which md2okf
+stages from that same file. sbx sets WORKSPACE_DIR in the container's own
+environment, so every process sees it, a plain `sbx exec` included. Nothing else is searched: a missing spec is an
 error, not a reason to look further up.
 
 Deliberately dependency-free: the sandbox installs a bare python3, so PyYAML is
@@ -145,12 +146,12 @@ def parse_frontmatter(text: str) -> dict | None:
 def find_spec() -> Path:
     """md2okf's own SPEC.md, at the one place each supported layout keeps it.
 
-    Inside the kit tree (the host) the spec is beside kits/, and WORKDIR is
-    never consulted. Outside it (the sandbox) the spec is beside the
-    workspace, and no ancestor of this script is: the home directory holds
-    nothing md2okf staged. The innermost kits/<agent>/files/ match wins, so a
-    checkout that itself lives under some other kits/ tree still resolves to
-    its own spec.
+    Inside the kit tree (the host) the spec is beside kits/, and WORKSPACE_DIR
+    is never consulted. Outside it (the sandbox) the spec is beside the
+    workspace, and no ancestor of this script is: neither the home directory
+    nor /usr/share holds anything md2okf staged. The innermost
+    kits/<agent>/files/ match wins, so a checkout that itself lives under some
+    other kits/ tree still resolves to its own spec.
     """
     parts = Path(__file__).resolve().parts
     for index in range(len(parts) - 3, -1, -1):
@@ -158,13 +159,13 @@ def find_spec() -> Path:
             spec = Path(*parts[:index]) / "SPEC.md"
             break
     else:
-        workdir = os.environ.get("WORKDIR")
-        if not workdir:
+        workspace = os.environ.get("WORKSPACE_DIR")
+        if not workspace:
             sys.exit(
                 "Error: cannot find md2okf's SPEC.md: this guard is not in md2okf's "
-                "kit tree, and no sandbox workspace ($WORKDIR) is set."
+                "kit tree, and no sandbox workspace ($WORKSPACE_DIR) is set."
             )
-        spec = Path(workdir).parent / "SPEC.md"
+        spec = Path(workspace).parent / "SPEC.md"
     if not spec.is_file():
         sys.exit(f"Error: cannot find md2okf's SPEC.md at {spec}.")
     return spec

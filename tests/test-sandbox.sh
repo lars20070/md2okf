@@ -50,16 +50,22 @@ fi
 # existing sandbox when it is ours and its configuration still matches.
 MD2OKF_AGENT="${agent}" uv run python -m md2okf.sandbox
 
-# Every name and path from the driver itself, not a copy of its rules.
-driver_value() {
-	MD2OKF_AGENT="${agent}" uv run python -c "from md2okf import agents, workbench
+# Every name and path from the driver itself, not a copy of its rules: one
+# per line, in one interpreter start.
+{
+	read -r sandbox_name
+	read -r sessions_dir
+	read -r wiki_dir
+} < <(
+	MD2OKF_AGENT="${agent}" uv run python -c 'from md2okf import agents, workbench
 agent = agents.from_env()
 wb = workbench.Workbench.default(agent.name)
-print($1)"
-}
-sandbox_name="$(driver_value 'workbench.sandbox_name(agent.name)')"
-sessions_dir="$(driver_value 'wb.sessions')"
-wiki_dir="$(driver_value 'wb.work_okf')"
+print(workbench.sandbox_name(agent.name), wb.sessions, wb.work_okf, sep="\n")'
+)
+if [[ -z "${sandbox_name:-}" || -z "${sessions_dir:-}" || -z "${wiki_dir:-}" ]]; then
+	echo "Error: could not read the sandbox name and paths from the driver." >&2
+	exit 2
+fi
 
 # `sh -l` is a LOGIN shell, as an interactive session would be; the host-side
 # checks below repeat what matters under a plain `sbx exec`, which is how the
@@ -97,6 +103,15 @@ if [[ "${plain_pwd}" == "${wiki_dir}" ]]; then
 	echo "ok a plain sbx exec starts in the wiki root, at its host path"
 else
 	echo "BROKEN a plain sbx exec starts in '${plain_pwd}', not ${wiki_dir}"
+	host_failures=$((host_failures + 1))
+fi
+# The compile-okf gate finds ../SPEC.md through WORKSPACE_DIR.
+# shellcheck disable=SC2016 # expanded by the guest shell
+plain_workspace="$(sbx exec "${sandbox_name}" -- sh -c 'printf %s "${WORKSPACE_DIR-}"' </dev/null)" || true
+if [[ "${plain_workspace}" == "${wiki_dir}" ]]; then
+	echo "ok WORKSPACE_DIR is the wiki root under a plain sbx exec"
+else
+	echo "BROKEN WORKSPACE_DIR is '${plain_workspace}' under a plain sbx exec, not ${wiki_dir}"
 	host_failures=$((host_failures + 1))
 fi
 if sbx exec "${sandbox_name}" -- merkleokf --nolog -L 0 "${wiki_dir}" </dev/null >/dev/null 2>&1; then

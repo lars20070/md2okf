@@ -14,6 +14,7 @@
 #                       the workbench's sessions/ (Agent.trace_target)
 #   AGENT_CONFIG_DIR    the agent's config directory, which holds the trace
 #                       directory and must stay the agent's to write
+#   AGENT_SKILLS_DIR    where the agent finds its skills, compile-okf included
 #   AGENT_INSTRUCTIONS  the file that tells the agent the OKF contract; it must
 #                       sign pages as "$AGENT_NAME/"
 #   AGENT_RUNTIME_PATHS space-separated files and directories of agent config,
@@ -81,7 +82,8 @@ check_exec() {
 	fi
 }
 
-for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_CONFIG_DIR AGENT_INSTRUCTIONS AGENT_RUNTIME_PATHS; do
+for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_CONFIG_DIR AGENT_SKILLS_DIR AGENT_INSTRUCTIONS \
+	AGENT_RUNTIME_PATHS; do
 	eval "value=\${${required}-}"
 	if [ -z "${value}" ]; then
 		echo "BROKEN the agent file does not set ${required}"
@@ -99,11 +101,11 @@ case "$(pwd -P)" in
 *) broken "sandbox workspace is not the wiki root: $(pwd -P)" ;;
 esac
 
-# The shims and the driver both assume each workspace sits at its host path,
-# which is what sbx reports as WORKSPACE_DIR. Informational when unset: the
-# shims bake the path at create and need nothing at run time.
+# The driver assumes each workspace sits at its host path, which is what sbx
+# reports as WORKSPACE_DIR, and the compile-okf gate finds ../SPEC.md through
+# it. test-sandbox.sh repeats this under a plain `sbx exec`.
 if [ -z "${WORKSPACE_DIR:-}" ]; then
-	echo "note WORKSPACE_DIR is not set in this shell"
+	broken "WORKSPACE_DIR is not set, so the compile-okf gate cannot find ../SPEC.md"
 elif [ "$(cd "${WORKSPACE_DIR}" 2>/dev/null && pwd -P)" = "$(pwd -P)" ]; then
 	ok "WORKSPACE_DIR is the wiki root"
 else
@@ -161,6 +163,17 @@ fi
 # pinned release binaries: checksummed download, no package manager.
 check mq
 check okfctl
+
+# The gate's frontmatter guard must find md2okf's SPEC.md from where the kit
+# installed it. Exit 2 is "could not run"; 0 or 1 (findings, as on an empty
+# wiki) means it found the spec and checked.
+guard="${AGENT_SKILLS_DIR}/compile-okf/scripts/frontmatter-guard.py"
+python3 "${guard}" "$(pwd -P)" >/dev/null 2>&1
+if [ "$?" -ne 2 ]; then
+	ok "the frontmatter guard finds md2okf's SPEC.md"
+else
+	broken "the frontmatter guard cannot run: python3 ${guard} $(pwd -P)"
+fi
 
 # Provenance: pages must be signed by the agent that wrote them.
 check_file "${AGENT_INSTRUCTIONS}"

@@ -585,7 +585,7 @@ def test_fingerprint_ignores_finder_metadata_and_pycache(tmp_path):
     [
         "files/home/.pi/agent/AGENTS.md",
         "files/home/.pi/agent/skills/compile-okf/SKILL.md",
-        "files/home/.local/lib/md2okf/mount-state.sh",
+        "files/home/.local/bin/a-helper",
         "files/home/.claude/skills/compile-okf/SKILL.md",
         "files/home/.agents/skills/compile-okf/SKILL.md",
         "files/home/.codex/config.toml",

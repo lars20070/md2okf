@@ -11,6 +11,7 @@ AGENT_NAME=pi
 AGENT_BINARY=pi
 AGENT_TRACE_DIR="${HOME}/.pi/agent/sessions"
 AGENT_CONFIG_DIR="${HOME}/.pi/agent"
+AGENT_SKILLS_DIR="${HOME}/.pi/agent/skills"
 AGENT_INSTRUCTIONS="${HOME}/.pi/agent/AGENTS.md"
 AGENT_RUNTIME_PATHS="${HOME}/.pi/agent/AGENTS.md ${HOME}/.pi/agent/skills"
 
