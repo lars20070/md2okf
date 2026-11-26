@@ -2,7 +2,7 @@
 
 This reference covers only saved-session behavior consumed by `pi-trace.py`.
 It is pinned to `@earendil-works/pi-coding-agent` `1.4.0`, the version in
-`kits/pi/md2okf-pi.dockerfile`. The trace format is still version 3; releases from
+`kits/md2okf-pi/md2okf-pi.dockerfile`. The trace format is still version 3; releases from
 0.86.0 on added carriers inside it, 1.4.0 itself none, and older traces read
 the same way. Treat every field as optional and unknown types as metadata.
 

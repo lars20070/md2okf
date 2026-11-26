@@ -1,16 +1,20 @@
-# Content recipe for md2okf-claude.yaml beside it. The result is a mixin: one
-# overlay layer that lands on the claude workload's filesystem, so it carries
+# Content recipe for md2okf-codex.yaml beside it. The result is a mixin: one
+# overlay layer that lands on the codex workload's filesystem, so it carries
 # only what this kit adds. Package installs are not here: they run as install
 # hooks against the workload's own package database (see the descriptor).
 #
-# The overlay stays out of /home entirely. Whatever the workload keeps there
-# is its own, and the trace directory md2okf mounts at ~/.claude/projects
-# needs nothing from this layer.
+# The one thing under /home is an empty, agent-owned ~/.codex. md2okf mounts
+# its sessions directory at ~/.codex/sessions, and a runtime that has to
+# create a mount target's missing parent creates it as root -- after which
+# the workload's install hook, which runs as the agent, could not write
+# ~/.codex/config.toml. Shipping the directory keeps it the agent's. A mixin's
+# directory entries replace the base's, owner included, so /home stays root's
+# and /home/agent the agent's (kit-tck checks both).
 
 # The two pinned release binaries, downloaded and checksummed in a throwaway
 # stage, so neither Debian nor curl ends up in the mixin. Pinning the digests
 # here, rather than reading each release's checksums file, means a re-uploaded
-# asset fails the build too. Identical in kits/codex and kits/pi.
+# asset fails the build too. Identical in kits/md2okf-claude and kits/md2okf-pi.
 FROM debian:trixie-slim AS fetch
 ARG TARGETARCH
 RUN apt-get update \
@@ -61,18 +65,20 @@ FETCH
 
 # The skills, root-owned and read-only to the agent, under a kit-specific
 # prefix. The descriptor's agent-skill@1 entries name each directory, and the
-# runtime exposes them in ~/.claude/skills. COPY does not reliably carry the
+# runtime exposes them in ~/.agents/skills. COPY does not reliably carry the
 # git 100755 bit, so the gate script's mode is set explicitly.
 FROM debian:trixie-slim AS assemble
 COPY files/skills/ /src/skills/
 RUN <<'ASSEMBLE'
 set -eu
-install -d -o 0 -g 0 -m 0755 /out/usr/share/md2okf-claude
-cp -R /src/skills /out/usr/share/md2okf-claude/skills
+install -d -o 0 -g 0 -m 0755 /out/usr/share/md2okf-codex
+cp -R /src/skills /out/usr/share/md2okf-codex/skills
 find /out -type d -exec chmod 0755 {} +
 find /out -type f -exec chmod 0644 {} +
-chmod 0755 /out/usr/share/md2okf-claude/skills/compile-okf/scripts/check-okf.sh
+chmod 0755 /out/usr/share/md2okf-codex/skills/compile-okf/scripts/check-okf.sh
 chown -R 0:0 /out
+install -d -o 0 -g 0 -m 0755 /out/home
+install -d -o 1000 -g 1000 -m 0755 /out/home/agent /out/home/agent/.codex
 ASSEMBLE
 
 FROM scratch

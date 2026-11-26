@@ -137,7 +137,7 @@ jobs:
       - name: Build and smoke-test the distribution
         run: make dist
 
-  # Build every kit (kits/*/md2okf-*.yaml, schema v3) for both architectures
+  # Build every kit (kits/md2okf-*/md2okf-*.yaml, schema v3) for both architectures
   # and check each artifact with kit-tck. `sbx kit validate` cannot read a v3
   # source kit, so `make validate` builds with docker buildx instead: the kit
   # frontend validates the descriptor, then kit-tck judges what came out. No

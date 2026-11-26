@@ -91,7 +91,7 @@ for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_CONFIG_DIR AGENT_S
 	fi
 done
 
-# The tool list must match BOTH what kits/<agent> installs (the descriptor's
+# The tool list must match BOTH what kits/md2okf-<agent> installs (the descriptor's
 # install hooks and the recipe) AND the instructions' "Installed tools" prose.
 # That prose is the promise being tested here, so a tool installed but not
 # promised — or promised but not installed — is itself the bug.

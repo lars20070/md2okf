@@ -31,7 +31,7 @@ okf/*
 
 # lat.md (`lat init`). Anchored to the repository root: a bare `.pi` matches
 # at any depth and would ignore the Pi kit's own config under
-# kits/pi/files/home/.pi/.
+# kits/md2okf-pi/files/home/.pi/.
 /.lat-build
 /.pi/
 # lat.md/.gitignore ignores these too, but hatchling reads only this root file

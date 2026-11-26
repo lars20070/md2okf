@@ -106,7 +106,7 @@ To raise the minimum, change all of these together:
 3. The sbx version in the "Install sbx" section of `README.md`.
 4. A Changed entry in `CHANGELOG.md`.
 5. If the release bundles a newer kit spec: the `# syntax=` frontend digest in
-   every `kits/*/md2okf-*.yaml`, `KIT_TCK_VERSION` in
+   every `kits/md2okf-*/md2okf-*.yaml`, `KIT_TCK_VERSION` in
    `scripts/validate-spec.sh`, and the kit-tck version and checksum in the
    `validate-kit` job.
 
@@ -158,20 +158,24 @@ The test suite reads the floor from `SBX_VERSION`, so it needs no edit.
 
 `make test-sandbox` asks the other question: does each agent's sandbox
 actually have every tool its kit installs, the agent config and skills from
-`kits/<agent>/files/`, and a ready credential? It needs
+`kits/md2okf-<agent>/files/`, and a ready credential? It needs
 an `sbx login` session, and each agent's credential (see the README's
 "Choosing an agent").
-Like the scripts below it reuses the sandbox — fast, and nothing a compile left
-behind is lost — and only builds one if none exists. That also means it tests
-the sandbox you have, which may be older than your last `kits/<agent>/` edit.
-To check the current kit from scratch, throw the sandbox away first with
-`sbx rm --force md2okf-<agent>`; building the next one takes minutes. It checks every
-registered agent in turn; `make test-sandbox AGENT=pi` checks one.
+It asks the driver for the sandbox, the same way a compile does. The driver
+reuses the sandbox it owns while its fingerprint still matches: the kit tree,
+the sbx version, the mounts and the pinned workload. Reuse is fast, and nothing
+a compile left behind is lost. After an edit under `kits/md2okf-<agent>/` the
+fingerprint no longer matches, so the driver rebuilds the sandbox before the
+checks run (minutes); there is no need to remove it first. A reused sandbox
+never runs `sbx run --kit` again, though, so to prove a kit still composes from
+scratch without touching your working sandbox, run the check as a pilot (see
+[Piloting a kit change](#piloting-a-kit-change)). It checks every registered
+agent in turn; `make test-sandbox AGENT=pi` checks one.
 
 ## Working inside the sandbox
 
 Two flags open the sandbox, building or refreshing it first when none exists or
-the running one no longer matches its `kits/<agent>/`:
+the running one no longer matches its `kits/md2okf-<agent>/`:
 
 ```bash
 md2okf --shell   # interactive shell at the wiki root
@@ -266,7 +270,7 @@ strips frontmatter: `merkleokf` answers "did this change", `sizeokf` answers
 
 The instructions come in two parts, shown here for Pi; the Claude Code and
 Codex kits carry the same two parts, ported, in the places their agents read
-them (see each kit's `README.md`). `kits/pi/files/home/.pi/agent/AGENTS.md`
+them (see each kit's `README.md`). `kits/md2okf-pi/files/home/.pi/agent/AGENTS.md`
 holds what every task must respect: the OKF conventions, the directories the
 agent may write to, and the rule that `SPEC.md` outranks both. Each task's
 procedure lives in a skill of its own. Task skill today: `compile-okf`. Tool
@@ -283,14 +287,14 @@ every kit: `tests/test_kits.py` checks each kit for the shared rules, its own
 `generated.by` producer, byte-identical gate scripts and the one shim hook
 every kit shares.
 
-Pi's kit is `kits/pi/`, and the config it carries lives in
-`kits/pi/files/home/.pi/agent/`. The Claude Code and Codex kits keep their
-skills in `kits/<agent>/files/skills/` and their instructions in the
+Pi's kit is `kits/md2okf-pi/`, and the config it carries lives in
+`kits/md2okf-pi/files/home/.pi/agent/`. The Claude Code and Codex kits keep their
+skills in `kits/md2okf-<agent>/files/skills/` and their instructions in the
 `agent-context@2` entry of their descriptor. All of it is built into the
 sandbox, not mounted, so an edit reaches the agent on the next fresh sandbox —
 which `md2okf` builds by itself once the kit's hash no longer matches what the
 running one was built from, or immediately on `--fresh`.
-[The kit guide](kits/pi/README.md) covers the model and provider settings.
+[The kit guide](kits/md2okf-pi/README.md) covers the model and provider settings.
 
 `tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which asks the
 driver for a sandbox and then calls `sbx`, and the POSIX `sh` script it runs
@@ -303,7 +307,7 @@ directory; `test_kits.py` in it checks every kit's instructions statically.
 against its own curation health, and it owns the reserved `index.md` files: the
 agent runs `okfctl index build` rather than writing link lists by hand.
 
-The gate is `kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
+The gate is `kits/md2okf-pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh`,
 one script with two call sites — the agent runs it before it finishes, and
 `make check-okf` runs the same file on the host. It combines five checks:
 `okfctl validate` for the spec floor, a `frontmatter-guard.py` for the
@@ -319,7 +323,7 @@ judgment calls and the gate runs unattended inside the compile loop.
 
 The guard reads the expected `okf_version` from md2okf's own `SPEC.md`, never
 from a spec beside the bundle it checks. On the host the script sits in the kit
-tree, `kits/<agent>/files/`, and reads the `SPEC.md` beside that `kits/`
+tree, `kits/md2okf-<agent>/files/`, and reads the `SPEC.md` beside that `kits/`
 directory: the repository root, or the packaged copy in an installed md2okf.
 In the sandbox, where no kit tree exists, it reads the read-only `../SPEC.md`
 mount beside the workspace, which md2okf stages from that same file. Nothing

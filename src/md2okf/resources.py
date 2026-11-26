@@ -58,11 +58,17 @@ def _checkout_path(relative: str, what: str) -> Path:
 
 
 def kit_dir(agent: str) -> Path:
-    """One agent's sandbox kit: the installed ``md2okf/kits/<agent>``, else ``kits/<agent>``."""
+    """One agent's sandbox kit: the installed ``md2okf/kits/md2okf-<agent>``, else ``kits/md2okf-<agent>``.
+
+    The directory carries the same ``md2okf-`` stem as the kit's descriptor and
+    sandbox, never the bare agent name, which the Claude Code and Codex kits
+    share with the workloads ``sbx run --kit`` composes them onto.
+    """
+    kit = f"md2okf-{agent}"
     root = _installed_root()
     if root is not None:
-        return root / "kits" / agent
-    return _checkout_path(f"kits/{agent}", f"the {agent} sandbox kit")
+        return root / "kits" / kit
+    return _checkout_path(f"kits/{kit}", f"the {agent} sandbox kit")
 
 
 def spec_md() -> Path:

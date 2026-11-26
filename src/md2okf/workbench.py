@@ -1,6 +1,6 @@
 """The workbench: a fixed staging area for one sandbox to serve any run.
 
-It reproduces the sibling layout `kits/pi`'s agent config assumes for
+It reproduces the sibling layout `kits/md2okf-pi`'s agent config assumes for
 whatever -o/inputs a run is given. See .claude/plans/interface-plan.md,
 "The workbench".
 """

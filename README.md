@@ -35,7 +35,7 @@ flowchart LR
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
     STATE["session traces<br/>~/.local/state/md2okf/*/sessions"]
     DRV["host driver<br>md2okf -o okf/ md/"]
-    KIT["kits/*/md2okf-*.yaml<br/>kits/*/files/"]
+    KIT["kits/md2okf-*/md2okf-*.yaml<br/>kits/md2okf-*/files/"]
   end
 
   subgraph VM["sbx microVM"]

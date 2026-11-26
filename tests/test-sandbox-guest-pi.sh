@@ -15,7 +15,7 @@ AGENT_SKILLS_DIR="${HOME}/.pi/agent/skills"
 AGENT_INSTRUCTIONS="${HOME}/.pi/agent/AGENTS.md"
 AGENT_RUNTIME_PATHS="${HOME}/.pi/agent/AGENTS.md ${HOME}/.pi/agent/skills"
 
-# Exact pins in kits/pi (Pi through the image digest in the recipe).
+# Exact pins in kits/md2okf-pi (Pi through the image digest in the recipe).
 EXPECTED_PI_VERSION=1.4.0
 EXPECTED_GITHUB_MCP_VERSION=1.12.2
 EXPECTED_CONTEXT7_PI_VERSION=0.1.3
@@ -51,7 +51,7 @@ check_version() {
 }
 
 agent_checks() {
-	# Config delivery: kits/pi/files/home/.pi/agent/ is copied in by the
+	# Config delivery: kits/md2okf-pi/files/home/.pi/agent/ is copied in by the
 	# recipe, not mounted, so a layout change can leave Pi with no
 	# instructions and no skill.
 	check_file "${HOME}/.pi/agent/settings.json"
@@ -198,7 +198,7 @@ pi_github_checks() {
 	# Binding one later does not reach an existing sandbox.
 	if [ "${SBX_CRED_GITHUB_MODE:-none}" = none ]; then
 		if [ "${REQUIRE_GITHUB}" = 1 ]; then
-			broken "no GitHub secret was bound when this sandbox was created (REQUIRE_GITHUB=1). On the host: gh auth token | sbx secret set github (or a least-privilege token, see kits/pi/README.md), then sbx rm --force md2okf-pi"
+			broken "no GitHub secret was bound when this sandbox was created (REQUIRE_GITHUB=1). On the host: gh auth token | sbx secret set github (or a least-privilege token, see kits/md2okf-pi/README.md), then sbx rm --force md2okf-pi"
 		else
 			echo "ok skipped: no GitHub secret bound (REQUIRE_GITHUB=1 makes this a failure)"
 		fi

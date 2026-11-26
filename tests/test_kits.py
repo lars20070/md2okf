@@ -5,7 +5,7 @@ validate` builds each kit and checks the artifact with kit-tck, and the
 tests/test-sandbox-guest-<agent>.sh scripts check what a running sandbox
 delivers, but neither reads what the agent is told to do.
 
-They run over every kits/*/ directory, registered or not, so a kit being
+They run over every kits/md2okf-*/ directory, registered or not, so a kit being
 authored is held to the same rules before md2okf.agents ever offers it.
 Instruction and procedure files are checked in per agent rather than
 generated, which is exactly why these checks exist: hand-kept copies of the
@@ -20,14 +20,25 @@ from pathlib import Path
 import pytest
 
 _KITS_ROOT = Path(__file__).resolve().parents[1] / "kits"
+_KIT_PREFIX = "md2okf-"
 
 
-def _descriptor_path(kit: str) -> Path:
-    """A kit's v3 descriptor: kits/<kit>/md2okf-<kit>.yaml, beside its .dockerfile recipe."""
-    return _KITS_ROOT / kit / f"md2okf-{kit}.yaml"
+def _kit(agent: str) -> Path:
+    """An agent's kit directory, kits/md2okf-<agent>: named like its descriptor and its sandbox."""
+    return _KITS_ROOT / f"{_KIT_PREFIX}{agent}"
 
 
-_KITS = sorted(path.name for path in _KITS_ROOT.iterdir() if _descriptor_path(path.name).is_file())
+def _descriptor_path(agent: str) -> Path:
+    """A kit's v3 descriptor: kits/md2okf-<agent>/md2okf-<agent>.yaml, beside its .dockerfile recipe."""
+    return _kit(agent) / f"{_KIT_PREFIX}{agent}.yaml"
+
+
+# Keyed by agent name (pi, claude, codex), not by directory name.
+_KITS = sorted(
+    path.name.removeprefix(_KIT_PREFIX)
+    for path in _KITS_ROOT.iterdir()
+    if path.name.startswith(_KIT_PREFIX) and _descriptor_path(path.name.removeprefix(_KIT_PREFIX)).is_file()
+)
 
 # Each agent's home-directory config roots. A kit must never mention another
 # agent's: that is what a copy-and-paste port leaves behind.
@@ -86,10 +97,6 @@ _METADATA_NAMES = frozenset({".DS_Store", ".localized"})
 def _is_metadata(path: Path) -> bool:
     # "._name" is the sidecar Finder writes next to a file on a non-native disk.
     return path.name in _METADATA_NAMES or path.name.startswith("._")
-
-
-def _kit(agent: str) -> Path:
-    return _KITS_ROOT / agent
 
 
 def _descriptor(agent: str) -> str:
@@ -154,7 +161,7 @@ def _shim_hook(agent: str) -> str:
         _descriptor(agent),
         re.MULTILINE | re.DOTALL,
     )
-    assert match, f"kits/{agent} has no shim-writing install hook"
+    assert match, f"kits/md2okf-{agent} has no shim-writing install hook"
     return match.group(0)
 
 
@@ -165,21 +172,73 @@ def test_every_registered_kit_is_found():
     assert {"pi", "claude", "codex"} <= set(_KITS)
 
 
+def _is_host_leftover(directory: Path) -> bool:
+    """Whether a directory under kits/ holds nothing but gitignored host clutter.
+
+    Git deletes a renamed kit's tracked files but keeps any directory that still
+    holds an ignored one, so a macOS checkout that predates the move to
+    kits/md2okf-<agent>/ keeps a kits/<agent>/ of .DS_Store files and the
+    __pycache__ a local run of frontmatter-guard.py leaves. That is no kit.
+    """
+    return all(
+        _is_metadata(path) or "__pycache__" in path.relative_to(directory).parts
+        for path in directory.rglob("*")
+        if path.is_file()
+    )
+
+
+def _misnamed_kit_dirs(kits_root: Path) -> list[str]:
+    """Directories under kits_root that hold kit content but are not kits/md2okf-<agent>/md2okf-<agent>.yaml."""
+    return sorted(
+        path.name
+        for path in kits_root.iterdir()
+        if path.is_dir()
+        and not _is_host_leftover(path)
+        and not (path.name.startswith(_KIT_PREFIX) and (path / f"{path.name}.yaml").is_file())
+    )
+
+
+def test_every_kit_directory_is_named_after_its_descriptor():
+    """kits/md2okf-<agent>/ holds md2okf-<agent>.yaml; a bare kits/<agent>/ shares the workload's name."""
+    stray = _misnamed_kit_dirs(_KITS_ROOT)
+    assert not stray, f"kit directories not named md2okf-<agent> beside their descriptor: {stray}"
+
+
+def test_a_leftover_of_host_clutter_is_not_a_misnamed_kit(tmp_path):
+    """An upgraded macOS checkout passes; a bare kits/<agent>/ with kit source in it still fails."""
+    (tmp_path / "md2okf-claude").mkdir()
+    (tmp_path / "md2okf-claude" / "md2okf-claude.yaml").write_text("kind: mixin\n", encoding="utf-8")
+    # What git leaves of the old kits/claude/ after the rename: ignored files only.
+    leftover = tmp_path / "claude"
+    (leftover / "files/skills/compile-okf/scripts/__pycache__").mkdir(parents=True)
+    (leftover / ".DS_Store").write_bytes(b"")
+    (leftover / "files/._README.md").write_bytes(b"")
+    (leftover / "files/skills/compile-okf/scripts/__pycache__/frontmatter-guard.cpython-312.pyc").write_bytes(b"")
+    # A genuine collision: the bare agent name, holding a descriptor.
+    (tmp_path / "codex").mkdir()
+    (tmp_path / "codex" / "md2okf-codex.yaml").write_text("kind: mixin\n", encoding="utf-8")
+    (tmp_path / "codex" / ".DS_Store").write_bytes(b"")
+    # Kit source of any kind, not only a descriptor, still counts.
+    (tmp_path / "pi" / "files").mkdir(parents=True)
+    (tmp_path / "pi" / "files" / "AGENTS.md").write_text("# Pi\n", encoding="utf-8")
+    assert _misnamed_kit_dirs(tmp_path) == ["codex", "pi"]
+
+
 @pytest.mark.parametrize("agent", _KITS)
 @pytest.mark.parametrize("rule", sorted(_SHARED_INVARIANTS))
 def test_every_kit_states_the_shared_authoring_contract(agent, rule):
     """The skills say these rules are not repeated, so the instructions must carry them."""
-    assert _SHARED_INVARIANTS[rule] in _instruction_text(agent), f"kits/{agent} never says: {rule}"
+    assert _SHARED_INVARIANTS[rule] in _instruction_text(agent), f"kits/md2okf-{agent} never says: {rule}"
 
 
 @pytest.mark.parametrize("agent", _KITS)
 def test_every_kit_stamps_its_own_provenance(agent):
     """A port that keeps `by: pi/` makes every other agent sign its pages as Pi."""
     text = _instruction_text(agent)
-    assert f"generated: {{ by: {agent}/" in text, f"kits/{agent} does not tell the agent to sign as {agent}/"
+    assert f"generated: {{ by: {agent}/" in text, f"kits/md2okf-{agent} does not tell the agent to sign as {agent}/"
     for other in _AGENT_HOME_DIRS:
         if other != agent:
-            assert f"by: {other}/" not in text, f"kits/{agent} tells the agent to sign as {other}/"
+            assert f"by: {other}/" not in text, f"kits/md2okf-{agent} tells the agent to sign as {other}/"
 
 
 @pytest.mark.parametrize("agent", _KITS)
@@ -187,9 +246,9 @@ def test_no_kit_mentions_another_agents_config(agent):
     foreign = [d for other, dirs in _AGENT_HOME_DIRS.items() if other != agent for d in dirs]
     text = _instruction_text(agent)
     mentioned = [d for d in foreign if f"~/{d}/" in text or f"$HOME/{d}/" in text or f"/home/agent/{d}/" in text]
-    assert not mentioned, f"kits/{agent} refers to another agent's config: {mentioned}"
+    assert not mentioned, f"kits/md2okf-{agent} refers to another agent's config: {mentioned}"
     shipped = [d for d in foreign if (_kit(agent) / "files" / "home" / d).exists()]
-    assert not shipped, f"kits/{agent} ships another agent's config directory: {shipped}"
+    assert not shipped, f"kits/md2okf-{agent} ships another agent's config directory: {shipped}"
 
 
 @pytest.mark.parametrize("agent", _KITS)
@@ -206,7 +265,7 @@ def test_every_file_the_instructions_name_is_in_the_kit(agent):
         path = _repo_path_for_guest_file(agent, ref)
         if path is not None and not path.is_file():
             missing.append(ref)
-    assert not missing, f"kits/{agent} instructions name files it does not ship: {missing}"
+    assert not missing, f"kits/md2okf-{agent} instructions name files it does not ship: {missing}"
 
 
 @pytest.mark.parametrize("agent", _KITS)
@@ -223,7 +282,7 @@ def test_runtime_instructions_never_call_the_wiki_root_dot_dot_okf(agent):
     but reads as though the wiki were a child directory.
     """
     scanned = _runtime_files(agent)
-    assert scanned, f"no runtime files found under kits/{agent}/files/home"
+    assert scanned, f"no runtime files found under kits/md2okf-{agent}/files/home"
     # errors="replace" so an unreadable byte is a substituted character rather
     # than a crash: a binary that is not Finder metadata should still be
     # searched, not halt the sweep before the files after it.
@@ -279,7 +338,7 @@ def _capability(agent: str, kind: str) -> str:
         _descriptor(agent),
         re.MULTILINE | re.DOTALL,
     )
-    assert match, f"kits/{agent} declares no {kind}"
+    assert match, f"kits/md2okf-{agent} declares no {kind}"
     return match.group(0)
 
 
@@ -311,15 +370,16 @@ def _skill_kits() -> list[tuple[str, str]]:
 @pytest.mark.parametrize("script", ["check-okf.sh", "frontmatter-guard.py"])
 def test_the_gate_scripts_are_identical_in_every_kit(agent, script):
     """One gate, many copies: `make check-okf` runs Pi's on the host, so no agent's may differ."""
-    assert agent in _GATE_DIRS, f"kits/{agent} has no known gate location"
+    assert agent in _GATE_DIRS, f"kits/md2okf-{agent} has no known gate location"
     reference = _kit("pi") / _GATE_DIRS["pi"] / script
     copy = _kit(agent) / _GATE_DIRS[agent] / script
-    assert copy.is_file(), f"kits/{agent} is missing its {script}"
-    assert copy.read_bytes() == reference.read_bytes(), f"kits/{agent}'s {script} has drifted from kits/pi"
+    assert copy.is_file(), f"kits/md2okf-{agent} is missing its {script}"
+    drifted = f"kits/md2okf-{agent}'s {script} has drifted from kits/md2okf-pi"
+    assert copy.read_bytes() == reference.read_bytes(), drifted
 
 
 @pytest.mark.parametrize(("agent", "skill"), _skill_kits())
 def test_wiki_skills_name_the_workspace_root_as_pwd(agent, skill):
     """The counterpart of the ../okf rule: name the wiki as "$PWD"."""
     text = (_kit(agent) / _SKILL_ROOTS[agent] / skill / "SKILL.md").read_text(encoding="utf-8")
-    assert '"$PWD"' in text, f'kits/{agent} {skill} does not name the wiki root as "$PWD"'
+    assert '"$PWD"' in text, f'kits/md2okf-{agent} {skill} does not name the wiki root as "$PWD"'

@@ -18,7 +18,7 @@ SPEC.md is read to learn which okf_version the root index must declare, so the
 check moves with the spec instead of hard-coding a number. It is always md2okf's
 own SPEC.md, never one found beside the wiki being checked, and there is no
 override. On the host, this script sits in md2okf's kit tree,
-kits/<agent>/files/, and the spec is the SPEC.md beside that kits/ directory:
+kits/md2okf-<agent>/files/, and the spec is the SPEC.md beside that kits/ directory:
 the repository root in a checkout, the packaged copy in an installed md2okf. In
 the sandbox, where the kit's files are built in outside that tree, it is the
 read-only mount beside the workspace, `$WORKSPACE_DIR/../SPEC.md`, which md2okf
@@ -150,7 +150,7 @@ def find_spec() -> Path:
     is never consulted. Outside it (the sandbox) the spec is beside the
     workspace, and no ancestor of this script is: neither the home directory
     nor /usr/share holds anything md2okf staged. The innermost
-    kits/<agent>/files/ match wins, so a checkout that itself lives under some
+    kits/md2okf-<agent>/files/ match wins, so a checkout that itself lives under some
     other kits/ tree still resolves to its own spec.
     """
     parts = Path(__file__).resolve().parts

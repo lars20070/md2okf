@@ -7,8 +7,8 @@
 # md2okf-codex.dockerfile beside this file into the mixin's one layer. It is
 # pinned by digest because it produces the published bytes.
 #
-# The stem is md2okf-codex, not codex: that is the workload this composes
-# onto, and two kits with one stem collide.
+# The directory and the stem are md2okf-codex, not codex: that is the workload
+# this composes onto, and two kits with one stem collide.
 #
 # MIGRATION NOTE (v2 -> v3): the v2 kit was `extends: codex` with its own
 # entrypoint, a startup hook and an `md2okf-agent` wrapper that bind-mounted
@@ -182,7 +182,7 @@ capabilities:
   # them from when the workspace is not a git repository -- after the
   # workload's generic sandbox notes. The workload offers both @1 and @2 as
   # optional, and the two cannot compose, so declaring @2 here selects its
-  # @2 profile. Ported from kits/pi's AGENTS.md; tests/test_kits.py holds the
+  # @2 profile. Ported from kits/md2okf-pi's AGENTS.md; tests/test_kits.py holds the
   # two to the same contract.
   # MIGRATION NOTE: the v2 kit shipped this text as a static
   # ~/.codex/AGENTS.md, because v2 agentInstructions landed in the

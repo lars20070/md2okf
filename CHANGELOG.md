@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-11-26
+
+### Changed
+
+- **The kit directories are now `kits/md2okf-pi`, `kits/md2okf-claude` and
+  `kits/md2okf-codex`.** They were `kits/pi`, `kits/claude` and `kits/codex`.
+  Each directory now has the same name as its descriptor
+  (`md2okf-<agent>.yaml`) and its sandbox, and no longer the bare name of the
+  `claude` and `codex` workloads that the mixins compose onto. The wheel carries
+  them under `md2okf/kits/md2okf-<agent>/`. Agent names and `MD2OKF_AGENT`
+  values, sandbox names and workbench paths do not change.
+- **For contributors: `make validate` and `tests/test_kits.py` reject a kit
+  directory that is not named `md2okf-<agent>`.** A directory that holds only
+  gitignored host clutter (`.DS_Store`, `._*` sidecars, `__pycache__`) is
+  skipped, because git leaves one behind when a kit moves. `make validate` says
+  so in a note.
+- **`.env.example` no longer lists `OPENROUTER_API_KEY`.** md2okf never read
+  the key from the environment. `sbx secret set openrouter` prompts for it, as
+  the README describes. `XDG_STATE_HOME` is now commented out and shows its
+  default, so a copied `.env` no longer moves the state to a placeholder path.
+
+### Fixed
+
+- **The contributor docs describe how `make test-sandbox` picks its sandbox.**
+  `CONTRIBUTING.md`, `AGENTS.md` and `tests/test-sandbox.sh` said it reuses
+  whatever sandbox is running and told you to `sbx rm --force` it after a kit
+  edit. In fact it asks the driver, which rebuilds an owned sandbox whose
+  fingerprint changed and reuses one that still matches. To prove that a kit
+  still composes from scratch without touching your working sandbox, run a
+  pilot (see CONTRIBUTING.md, "Piloting a kit change").
+
+### Upgrading
+
+- The kits' own files changed with the rename, so the next run with each agent
+  rebuilds its sandbox once, removing the old one first. Transcripts under
+  `$XDG_STATE_HOME/md2okf/<agent>/sessions` and secrets set with `sbx secret`
+  carry over. Copy out anything you kept only inside a sandbox before that run.
+- In a checkout, git may leave `kits/pi/`, `kits/claude/` or `kits/codex/`
+  behind if they hold ignored files, such as Finder's `.DS_Store`. Nothing reads
+  them any more. Check that they hold nothing of yours, then delete them.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added

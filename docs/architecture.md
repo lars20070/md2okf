@@ -183,7 +183,7 @@ looking around, not for editing the wiki:
 | `okf/` | the generated wiki, and the default for `-o`; not tracked by git |
 | `src/md2okf/` | the `md2okf` command: the CLI, the agent definitions, the workbench, the calls to `sbx` and the Ralph loop |
 | `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus scripts for repository chores |
-| `kits/<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): a schema v3 descriptor, the recipe that builds its content, and the configuration it carries |
+| `kits/md2okf-<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): a schema v3 descriptor, the recipe that builds its content, and the configuration it carries |
 | `tests/` | the driver's pytest suite and the shell tests for the sandbox |
 | `Makefile` | developer tasks: lint, validate, tests and installs |
 | `docs/` | reference pages: [usage](usage.md), [configuration](configuration.md) and this page |

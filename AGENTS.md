@@ -5,7 +5,7 @@
 > not Pi's task instructions. Pi runs inside the sandbox with `okf/` as its
 > workspace and cannot read this repository-level file; if you are Pi, your
 > role and rules live in your own agent config (`~/.pi/agent/AGENTS.md`, authored
-> from `kits/pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
+> from `kits/md2okf-pi/files/home/.pi/agent/AGENTS.md`) — nothing here changes that.
 > Host MCP (Context7 / GitHub in `.mcp.json`) is for Cursor/Claude on the host
 > only. Sandbox Pi gets Context7 through the native `@upstash/context7-pi`
 > package installed by the kit, not via MCP.
@@ -126,24 +126,24 @@ reads its instructions differs, and was measured, not assumed: Pi from
 `~/.claude/CLAUDE.md` and Codex from `~/.codex/AGENTS.md` (it ignores files
 outside a git project), both written by sbx from the kit's `agent-context@2`
 body. Each kit's `README.md` says why. Each agent has its own kit
-(`kits/<agent>/`), sandbox (`md2okf-<agent>`) and workbench
+(`kits/md2okf-<agent>/`), sandbox (`md2okf-<agent>`) and workbench
 (`$XDG_STATE_HOME/md2okf/<agent>/`); everything agent-specific — command lines,
 first-turn prompt, credential check, event-stream parser
 (`src/md2okf/protocols/<agent>.py`) — lives on its `Agent`, never in the
 generic modules. An agent is registered only once its kit ships.
 
 Every kit is a Sandbox Kit schema v3 source kit: a descriptor
-`kits/<agent>/md2okf-<agent>.yaml` (capabilities: network policy per phase,
+`kits/md2okf-<agent>/md2okf-<agent>.yaml` (capabilities: network policy per phase,
 credentials, install hooks, skills, instructions) and a recipe
 `md2okf-<agent>.dockerfile` beside it, which builds the kit's content from
-`files/`. The stem is never the bare agent name, which would collide with the
-workload of that name. Pi's kit is a **workload**, the whole sandbox, built
-on Docker's Pi image pinned by digest. Claude Code's and Codex's are
-**mixins** composed onto Docker's published `claude` and `codex` workloads,
-which `agents.py` pins by index digest (`workload_ref`).
+`files/`. The directory and the stem are never the bare agent name, which
+would collide with the workload of that name. Pi's kit is a **workload**, the
+whole sandbox, built on Docker's Pi image pinned by digest. Claude Code's and
+Codex's are **mixins** composed onto Docker's published `claude` and `codex`
+workloads, which `agents.py` pins by index digest (`workload_ref`).
 
 Pi's config (`AGENTS.md`, `settings.json`, `models.json`, `mcp.json`,
-`skills/`) lives in `kits/pi/files/home/.pi/agent/`. The two mixins carry
+`skills/`) lives in `kits/md2okf-pi/files/home/.pi/agent/`. The two mixins carry
 their skills in `files/skills/`, installed under `/usr/share` and exposed in
 the agent's skills directory through `agent-skill@1`, and their instructions
 inline in the descriptor. The agent has `bash`, so it lints its own output and
@@ -163,7 +163,7 @@ section.** Helper skill:
 a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds the driver's pytest suite (offline: `conftest.py` fakes the one
-`sbx` seam; `test_kits.py` holds every `kits/*/` to the shared authoring
+`sbx` seam; `test_kits.py` holds every `kits/md2okf-*/` to the shared authoring
 contract, its own provenance and the shared shim hook) and one shell suite
 that pytest cannot replace — the paired live-sandbox check (`test-sandbox.sh`,
 which asks the driver for a sandbox, runs `test-sandbox-guest-<agent>.sh` inside
@@ -272,7 +272,7 @@ Sandbox Kits before considering the task complete:
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This builds every `kits/*/md2okf-*.yaml` with `docker buildx` and checks the
+This builds every `kits/md2okf-*/md2okf-*.yaml` with `docker buildx` and checks the
 built artifact with `kit-tck` (3.0.0-m.12, the spec sbx 0.54.0 bundles).
 `sbx kit validate` cannot read a schema v3 source kit, so the build is the
 check: the kit frontend validates the descriptor first, then kit-tck judges
@@ -286,9 +286,12 @@ it passes.
 
 `make validate` checks each kit alone; it cannot see how a mixin composes onto
 its workload. If you changed what a sandbox installs or carries, also run
-`sbx rm --force md2okf-<agent> && make test-sandbox AGENT=<agent>` — on its
-own `make test-sandbox` reuses whatever sandbox is running, which may predate
-your edit.
+`make test-sandbox AGENT=<agent>`. It gets the sandbox from the driver, which
+rebuilds an owned sandbox whose kit fingerprint changed and reuses one that
+still matches, so no `sbx rm` is needed first. A reused sandbox never re-runs
+`sbx run --kit`: to prove fresh composition without touching the working
+sandbox, run it as a pilot with its own `MD2OKF_SANDBOX_NAME` and a temporary
+`XDG_STATE_HOME` (CONTRIBUTING.md, "Piloting a kit change").
 
 ## Skills
 

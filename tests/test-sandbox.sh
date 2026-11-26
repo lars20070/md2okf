@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check that one agent's sandbox delivers what kits/<agent>/ promises: the
-# installed toolchain, the agent config from kits/<agent>/files/, a ready
+# Check that one agent's sandbox delivers what kits/md2okf-<agent>/ promises: the
+# installed toolchain, the agent config from kits/md2okf-<agent>/files/, a ready
 # credential, and the driver's mount invariants. The checks themselves live in
 # tests/test-sandbox-guest-common.sh, which every agent shares, and
 # tests/test-sandbox-guest-<agent>.sh, which defines what differs.
@@ -12,13 +12,14 @@ set -euo pipefail
 # The agent is required, with no default, so a mistyped or forgotten one fails
 # here instead of silently testing Pi.
 #
-# Reuses the agent's existing sandbox, creating one only if missing (minutes),
-# so it may be testing a sandbox older than your last kits/<agent>/ edit. To
-# force a fresh one: sbx rm --force md2okf-pi && ./tests/test-sandbox.sh pi
-#
-# To pilot a kit change beside a working sandbox, set both MD2OKF_SANDBOX_NAME
-# and a temporary XDG_STATE_HOME (see CONTRIBUTING.md); every path and name
-# below comes from the driver, so both are honoured.
+# Gets the sandbox from the driver, which reuses the one it owns while its
+# fingerprint (kit tree, sbx version, mounts, pinned workload) still matches,
+# and rebuilds it (minutes) once a kits/md2okf-<agent>/ edit moves that
+# fingerprint. A reused sandbox never re-runs `sbx run --kit`, so to check
+# fresh composition without touching a working sandbox, pilot it: set both
+# MD2OKF_SANDBOX_NAME and a temporary XDG_STATE_HOME (see CONTRIBUTING.md,
+# "Piloting a kit change"); every path and name below comes from the driver,
+# so both are honoured.
 
 if [[ "$#" -ne 1 || -z "$1" ]]; then
 	echo "Usage: $0 AGENT   (e.g. pi)" >&2

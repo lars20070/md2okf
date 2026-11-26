@@ -1,4 +1,4 @@
-# kits/codex
+# kits/md2okf-codex
 
 The Docker Sandbox kit that runs Codex for `md2okf` (`MD2OKF_AGENT=codex`). It
 is a Sandbox Kit schema v3 **mixin**, `md2okf-codex.yaml` with the recipe
@@ -6,7 +6,7 @@ is a Sandbox Kit schema v3 **mixin**, `md2okf-codex.yaml` with the recipe
 workload:
 
 ```bash
-sbx run --kit ./kits/codex docker.io/sbx/codex@sha256:<digest> ...
+sbx run --kit ./kits/md2okf-codex docker.io/sbx/codex@sha256:<digest> ...
 ```
 
 The workload brings the image (Debian 13 on Docker Hardened Images), Codex
@@ -15,8 +15,8 @@ itself, the OpenAI network hosts, the credential and permissive defaults
 adds only what compiling needs: the OKF toolchain (Node, the linters, `mq`,
 `okfctl` and the four helper CLIs), the md2okf instructions and the skills.
 
-The stem is `md2okf-codex`, not `codex`: that is the workload's name, and two
-kits with one stem collide.
+The directory and the stem are `md2okf-codex`, not `codex`: that is the
+workload's name, and two kits with one stem collide.
 
 ## The pinned workload
 

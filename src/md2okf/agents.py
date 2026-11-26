@@ -39,7 +39,7 @@ class Agent:
     """One agent framework: how to run it, prompt it, check it and parse it."""
 
     name: str
-    """Registry key; also names the kit (kits/<name>), sandbox and workbench."""
+    """Registry key; also names the kit (kits/md2okf-<name>), sandbox and workbench."""
 
     compile_args: Callable[[str], list[str]]
     """Prompt -> the full in-sandbox argv for one Ralph-loop turn."""
@@ -155,7 +155,7 @@ def _claude_check_credentials(name: str) -> str | None:
 # The published workloads the Claude Code and Codex kits are mixins for, by
 # multi-platform index digest. Bumping one is a deliberate change: it rebuilds
 # every sandbox of that agent on its next use (see Agent.workload_ref). Check
-# a candidate's descriptor before bumping, as kits/claude/README.md describes.
+# a candidate's descriptor before bumping, as kits/md2okf-claude/README.md describes.
 CLAUDE_WORKLOAD = "docker.io/sbx/claude@sha256:a91195e9e3b6f316fda9afd5228b26d65abd486dc6e627682c2aabbd59747886"
 CODEX_WORKLOAD = "docker.io/sbx/codex@sha256:eb621d203636085c03be079c27439c805c8e46927c27f5daf6210ed8e6c62cd8"
 
@@ -166,7 +166,7 @@ PI = Agent(
     # `--tools -tool_search` drops the loader settings.json adds for those
     # deferred tools, leaving the compile the tool set Pi 0.86 gave it. This
     # removes MCP *tools*, not GitHub access: a bound `github` secret still
-    # reaches `gh` and `git` through bash (see kits/pi/README.md).
+    # reaches `gh` and `git` through bash (see kits/md2okf-pi/README.md).
     compile_args=lambda prompt: ["pi", "--mode", "json", "--no-mcp", "--tools", "-tool_search", prompt],
     interactive_args=("pi",),
     compile_prompt=_pi_compile_prompt,
