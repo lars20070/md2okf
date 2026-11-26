@@ -21,14 +21,43 @@ and this project adheres to
 
 ### Changed
 
-- **md2okf now requires sbx 0.50.0 (was 0.49.2).** `SBX_VERSION`, CI's pinned
-  checksum and the README move together. sbx 0.50.0 is a security and kits
-  release (hardened `sbx cp`, host git and helper execution; local source kits
-  rebuild once); it changes no kit-spec or CLI flags the kits rely on. The kit
-  fingerprint hashes the sbx version, so every existing sandbox is rebuilt once,
-  automatically, on its first use after the upgrade. `sbx exec` now exits 125
-  when it cannot run the command; the driver already treats any nonzero status
-  as a failure.
+- **md2okf now requires sbx 0.54.0 (was 0.49.2), and every kit is a Sandbox
+  Kit schema v3 kit.** Since sbx 0.51 the built-in `claude` and `codex` agents
+  are published schema v3 workloads, and the old v2 kits that extended them no
+  longer load. `SBX_VERSION`, CI's pinned checksum and the README move
+  together. The kit fingerprint hashes the sbx version, so every existing
+  sandbox is rebuilt once, automatically, on its first use after the upgrade;
+  the rebuild removes the old sandbox first, but transcripts are on the host
+  and carry over.
+  - Each kit is now a descriptor, `kits/<agent>/md2okf-<agent>.yaml`, with a
+    recipe, `md2okf-<agent>.dockerfile`, beside it; `spec.yaml` is gone. Pi's
+    kit is a workload on the same digest-pinned Pi image. Claude Code's and
+    Codex's are mixins over Docker's published `claude` and `codex` workloads,
+    which md2okf pins by index digest, so their sandboxes now run Debian 13 on
+    Docker Hardened Images instead of Ubuntu. A new pin rebuilds the sandbox.
+  - Claude Code reads the md2okf instructions from `~/.claude/CLAUDE.md` (was
+    `../CLAUDE.md`), joined to the workload's own notes, and Codex from the
+    workload-written `~/.codex/AGENTS.md`. Both get their skills through the
+    runtime, so a host's shared skills store no longer hides them.
+  - Transcripts reach the host through a mount of
+    `$XDG_STATE_HOME/md2okf/<agent>/sessions` at the agent's own transcript
+    directory. The in-sandbox bind helpers, the `md2okf-agent` wrapper, the
+    kits' entrypoints and startup hooks, and `MD2OKF_STATE_DIR` are gone; the
+    driver runs each agent directly.
+  - `mq`, `okfctl` and Pi's `github-mcp-server` are downloaded when the kit is
+    built, checked against pinned SHA-256 digests, so the sandboxes no longer
+    reach GitHub to install them. Network grants are split into an install and
+    a runtime phase. Pi's GitHub credential is now `GITHUB_TOKEN`, and its
+    in-sandbox Docker engine is off.
+  - Pi's OpenRouter credential is optional in the kit, so `md2okf --shell`
+    still opens when no key is bound; a compile still refuses with the remedy.
+  - `md2okf` runs `sbx run --no-input`, so a question sbx would ask fails with
+    sbx's own instruction, which `md2okf` prints, instead of hanging.
+  - For contributors: `make validate` now builds each kit with `docker buildx`
+    and checks it with `kit-tck` 3.0.0-m.12, since `sbx kit validate` cannot
+    read a v3 source kit; it needs Docker and `kit-tck`, not sbx. CI builds
+    both architectures. `make test-shell` and its CI job are gone with the bind
+    helper. `MD2OKF_SANDBOX_NAME` pilots a kit change beside a working sandbox.
 
 ## [0.3.2] - 2026-10-22
 

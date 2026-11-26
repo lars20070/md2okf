@@ -10,10 +10,11 @@
 AGENT_NAME=pi
 AGENT_BINARY=pi
 AGENT_TRACE_DIR="${HOME}/.pi/agent/sessions"
+AGENT_CONFIG_DIR="${HOME}/.pi/agent"
 AGENT_INSTRUCTIONS="${HOME}/.pi/agent/AGENTS.md"
 AGENT_RUNTIME_PATHS="${HOME}/.pi/agent/AGENTS.md ${HOME}/.pi/agent/skills"
 
-# Exact pins in kits/pi/spec.yaml (Pi through the image digest).
+# Exact pins in kits/pi (Pi through the image digest in the recipe).
 EXPECTED_PI_VERSION=1.4.0
 EXPECTED_GITHUB_MCP_VERSION=1.12.2
 EXPECTED_CONTEXT7_PI_VERSION=0.1.3
@@ -49,9 +50,9 @@ check_version() {
 }
 
 agent_checks() {
-	# Config delivery: kits/pi/files/home/.pi/agent/ is copied at kit build
-	# time, not mounted, so a layout change can leave Pi with no instructions
-	# and no skill.
+	# Config delivery: kits/pi/files/home/.pi/agent/ is copied in by the
+	# recipe, not mounted, so a layout change can leave Pi with no
+	# instructions and no skill.
 	check_file "${HOME}/.pi/agent/settings.json"
 	check_file "${HOME}/.pi/agent/models.json"
 	check_file "${HOME}/.pi/agent/skills/compile-okf/SKILL.md"
@@ -63,8 +64,8 @@ agent_checks() {
 	check_file "${HOME}/.pi/agent/skills/merkle-okf/SKILL.md"
 	check_file "${HOME}/.pi/agent/skills/curate-okf/SKILL.md"
 
-	# Context7 native Pi package (kits/pi/spec.yaml setup.install +
-	# settings.json packages). Presence only — no live Context7 API call.
+	# Context7 native Pi package (the kit's install hook + settings.json
+	# packages). Presence only — no live Context7 API call.
 	if timeout 20 pi list 2>/dev/null | grep -q context7-pi; then
 		ok "context7-pi (pi list)"
 	else
@@ -84,7 +85,7 @@ agent_checks() {
 		failures=$((failures + 1))
 	fi
 
-	# Credentials (kits/pi/spec.yaml). Automates the manual check in the
+	# Credentials (the kit's credential@1). Automates the manual check in the
 	# README. Never print the value — case-match and report only a verdict.
 	case "${OPENROUTER_API_KEY-}" in
 	"")
@@ -186,33 +187,14 @@ pi_config_checks() {
 		}' "${mcp}"
 }
 
-# The token exports and the MCP path, through md2okf-agent: the driver starts
-# every Pi process that way, under an `sbx exec` that skips the entrypoint, so
-# the shim -- not this login shell -- is what must export them.
+# The GitHub credential and the MCP path. The credential is named
+# GITHUB_TOKEN, which gh reads and mcp.json hands to the GitHub MCP server, so
+# nothing has to export it under another name. test-sandbox.sh repeats the
+# variable check under a plain, non-login `sbx exec`, the way the driver
+# starts every Pi process.
 pi_github_checks() {
-	# Never print a value: the inner shell case-matches and names only the
-	# first variable that is not the sentinel.
-	# shellcheck disable=SC2016 # expanded by the inner shell, not this one
-	verdict=$(
-		md2okf-agent sh -c '
-			for name in GH_TOKEN GITHUB_TOKEN GITHUB_PERSONAL_ACCESS_TOKEN; do
-				eval "value=\${${name}-}"
-				case "${value}" in
-				proxy-managed) ;;
-				*) echo "${name}"; exit 0 ;;
-				esac
-			done
-			echo ok' </dev/null 2>&1
-	)
-	if [ "${verdict}" = ok ]; then
-		ok "md2okf-agent exports GH_TOKEN, GITHUB_TOKEN and GITHUB_PERSONAL_ACCESS_TOKEN as the sentinel"
-	else
-		broken "md2okf-agent: ${verdict} is not the proxy-managed sentinel"
-	fi
-
-	# GH_TOKEN is always the sentinel in a local sandbox; this is what says
-	# whether a host secret stands behind it. Binding one later does not reach
-	# an existing sandbox.
+	# This is what says whether a host secret stands behind the sentinel.
+	# Binding one later does not reach an existing sandbox.
 	if [ "${SBX_CRED_GITHUB_MODE:-none}" = none ]; then
 		if [ "${REQUIRE_GITHUB}" = 1 ]; then
 			broken "no GitHub secret was bound when this sandbox was created (REQUIRE_GITHUB=1). On the host: gh auth token | sbx secret set github (or a least-privilege token, see kits/pi/README.md), then sbx rm --force md2okf-pi"
@@ -222,6 +204,13 @@ pi_github_checks() {
 		return
 	fi
 
+	# Never print the value: case-match and report only a verdict.
+	case "${GITHUB_TOKEN-}" in
+	proxy-managed) ok "GITHUB_TOKEN is the proxy-managed sentinel" ;;
+	"") broken "GITHUB_TOKEN is not set although a GitHub secret is bound" ;;
+	*) broken "GITHUB_TOKEN is not the proxy-managed sentinel" ;;
+	esac
+
 	if gh auth status >/dev/null 2>&1 </dev/null; then
 		ok "gh is authenticated through the proxy"
 	else
@@ -229,7 +218,7 @@ pi_github_checks() {
 	fi
 
 	# Exits 1 when an entry is invalid or an enabled server is not connected.
-	mcp_list=$(md2okf-agent pi mcp list --json </dev/null 2>/dev/null)
+	mcp_list=$(pi mcp list --json </dev/null 2>/dev/null)
 	if printf '%s\n' "${mcp_list}" | jq -e \
 		'any(.servers[]; .name == "github" and .state == "connected" and (.tools | length) > 0)' \
 		>/dev/null 2>&1; then
@@ -239,10 +228,10 @@ pi_github_checks() {
 	fi
 
 	# Listing tools needs no credential. One read-only call proves the proxy
-	# authenticates the server's requests, through the shim's exports. The
+	# authenticates the server's requests, with the token mcp.json maps. The
 	# heredoc is the client's stdin, so it cannot swallow the rest of this
 	# script, which `sh -s` is reading from stdin too.
-	if login=$(md2okf-agent python3 - <<'PY'
+	if login=$(GITHUB_PERSONAL_ACCESS_TOKEN="${GITHUB_TOKEN-}" python3 - <<'PY'
 import json
 import queue
 import subprocess

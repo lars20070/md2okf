@@ -4,7 +4,7 @@ Everything that differs between Pi, Claude Code and Codex lives on one `Agent` r
 
 ## Agent contract
 
-[[src/md2okf/agents.py#Agent]] has six fields: name, compile command line, interactive command line, first-turn prompt, credential check and event protocol.
+[[src/md2okf/agents.py#Agent]] has eight fields: name, compile command line, interactive command line, first-turn prompt, credential check, event protocol, trace target and the workload its kit composes onto.
 
 The generic modules, [[cli]], [[compile-loop]], [[workbench]] and [[sandbox]], never branch on an agent's name. The name also names the agent's kit (`kits/<name>`), its sandbox (`md2okf-<name>`) and its workbench. A new agent is therefore one new record, one protocol module and one kit.
 
@@ -14,17 +14,17 @@ The generic modules, [[cli]], [[compile-loop]], [[workbench]] and [[sandbox]], n
 
 An unknown name is refused with exit 2, listing the valid ones. An agent is registered only once its kit ships, and the wheel gains one `force-include` line per registered kit at the same time (see [[development#Packaging]]).
 
-## Wrapper prefix
+## Trace target and workload
 
-Every in-sandbox command line, compile turn or interactive session, starts with [[src/md2okf/agents.py#WRAPPER]], the kit's `md2okf-agent` wrapper, not with the agent itself.
+Every in-sandbox command line, compile turn or interactive session, starts with the agent itself, run by a plain `sbx exec`, which bypasses the kit's entrypoint.
 
-`sbx exec` bypasses the kit's entrypoint, so per-process setup cannot live there. The wrapper makes sure the agent's trace directory is bound onto host-backed state before the agent writes anything (see [[lat.md/kits#Runtime]]). The agent's own flags stay here in Python, where they are unit-tested.
+Nothing per-process has to run first, because `trace_target` names the agent's native trace directory and the driver mounts the workbench's `sessions/` there (see [[lat.md/kits#Runtime]]). `workload_ref` is None for Pi, whose kit is the workload, and the pinned published workload for Claude Code and Codex, whose kits are mixins (see [[sandbox#Launch]]). The agent's own flags stay here in Python, where they are unit-tested.
 
 ## Compile turns run without MCP
 
 A compile turn starts the agent with no MCP servers, because a compile uses none of them. Each agent spells this differently.
 
-Pi gets `--no-mcp` and drops its `tool_search` loader. Claude Code gets `--strict-mcp-config` with no config, which excludes both the parent kit's gateway and any claude.ai connectors. Codex gets a `-c` override disabling the parent's gateway; an empty `mcp_servers` table was measured not to remove it. Interactive sessions keep MCP. Removing MCP tools does not remove GitHub access: a bound `github` secret still reaches `gh` and `git` through the shell.
+Pi gets `--no-mcp` and drops its `tool_search` loader. Claude Code gets `--strict-mcp-config` with no config, which excludes both the workload's gateway and any claude.ai connectors. Codex gets a `-c` override disabling the workload's gateway; an empty `mcp_servers` table was measured not to remove it. Interactive sessions keep MCP. Removing MCP tools does not remove GitHub access: a bound `github` secret still reaches `gh` and `git` through the shell.
 
 ## Workspace root rule
 

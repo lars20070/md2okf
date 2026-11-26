@@ -56,37 +56,94 @@ def test_logged_in_reflects_ls(fake_sbx):
 
 def test_exists_before_and_after_create(fake_sbx):
     assert sandbox.exists("md2okf") is False
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     assert sandbox.exists("md2okf") is True
 
 
 def test_create_returns_a_token_identity_reads_back(fake_sbx):
-    token = sandbox.create("md2okf", Path("/kit"), [], {})
+    token = sandbox.create("md2okf", Path("/kit"), None, [])
     assert token
     assert sandbox.identity("md2okf") == token
 
 
-def test_create_mounts_and_env_reach_the_argv(fake_sbx):
-    mounts = [sandbox.Mount(Path("/work/okf")), sandbox.Mount(Path("/work/md"), readonly=True)]
-    sandbox.create("md2okf", Path("/kit"), mounts, {"MD2OKF_STATE_DIR": "/state"})
+def test_create_runs_a_workload_kit_with_its_mounts(fake_sbx):
+    """Pi's shape: the kit directory is the workload, and no environment is injected."""
+    mounts = [
+        sandbox.Mount(Path("/work/okf")),
+        sandbox.Mount(Path("/work/md"), readonly=True),
+        sandbox.Mount(Path("/state/sessions"), target="/home/agent/.pi/agent/sessions"),
+    ]
+    sandbox.create("md2okf", Path("/kit"), None, mounts)
     run_call = next(c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"])
     assert run_call == [
         "sbx",
         "run",
         "--detach",
+        "--no-input",
         "--name",
         "md2okf",
-        "-e",
-        "MD2OKF_STATE_DIR=/state",
         "/kit",
         "/work/okf",
         "/work/md:ro",
+        "/state/sessions:/home/agent/.pi/agent/sessions",
     ]
 
 
+def test_create_composes_a_mixin_kit_onto_the_pinned_workload(fake_sbx):
+    """Claude Code's and Codex's shape: --kit takes the mixin, the positional names the workload."""
+    sandbox.create("md2okf", Path("/kit"), "docker.io/sbx/claude@sha256:abc", [sandbox.Mount(Path("/work/okf"))])
+    run_call = next(c for c in fake_sbx.calls if c[:3] == ["sbx", "run", "--detach"])
+    assert run_call == [
+        "sbx",
+        "run",
+        "--detach",
+        "--no-input",
+        "--name",
+        "md2okf",
+        "--kit",
+        "/kit",
+        "docker.io/sbx/claude@sha256:abc",
+        "/work/okf",
+    ]
+
+
+def test_run_argv_passes_a_relative_kit_directory_as_an_absolute_path():
+    """A bare relative name means an agent or sandbox name to sbx, not a local kit."""
+    argv = sandbox.run_argv("md2okf", Path("kits/pi"), None, [])
+    assert Path(argv[-1]).is_absolute()
+    assert argv[-1].endswith("/kits/pi")
+
+
+@pytest.mark.parametrize(
+    ("mount", "arg"),
+    [
+        (sandbox.Mount(Path("/a")), "/a"),
+        (sandbox.Mount(Path("/a"), readonly=True), "/a:ro"),
+        (sandbox.Mount(Path("/a"), target="/b"), "/a:/b"),
+        (sandbox.Mount(Path("/a"), readonly=True, target="/b"), "/a:/b:ro"),
+    ],
+)
+def test_mount_args_follow_the_path_target_ro_grammar(mount, arg):
+    assert mount.as_arg() == arg
+
+
+def test_a_failed_create_carries_the_sbx_diagnostic(fake_sbx, monkeypatch):
+    """With --no-input sbx refuses a question by naming the command that answers it; pass that on."""
+    real_run = fake_sbx.run
+
+    def refusing(argv, **kwargs):
+        if argv[:3] == ["sbx", "run", "--detach"]:
+            return __import__("subprocess").CompletedProcess(argv, 1, "", "kit needs approval: run sbx kit approve x\n")
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(sandbox.subprocess, "run", refusing)
+    with pytest.raises(sandbox.SandboxError, match="run sbx kit approve x"):
+        sandbox.create("md2okf", Path("/kit"), None, [])
+
+
 def test_create_removes_any_prior_sandbox_first(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
+    sandbox.create("md2okf", Path("/kit"), None, [])
     rm_calls = [c for c in fake_sbx.calls if c[:3] == ["sbx", "rm", "--force"]]
     assert len(rm_calls) == 2
 
@@ -94,7 +151,7 @@ def test_create_removes_any_prior_sandbox_first(fake_sbx):
 def test_create_raises_on_sbx_run_failure(fake_sbx):
     fake_sbx.run_fail_names.add("md2okf")
     with pytest.raises(sandbox.SandboxError, match="md2okf"):
-        sandbox.create("md2okf", Path("/kit"), [], {})
+        sandbox.create("md2okf", Path("/kit"), None, [])
 
 
 def test_create_removes_the_sandbox_when_the_token_write_fails(fake_sbx):
@@ -107,7 +164,7 @@ def test_create_removes_the_sandbox_when_the_token_write_fails(fake_sbx):
     """
     fake_sbx.token_write_fail_names.add("md2okf")
     with pytest.raises(sandbox.SandboxError, match="ownership token"):
-        sandbox.create("md2okf", Path("/kit"), [], {})
+        sandbox.create("md2okf", Path("/kit"), None, [])
     assert sandbox.exists("md2okf") is False
 
 
@@ -118,13 +175,13 @@ def test_identity_is_none_for_a_sandbox_that_is_not_ours(fake_sbx):
 
 
 def test_remove_deletes(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     sandbox.remove("md2okf")
     assert sandbox.exists("md2okf") is False
 
 
 def test_probe_reflects_configured_state(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     fake_sbx.probe_ok = True
     assert sandbox.probe("md2okf", Path("/work/okf")) is True
     fake_sbx.probe_ok = False
@@ -132,7 +189,7 @@ def test_probe_reflects_configured_state(fake_sbx):
 
 
 def test_key_is_proxy_managed(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     fake_sbx.openrouter_key = "proxy-managed"
     assert sandbox.key_is_proxy_managed("md2okf") is True
     fake_sbx.openrouter_key = "sk-literal-value"
@@ -140,7 +197,7 @@ def test_key_is_proxy_managed(fake_sbx):
 
 
 def test_exec_capture_runs_through_the_seam(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     fake_sbx.queue_hash("abc123456789")
     result = sandbox.exec_capture("md2okf", ["merkleokf", "--nolog", "-L", "0", "/work/okf"])
     assert result.returncode == 0
@@ -148,7 +205,7 @@ def test_exec_capture_runs_through_the_seam(fake_sbx):
 
 
 def test_exec_stream_yields_lines_then_returncode(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     fake_sbx.queue_turn(['{"type": "message_end"}', '{"type": "tool_execution_start"}'], returncode=0)
     stream = sandbox.exec_stream("md2okf", ["pi", "--mode", "json", "compile it"])
     lines = list(stream)
@@ -157,7 +214,7 @@ def test_exec_stream_yields_lines_then_returncode(fake_sbx):
 
 
 def test_exec_stream_propagates_nonzero_returncode(fake_sbx):
-    sandbox.create("md2okf", Path("/kit"), [], {})
+    sandbox.create("md2okf", Path("/kit"), None, [])
     fake_sbx.queue_turn(["oops"], returncode=1)
     stream = sandbox.exec_stream("md2okf", ["pi", "--mode", "json", "compile it"])
     list(stream)

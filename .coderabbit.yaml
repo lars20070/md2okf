@@ -50,15 +50,23 @@ reviews:
         directory, validate prerequisites early and exit non-zero with a clear
         message on stderr, clean up temporary resources with traps, keep
         secrets out of arguments and logs, and require ShellCheck-clean code.
-    - path: "**/spec.yaml"
+    - path: "kits/*/md2okf-*.yaml"
       instructions: |
-        For Docker Sandbox Kit specs, treat schema conformance as load-bearing:
-        flag renamed or restructured keys that a schema check would reject, and
-        say so rather than asserting the spec is valid. Keep capabilities
+        These are Docker Sandbox Kit schema v3 descriptors, built by the
+        frontend their `# syntax=` line pins. Treat schema conformance as
+        load-bearing: decoding is strict, so flag unknown or renamed keys, and
+        say so rather than asserting the descriptor is valid. Keep capabilities
         least-privilege and network access default-deny with a stated reason
-        for every allowed host, keep credentials proxy-managed and real secrets
-        out of the file, pin installed versions, make setup commands
-        idempotent, and bound retries and timeouts.
+        for every allowed host, split by install and runtime phase; keep
+        credentials proxy-managed and real secrets out of the file; list every
+        variable a lifecycle hook reads in its `env`; pin installed versions,
+        make hooks idempotent, and bound retries and timeouts.
+    - path: "kits/*/md2okf-*.dockerfile"
+      instructions: |
+        These are kit content recipes. Pin downloads by SHA-256, keep build
+        tools out of the final stage, and set owners explicitly: a mixin
+        overlay must keep /home root-owned and /home/agent owned by uid 1000,
+        and every other entry owned by root or uid 1000.
     - path: ".github/workflows/**"
       instructions: |
         Apply GitHub Actions best practices: pin third-party actions and

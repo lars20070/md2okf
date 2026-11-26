@@ -91,9 +91,9 @@ packages = ["src/md2okf"]
 # .agents/; only that skill is excluded there, not the whole directory.
 [tool.hatch.build.targets.sdist]
 # Anchored with a leading slash: a bare ".claude" is a gitignore-style pattern
-# that matches at any depth, and would also strip a kit's own
-# files/home/.claude/ (or kits/codex's files/home/.agents/) agent config out of
-# the sdist -- and so out of the wheel `uv build` makes from it.
+# that matches at any depth, and the same mistake with ".pi" would strip
+# kits/pi's files/home/.pi/ agent config out of the sdist -- and so out of the
+# wheel `uv build` makes from it.
 exclude = ["/.claude", "/.cursor", "/.agents/skills/lat-md", "/.codex/skills/lat-md"]
 
 [dependency-groups]

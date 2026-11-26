@@ -16,8 +16,7 @@ make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff,
                          # lat check (the lat.md/ knowledge graph); also
                          # VERSION ↔ CHANGELOG.md and VERSION ↔ every
                          # subproject (scripts/sync-versions.sh --check)
-make validate            # check every kits/*/spec.yaml against the Sandbox Kit schema
-make test-shell          # host test for the guest's session bind helper
+make validate            # build every kit with docker buildx and check it with kit-tck
 make test-web2md         # pytest, the web2md scraper suite
 make test-clis           # pytest, the four host CLI suites
 make test-md2okf         # pytest, the md2okf driver suite
@@ -44,11 +43,12 @@ MCP server are different: they call a bare `lat`, so install it once with
 `npm install -g lat.md@0.13.11` if you use them.
 `make check-okf` needs `okfctl`: `brew install cwest/tap/okfctl`.
 
-CI (`.github/workflows/ci.yml`) runs seven jobs on every pull request: `lint`,
-`test-shell`, `test-web2md`, `test-clis`, `test-md2okf`, `build-package` and
-`validate-kit`. Each one reuses the matching make target, so a green
-`make lint && make test-shell && make test-web2md && make test-clis &&
-make test-md2okf && make dist && make validate` locally means a green build.
+CI (`.github/workflows/ci.yml`) runs six jobs on every pull request: `lint`,
+`test-web2md`, `test-clis`, `test-md2okf`, `build-package` and `validate-kit`.
+Each one reuses the matching make target, so a green
+`make lint && make test-web2md && make test-clis && make test-md2okf &&
+make dist && make validate` locally means a green build (`validate-kit` builds
+both architectures; see below).
 
 ## Keep the knowledge graph current
 
@@ -60,25 +60,43 @@ one, follow the review steps in `lat.md/development.md`, "Keeping the graph
 current": `lat refs` finds the sections and back-references the change
 touches.
 
-## Validate the kit spec before you finish
+## Validate the kits before you finish
 
 Touch anything under `kits/` or `scripts/*.sh` and run `make validate`
-before you call the job done. It checks every kit spec against the schema bundled
-in your `sbx` binary, using `sbx kit validate --offline`, so it needs no running
-sbx daemon and no `sbx login`, and works on the host and inside a sandbox alike.
-It first checks your `sbx` against the minimum below; upgrade through Homebrew
-or APT when it reports an older install.
+before you call the job done. The kits are Sandbox Kit schema v3 source kits,
+which `sbx kit validate` cannot read, so `make validate` builds each one with
+`docker buildx` and checks the artifact with `kit-tck`. The kit frontend, pinned
+by digest in each descriptor's `# syntax=` line, rejects a malformed descriptor
+before it builds anything; kit-tck then checks annotations, layers, image config
+and overlay ownership, and the script checks that a mixin ships nothing owned by
+anyone but root and the agent.
+
+It needs Docker with Buildx and
+[kit-tck 3.0.0-m.12](https://github.com/docker/sandbox-kit-spec/releases/tag/v3.0.0-m.12),
+the spec version sbx 0.54.0 bundles; it needs no sbx daemon and no login. It
+creates a `docker-container` Buildx builder called `md2okf-kits` if none is
+named in `KIT_BUILDER`, because exporting an OCI layout needs one. A cold run
+pulls the frontend and the base images, so it is not offline. It builds
+`linux/amd64` and `linux/arm64`; without QEMU, build only your own platform
+with `make validate KIT_PLATFORMS=linux/arm64` (or `linux/amd64`). When `sbx`
+is installed, it is first checked against the minimum below.
+
+This is separate from how users get the kits built: `sbx` builds a local source
+kit itself, with host Buildx when there is one and its own builder sandbox
+otherwise, so `md2okf` users need no Docker.
+
+Each kit is checked alone. How a mixin composes onto its workload — a file, a
+credential or a hook that clashes — shows only in a live sandbox, through
+`make test-sandbox`.
 
 ### The sbx minimum
 
 `SBX_VERSION` holds one plain `X.Y.Z`: the single sbx floor for every agent.
 The driver refuses an older `sbx` (the wheel carries the file, so an installed
 `md2okf` enforces the same floor as a checkout), and `make validate` does the
-same. CI's `validate-kit` job installs exactly that release, verified by
-checksum, so the kits are always checked against one known schema. Local
-installations may be newer, and those newer releases are not tested by CI.
-The job runs `make validate`, which uses `sbx kit validate --offline`, so it
-needs no daemon and no `sbx login`.
+same wherever `sbx` is installed. CI's `validate-kit` job installs exactly that
+release, verified by checksum. Local installations may be newer, and those
+newer releases are not tested by CI.
 
 To raise the minimum, change all of these together:
 
@@ -87,12 +105,60 @@ To raise the minimum, change all of these together:
    the SHA-256 of that release's `DockerSandboxes-linux.tar.gz`.
 3. The sbx version in the "Install sbx" section of `README.md`.
 4. A Changed entry in `CHANGELOG.md`.
+5. If the release bundles a newer kit spec: the `# syntax=` frontend digest in
+   every `kits/*/md2okf-*.yaml`, `KIT_TCK_VERSION` in
+   `scripts/validate-spec.sh`, and the kit-tck version and checksum in the
+   `validate-kit` job.
+
+The test suite reads the floor from `SBX_VERSION`, so it needs no edit. The
+fingerprint includes the sbx version, so every sandbox rebuilds once after an
+upgrade.
+
+### The pinned workloads
+
+The Claude Code and Codex kits are mixins over Docker's published `claude` and
+`codex` workloads, pinned in `src/md2okf/agents.py` (`CLAUDE_WORKLOAD`,
+`CODEX_WORKLOAD`) by multi-platform index digest, never by a floating tag or a
+bare agent name. The digest is part of the sandbox fingerprint, so bumping it
+rebuilds that agent's sandbox on its next run, and nothing else does. Before a
+bump, read the candidate's descriptor — what it provides, its hooks, its
+agent-context and skills paths — without a daemon:
+
+```bash
+ref=docker.io/sbx/claude@sha256:<index digest>
+kit-tck inspect --descriptor "$ref" | grep -v '^  - deb/'
+```
+
+Then run `make test-sandbox AGENT=claude` (or `codex`) against it.
+
+### Piloting a kit change
+
+`MD2OKF_SANDBOX_NAME` (maintainer-only) replaces the sandbox name for every
+agent. Pair it with a temporary `XDG_STATE_HOME`, so the pilot gets its own
+workbench and ownership marker and leaves your working sandbox and its
+transcripts alone:
+
+```bash
+export MD2OKF_SANDBOX_NAME=md2okf-pilot XDG_STATE_HOME="$(mktemp -d)"
+make test-sandbox AGENT=claude
+sbx rm --force md2okf-pilot
+```
+
+Changing only the state directory leaves the usual name occupied and without
+its marker, so the driver refuses it as unowned; changing only the name would
+reuse the real workbench.
+
+On a failed create, the install hooks' logs are in
+`/var/log/sbx-kits/<kit>/install-<n>.log` inside the sandbox. The driver runs
+`sbx run --no-input`, so a question sbx would ask — a kit's permissions needing
+confirmation, say — fails with the command that answers it, and `md2okf`
+prints that diagnostic.
 
 The test suite reads the floor from `SBX_VERSION`, so it needs no edit.
 
 `make test-sandbox` asks the other question: does each agent's sandbox
-actually have every tool its `kits/<agent>/spec.yaml` installs, the agent
-config copied in from `kits/<agent>/files/`, and a ready credential? It needs
+actually have every tool its kit installs, the agent config and skills from
+`kits/<agent>/files/`, and a ready credential? It needs
 an `sbx login` session, and each agent's credential (see the README's
 "Choosing an agent").
 Like the scripts below it reuses the sandbox — fast, and nothing a compile left
@@ -214,21 +280,22 @@ A skill is a directory holding a `SKILL.md` — YAML frontmatter with a `name` a
 up from `~/.pi/agent/skills/`, Claude Code from `~/.claude/skills/`, Codex from
 `~/.agents/skills/`. A change to a skill or to the shared contract belongs in
 every kit: `tests/test_kits.py` checks each kit for the shared rules, its own
-`generated.by` producer, and byte-identical helper and gate scripts.
+`generated.by` producer, byte-identical gate scripts and the one shim hook
+every kit shares.
 
-The kit is `kits/pi/`, and the config it carries lives in
-`kits/pi/files/home/.pi/agent/`. That config is copied into the sandbox when
-the kit is built, not mounted, so an edit reaches Pi on the next fresh sandbox —
+Pi's kit is `kits/pi/`, and the config it carries lives in
+`kits/pi/files/home/.pi/agent/`. The Claude Code and Codex kits keep their
+skills in `kits/<agent>/files/skills/` and their instructions in the
+`agent-context@2` entry of their descriptor. All of it is built into the
+sandbox, not mounted, so an edit reaches the agent on the next fresh sandbox —
 which `md2okf` builds by itself once the kit's hash no longer matches what the
 running one was built from, or immediately on `--fresh`.
 [The kit guide](kits/pi/README.md) covers the model and provider settings.
 
 `tests/` holds the paired live-sandbox checks (`test-sandbox.sh`, which asks the
 driver for a sandbox and then calls `sbx`, and the POSIX `sh` script it runs
-inside the VM), plus `test-mount-state.sh` for the guest-side bind helper and
-the `md2okf-agent` wrapper every agent process starts through. The driver's own
-suite is pytest, under the same `tests/` directory; `test_kits.py` in it checks
-every kit's instructions statically.
+inside the VM). The driver's own suite is pytest, under the same `tests/`
+directory; `test_kits.py` in it checks every kit's instructions statically.
 
 ## Checking the wiki
 

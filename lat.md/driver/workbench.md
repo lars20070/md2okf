@@ -16,7 +16,7 @@ Runs differ only in the contents of the mount roots, never in the roots themselv
 2. `work/md`, read-only: this run's staged documents.
 3. `work/scripts`, read-only: the four helper CLI projects.
 4. `work/SPEC.md`, read-only: the bundled OKF spec.
-5. `sessions`, read-write: the agent's transcripts, the only persistent state inside the sandbox.
+5. `sessions`, read-write: the agent's transcripts, the only persistent state inside the sandbox. It is mounted at the agent's own trace directory (`trace_target` on [[src/md2okf/agents.py#Agent]]), not at its host path; the other four keep their host paths.
 
 No read-write mount contains a read-only one: `work/` itself is never mounted, so the agent cannot reach around a read-only mount through a writable parent. [[src/md2okf/workbench.py#Workbench#ensure_roots]] creates the roots before the first `sbx run`, because sbx cannot mount a missing path. After that it never replaces them.
 

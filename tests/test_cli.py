@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import shlex
 from pathlib import Path
 
 import pytest
@@ -100,9 +101,8 @@ def test_dry_run_prints_the_command_lines_that_would_run(tmp_path, capsys, isola
     out = capsys.readouterr().out
     assert "commands:" in out
     assert "  agent:  pi\n" in out
-    assert f"sbx run --detach --name {PI_SANDBOX} " in out
-    assert f"{resources.kit_dir('pi')} " in out
-    pi_argv = "md2okf-agent pi --mode json --no-mcp --tools -tool_search"
+    assert f"sbx run --detach --no-input --name {PI_SANDBOX} {resources.kit_dir('pi')} " in out
+    pi_argv = "pi --mode json --no-mcp --tools -tool_search"
     assert f"sbx exec {PI_SANDBOX} -- {pi_argv} 'Load the compile-okf skill" in out
     assert doc.name in out  # the staged basename is embedded in the pi prompt
     assert fake_sbx.calls == []
@@ -112,7 +112,21 @@ def test_dry_run_shows_the_agents_workbench(tmp_path, capsys, isolated_state, fa
     doc = _md(tmp_path)
     assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
     out = capsys.readouterr().out
-    assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'pi'} " in out
+    sessions = isolated_state / "xdg-state" / "md2okf" / "pi" / "sessions"
+    assert f"    {sessions}:/home/agent/.pi/agent/sessions\n" in out
+    assert "MD2OKF_STATE_DIR" not in out
+
+
+def test_dry_run_prints_the_argv_create_runs(tmp_path, capsys, isolated_state, fake_sbx, monkeypatch):
+    """One builder for both: the dry run cannot drift from what create() executes."""
+    monkeypatch.setenv("MD2OKF_AGENT", "codex")
+    assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(_md(tmp_path))]) == 0
+    out = capsys.readouterr().out
+    wb = workbench.Workbench.default("codex")
+    expected = sandbox.run_argv(
+        CODEX_SANDBOX, resources.kit_dir("codex"), agents.CODEX.workload_ref, wb.mounts(agents.CODEX.trace_target)
+    )
+    assert f"    {shlex.join(expected)}\n" in out
 
 
 @pytest.mark.parametrize("flags", [["--dry-run"], [], ["--shell"], ["--agent"]])
@@ -408,7 +422,7 @@ def test_shell_execs_an_interactive_bash_in_the_sandbox(isolated_state, fake_sbx
 def test_agent_execs_a_bare_interactive_agent_in_the_sandbox(isolated_state, fake_sbx, a_tty):
     with pytest.raises(ExecvpCalled) as excinfo:
         cli.main(["--agent"])
-    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "md2okf-agent", "pi"]
+    assert excinfo.value.argv == ["sbx", "exec", "-it", PI_SANDBOX, "--", "pi"]
 
 
 def test_shell_opens_with_a_warning_when_credentials_are_not_ready(isolated_state, fake_sbx, a_tty, capsys):
@@ -600,11 +614,14 @@ def test_claude_dry_run_resolves_its_own_sandbox_kit_workbench_and_argv(tmp_path
     assert cli.main(["--dry-run", "-o", str(tmp_path / "out"), str(doc)]) == 0
     out = capsys.readouterr().out
     assert "  agent:  claude\n" in out
-    assert f"sbx run --detach --name {CLAUDE_SANDBOX} " in out
-    assert f"MD2OKF_STATE_DIR={isolated_state / 'xdg-state' / 'md2okf' / 'claude'} " in out
-    assert f"{resources.kit_dir('claude')} " in out
     assert (
-        f"sbx exec {CLAUDE_SANDBOX} -- md2okf-agent claude -p --output-format stream-json --verbose "
+        f"sbx run --detach --no-input --name {CLAUDE_SANDBOX} --kit {resources.kit_dir('claude')} "
+        f"{agents.CLAUDE_WORKLOAD} {isolated_state / 'xdg-state' / 'md2okf' / 'claude' / 'work' / 'okf'} "
+    ) in out
+    sessions = isolated_state / "xdg-state" / "md2okf" / "claude" / "sessions"
+    assert f" {sessions}:/home/agent/.claude/projects\n" in out
+    assert (
+        f"sbx exec {CLAUDE_SANDBOX} -- claude -p --output-format stream-json --verbose "
         "--permission-mode bypassPermissions --strict-mcp-config 'Load the compile-okf skill: "
         "read ~/.claude/skills/compile-okf/SKILL.md"
     ) in out
@@ -631,7 +648,7 @@ def test_claude_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated
     assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
     assert "Write {'file_path': " in err  # -v renders Claude's tool calls like Pi's
     assert sandbox.exists(CLAUDE_SANDBOX)
-    assert all(argv[:2] == ["md2okf-agent", "claude"] for argv in claude.turn_argvs)
+    assert all(argv[:2] == ["claude", "-p"] for argv in claude.turn_argvs)
     assert (tmp_path / "out" / "page.md").is_file()
 
 
@@ -644,12 +661,12 @@ def test_claude_compile_refuses_when_not_logged_in(tmp_path, capsys, isolated_st
     assert claude.turn_argvs == []
 
 
-def test_claude_agent_session_runs_through_the_wrapper(isolated_state, claude, a_tty):
+def test_claude_agent_session_runs_claude_directly(isolated_state, claude, a_tty):
     with pytest.raises(ExecvpCalled) as excinfo:
         cli.main(["--agent"])
     assert excinfo.value.argv == [
         "sbx", "exec", "-it", CLAUDE_SANDBOX, "--",
-        "md2okf-agent", "claude", "--permission-mode", "bypassPermissions",
+        "claude", "--permission-mode", "bypassPermissions",
     ]  # fmt: skip
 
 
@@ -702,7 +719,7 @@ def test_codex_compiles_a_captured_stream_end_to_end(tmp_path, capsys, isolated_
     assert out.strip().split("\t")[1:] == ["2", "aaaa0000", "bbbb1111"]
     assert "file_change add /Users/user/" in err
     assert "Reading additional input" not in err
-    assert fake_sbx.turn_argvs[0][:3] == ["md2okf-agent", "codex", "exec"]
+    assert fake_sbx.turn_argvs[0][:2] == ["codex", "exec"]
     assert fake_sbx.turn_argvs[0][-1].startswith("$compile-okf Compile ")
     assert sandbox.exists(CODEX_SANDBOX)
 

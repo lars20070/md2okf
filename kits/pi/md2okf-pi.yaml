@@ -1,0 +1,248 @@
+# syntax=docker/sandbox-kit:3@sha256:8561468d43a0466e24dd048e3c6c2115d878ee36d71c4571195f1de2a63c2b5b
+# md2okf's Pi kit: a schema v3 WORKLOAD. Runs the Pi terminal coding agent in a
+# Docker Sandbox microVM, configured for OpenRouter and proxy-managed API
+# credentials. md2okf runs it as `sbx run <this directory> ...`. The frontend
+# above (kit-spec v3.0.0-m.12, the one sbx 0.54.0 bundles) builds
+# md2okf-pi.dockerfile beside this file into the kit's image. It is pinned by
+# digest because it produces the published bytes.
+#
+# The image, entrypoint and Pi's whole config (files/home/.pi/agent/, with
+# the instructions in its AGENTS.md) live in the recipe; this descriptor holds
+# what the sandbox needs from the host.
+#
+# MIGRATION NOTE (v2 -> v3): the v2 kit's entrypoint, startup hook and
+# `md2okf-agent` wrapper bind-mounted ~/.pi/agent/sessions onto
+# $MD2OKF_STATE_DIR/sessions inside the VM, and exported the GitHub token
+# under the names its consumers read. md2okf now mounts the host sessions
+# directory at ~/.pi/agent/sessions as an additional workspace
+# (PATH:TARGET), and the `github` credential below is named GITHUB_TOKEN,
+# which both gh and mcp.json read, so none of that plumbing is left.
+schemaVersion: "3"
+kind: workload
+version: "1.0.0"
+displayName: md2okf for Pi
+description: >-
+  Runs the Pi terminal coding agent in a Docker Sandbox microVM for md2okf,
+  configured for OpenRouter and proxy-managed API credentials.
+sourceUrl: https://github.com/lars20070/md2okf
+licenses: [MIT]
+
+capabilities:
+  # The host launches Pi under bash with the image's user (agent), rather
+  # than letting the entrypoint be PID 1.
+  - type: com.docker.sandbox/sbx@1
+
+  # Default-deny: every host the kit reaches must be listed. Pointing Pi at a
+  # different provider means adding its host here too -- see "Using another
+  # provider" in the README.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      # Only while the install hooks below run. Package mirrors are portless,
+      # which is what apt needs.
+      install:
+        allow:
+          # apt-get update refreshes every template source, so all of them
+          # must be reachable: Ubuntu amd64 (archive/security), arm64 (ports),
+          # and Docker's apt repo (pre-added by shell-docker).
+          - "archive.ubuntu.com"
+          - "security.ubuntu.com"
+          - "ports.ubuntu.com"
+          - "download.docker.com"
+          # npm: context7-pi, markdownlint-cli2, cspell. Pi itself comes
+          # prebuilt in the base image.
+          - "registry.npmjs.org:443"
+          # uv tool install: ruff, yamllint (index + wheels).
+          - "pypi.org:443"
+          - "files.pythonhosted.org:443"
+          # `pi install` (Context7 package) bootstraps against Pi's service.
+          - "pi.dev"
+      runtime:
+        allow:
+          # Model API. The openrouter credential below injects here.
+          - "openrouter.ai"
+          # Pi service bootstrap.
+          - "pi.dev"
+          # npm, as the v2 kit allowed it at run time.
+          - "registry.npmjs.org:443"
+          # The inspectmd/inspectokf/sizeokf/merkleokf shims are `uv tool
+          # run --from` the mounted projects, so a cold uv cache resolves
+          # their build backend (hatchling) from PyPI at run time.
+          - "pypi.org:443"
+          - "files.pythonhosted.org:443"
+          # GitHub: the GitHub MCP server's API calls and `gh`
+          # (api.github.com), and git over HTTPS (github.com). The `github`
+          # credential below injects into both. github.com redirects release
+          # downloads to a GitHub CDN host; today that is
+          # objects.githubusercontent.com, and release-assets is used too. No
+          # gist hosts: Pi's `/share` is not needed here.
+          - "api.github.com:443"
+          - "github.com:443"
+          - "objects.githubusercontent.com:443"
+          - "release-assets.githubusercontent.com:443"
+          # mq docs and language reference (mqlang.org/book/), for the agent
+          # to consult at runtime. Host only: kit rules match hosts, not paths.
+          - "mqlang.org:443"
+          # Context7 docs API (native @upstash/context7-pi extension).
+          - "context7.com:443"
+          # MIGRATION NOTE: the v2 list was one flat list, so the apt mirrors
+          # were reachable at run time too; nothing at run time needs them.
+          # The mq, okfctl and github-mcp-server downloads moved into the
+          # recipe, so the install phase no longer reaches GitHub.
+
+  # Credentials declare WHAT the kit needs and how the proxy injects it, not
+  # where it lives on the host (that comes from `sbx secret`). proxyManaged
+  # sets OPENROUTER_API_KEY inside the container as the proxy-managed
+  # sentinel.
+  #
+  # Optional, unlike v3's default: a required credential with nothing bound
+  # stops creation before the VM exists, and `md2okf --shell` must still open
+  # a diagnostic shell when the key is missing. md2okf checks the sentinel
+  # itself on every create and reuse (agents._pi_check_credentials), and a
+  # compile refuses with the remedy when it is absent.
+  - type: com.docker.sandbox/credential@1
+    optional: true
+    description: OpenRouter model API key
+    config:
+      service: openrouter
+      phase: runtime
+      apiKey:
+        name: OPENROUTER_API_KEY
+        proxyManaged: true
+        inject:
+          - domain: openrouter.ai
+            header: Authorization
+            format: "Bearer %s"
+
+  # Optional, in the same shape as Docker's github-clone mixin. GITHUB_TOKEN
+  # is the sentinel: a bearer token on api.github.com (gh, github-mcp-server)
+  # and x-access-token basic auth on github.com (git over HTTPS). gh reads
+  # GITHUB_TOKEN, and mcp.json hands it to the GitHub MCP server as
+  # GITHUB_PERSONAL_ACCESS_TOKEN. `sbx secret set github` on the host binds
+  # it, and only at create time; with nothing bound, SBX_CRED_GITHUB_MODE
+  # reads `none` and GitHub stays unauthenticated. A bound token is usable by
+  # every process in the sandbox, compile turns included -- see the README's
+  # "GitHub MCP server" before binding one.
+  - type: com.docker.sandbox/credential@1
+    optional: true
+    description: GitHub access for gh, git over HTTPS and the GitHub MCP server
+    config:
+      service: github
+      phase: runtime
+      apiKey:
+        name: GITHUB_TOKEN
+        proxyManaged: true
+        inject:
+          - domain: api.github.com
+            header: Authorization
+            format: "Bearer %s"
+          - domain: github.com
+            scheme: basic
+            username: x-access-token
+
+  # MIGRATION NOTE: the base image carries the v2 start-docker label, which
+  # started an in-sandbox Docker engine. Nothing in md2okf uses Docker inside
+  # Pi, so the kit declares no dockerd@1, and the recipe turns the label off.
+  #
+  # MIGRATION NOTE: the v2 agentInstructions (the sandbox layout and the
+  # installed tools) now live in the shipped ~/.pi/agent/AGENTS.md, the file
+  # Pi reads, so the kit declares no agent-context profile of its own.
+
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      # Run once at create, in order. Hook environments are deny-by-default:
+      # every variable a hook or its children read (the proxy for apt, npm,
+      # uv and pi; npm's prefix) is listed in `env`.
+      install:
+        # Distro CLI tools the agent shells out to. No fd-find here: the base
+        # image ships it, with an `fd` link next to Ubuntu's `fdfind`. Pi
+        # needs one of the two on PATH, or it downloads an unpinned `fd` from
+        # GitHub releases at first launch. ripgrep covers Pi's other bundled
+        # tool the same way.
+        - command: |
+            set -eu
+            apt_get() {
+              timeout 600 apt-get \
+                -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=30 \
+                -o Acquire::https::Timeout=30 \
+                "$@"
+            }
+            apt_get update
+            apt_get install -y --no-install-recommends \
+              curl \
+              jq \
+              python3 \
+              ripgrep \
+              shellcheck \
+              tree
+          user: "0"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
+          description: Install distro CLI tools
+
+        # npm through the sandbox proxy is flaky on this image. `npm config`
+        # writes ~/.npmrc, so every later npm step inherits it -- which is why
+        # this runs before the first of them, as the same user (1000) that
+        # owns that ~/.npmrc.
+        - command: |
+            set -eu
+            proxy="${HTTP_PROXY:-${HTTPS_PROXY:-}}"
+            if [ -z "${proxy}" ]; then
+              echo "md2okf: no proxy in the hook environment; leaving npm unconfigured" >&2
+              exit 0
+            fi
+            npm config set proxy "${proxy}"
+            npm config set https-proxy "${proxy}"
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NPM_CONFIG_PREFIX]
+          description: Configure npm proxy
+
+        # NPM_CONFIG_PREFIX is the image's agent-owned global prefix, on PATH.
+        - command: npm install --global markdownlint-cli2@0.23.2 cspell@10.0.1
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy, NPM_CONFIG_PREFIX]
+          description: Install Markdown and spelling linters
+
+        - command: |
+            set -eu
+            uv tool install ruff@0.16.2
+            uv tool install yamllint@1.38.0
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy]
+          description: Install Python linters
+
+        # Native Pi package (not MCP): tools + context7-docs skill under
+        # ~/.pi/agent/npm/. `pi install` also records it in settings.json,
+        # which the kit already ships with the same pin.
+        - command: |
+            set -eu
+            CONTEXT7_PI_VERSION=0.1.3
+            pi install "npm:@upstash/context7-pi@${CONTEXT7_PI_VERSION}"
+          user: "1000"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy, NPM_CONFIG_PREFIX]
+          description: Install Context7 Pi extension
+
+        # The four helper CLIs are shims over the projects md2okf mounts
+        # read-only at ../scripts, beside the wiki, so they always run the
+        # mounted tree. Written here because `$VAR` stays literal in v3
+        # lifecycle files: the install hook bakes the path from WORKSPACE_DIR,
+        # which then needs no environment under a plain `sbx exec`.
+        # Identical in every md2okf kit (tests/test_kits.py).
+        - command: |
+            set -eu
+            : "${WORKSPACE_DIR:?is not set, so the helper CLI projects cannot be located}"
+            scripts="$(dirname "${WORKSPACE_DIR}")/scripts"
+            case "${scripts}" in
+            *"'"*)
+              echo "md2okf: cannot write a shim for a path with a single quote: ${scripts}" >&2
+              exit 1
+              ;;
+            esac
+            mkdir -p "${HOME}/.local/bin"
+            for cli in inspectmd inspectokf sizeokf merkleokf; do
+              printf '#!/bin/sh\nset -eu\nexec uv tool run --from '"'"'%s/%s'"'"' %s "$@"\n' \
+                "${scripts}" "${cli}" "${cli}" >"${HOME}/.local/bin/${cli}"
+              chmod 0755 "${HOME}/.local/bin/${cli}"
+            done
+          user: "1000"
+          env: [WORKSPACE_DIR]
+          description: Write the workspace-backed helper CLI shims

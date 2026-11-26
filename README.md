@@ -35,7 +35,7 @@ flowchart LR
     MD@{ shape: docs, label: "source documents<br>md/*.md"}
     STATE["session traces<br/>~/.local/state/md2okf/*/sessions"]
     DRV["host driver<br>md2okf -o okf/ md/"]
-    KIT["kits/*/spec.yaml<br/>kits/*/files/"]
+    KIT["kits/*/md2okf-*.yaml<br/>kits/*/files/"]
   end
 
   subgraph VM["sbx microVM"]
@@ -144,7 +144,7 @@ The first flag opens a shell inside the sandbox, at the wiki root; the second op
 
 ## Install sbx
 
-Install the `sbx` command-line tool, version 0.50.0 or newer, and sign in.
+Install the `sbx` command-line tool, version 0.54.0 or newer, and sign in.
 `md2okf` refuses an older `sbx`.
 
 [macOS:](https://docs.docker.com/ai/sandboxes/install/#install-on-macos)

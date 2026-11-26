@@ -128,34 +128,65 @@ def exists(name: str) -> bool:
 
 @dataclass(frozen=True)
 class Mount:
-    """One `sbx run` workspace argument."""
+    """One `sbx run` workspace argument: PATH[:TARGET][:ro]."""
 
     path: Path
     readonly: bool = False
+    target: str | None = None
+    """The absolute guest path to mount at. None mounts at the host path itself."""
 
     def as_arg(self) -> str:
         """The positional argument `sbx run` expects for this mount."""
-        return f"{self.path}:ro" if self.readonly else str(self.path)
+        arg = str(self.path)
+        if self.target is not None:
+            arg += f":{self.target}"
+        return f"{arg}:ro" if self.readonly else arg
+
+
+# @lat: [[sandbox#Launch]]
+def run_argv(name: str, kit_dir: Path, workload_ref: str | None, mounts: Iterable[Mount]) -> list[str]:
+    """The `sbx run` argv that creates `name`; also what --dry-run prints.
+
+    With no `workload_ref`, `kit_dir` is itself the workload (Pi). Otherwise
+    it is a mixin, composed with `--kit` onto that published workload
+    (Claude Code, Codex). A local kit needs an explicit path, so it is passed
+    absolute. `--no-input` turns any question sbx would ask -- a kit's
+    permissions needing confirmation, say -- into a failure that names the
+    command to run, since create() captures every stream and has no
+    terminal to ask on.
+    """
+    argv = ["sbx", "run", "--detach", "--no-input", "--name", name]
+    if workload_ref is None:
+        argv.append(str(kit_dir.absolute()))
+    else:
+        argv += ["--kit", str(kit_dir.absolute()), workload_ref]
+    argv += [mount.as_arg() for mount in mounts]
+    return argv
+
+
+def _diagnostic(result: subprocess.CompletedProcess[str]) -> str:
+    """What sbx said about a failure: stderr, else stdout, else the exit code."""
+    return result.stderr.strip() or result.stdout.strip() or f"exit status {result.returncode}"
 
 
 # @lat: [[sandbox#Ownership token]]
-def create(name: str, kit_dir: Path, mounts: Iterable[Mount], env: dict[str, str]) -> str:
+def create(name: str, kit_dir: Path, workload_ref: str | None, mounts: Iterable[Mount]) -> str:
     """Recreate `name` over `mounts`, and return its fresh owner token.
 
     Tolerates a prior sandbox by this name not existing, mirroring today's
     `sbx rm --force ... || true`. Raises SandboxError on any failure from here
     on — a failed create must leave no ownership marker (see workbench.py).
+    The error carries sbx's own diagnostic, which for a refused first run
+    names the command that confirms it.
     """
     _run(["sbx", "rm", "--force", name])
 
-    argv = ["sbx", "run", "--detach", "--name", name]
-    for key, value in env.items():
-        argv += ["-e", f"{key}={value}"]
-    argv.append(str(kit_dir))
-    argv += [mount.as_arg() for mount in mounts]
-    result = _run(argv)
+    result = _run(run_argv(name, kit_dir, workload_ref, mounts))
     if result.returncode != 0:
-        raise SandboxError(f"sbx run failed for {name!r}: {result.stderr.strip()}")
+        raise SandboxError(
+            f"sbx run failed for {name!r}: {_diagnostic(result)}\n"
+            "  A failed kit install hook logs to /var/log/sbx-kits/<kit>/ inside the sandbox."
+        )
 
     token = secrets.token_hex(16)
     written = _run(["sbx", "exec", name, "--", "sh", "-c", f"echo {token} >{OWNER_TOKEN_PATH}"])

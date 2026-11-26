@@ -30,7 +30,7 @@ The run lock is taken with `survive_exec`, so the replacement process inherits t
 
 `--dry-run` resolves and validates the inputs, then prints the agent, spec, output, documents, mounts and the `sbx` command lines that would run.
 
-[[src/md2okf/cli.py#_print_dry_run]] needs no `sbx`, takes no lock and starts nothing paid. It shows the `sbx run` line unconditionally, because whether the sandbox would be reused is a live decision that would mean querying `sbx`. It shows only the first iteration's agent command, since how many iterations run is what compiling decides.
+[[src/md2okf/cli.py#_print_dry_run]] needs no `sbx`, takes no lock and starts nothing paid. It shows the `sbx run` line unconditionally, because whether the sandbox would be reused is a live decision that would mean querying `sbx`. That line comes from the same builder `create` runs (see [[sandbox#Launch]]). It shows only the first iteration's agent command, since how many iterations run is what compiling decides.
 
 ## Exit codes
 

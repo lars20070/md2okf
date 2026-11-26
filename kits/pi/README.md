@@ -1,26 +1,31 @@
 # kits/pi
 
-The Docker Sandbox kit that runs Pi. `spec.yaml` declares the image, the network
-allowlist, the credentials and the pinned installs — the linters, the GitHub MCP
-server, and the `mq` and `okfctl` release binaries. Pi itself comes prebuilt in
-the image, which is pinned by digest (see [Bumping Pi](#bumping-pi)).
-Everything under `files/home/` is copied into the sandbox at `~/`, so
+The Docker Sandbox kit that runs Pi: a Sandbox Kit schema v3 **workload**, the
+whole sandbox, in two files. `md2okf-pi.yaml`, the descriptor, declares what
+the sandbox needs from the host: the network allowlist per phase, the
+credentials, and the install hooks for the linters and the Context7 package.
+`md2okf-pi.dockerfile`, the recipe, builds the image: Docker's Pi image, pinned
+by digest (see [Bumping Pi](#bumping-pi)), plus the GitHub MCP server and the
+`mq` and `okfctl` release binaries, each checked against a pinned SHA-256, and
+Pi's config. Everything under `files/home/` lands in the agent's home, so
 `files/home/.pi/agent/` becomes Pi's config directory: `AGENTS.md`,
-`settings.json`, `models.json`, `mcp.json` and `skills/`.
+`settings.json`, `models.json`, `mcp.json` and `skills/`. `AGENTS.md` carries
+the whole contract, the sandbox layout and the installed tools included; the kit
+declares no `agent-context` of its own.
 
-The `files/` level is fixed by the Sandbox Kit schema. It cannot be renamed or
-moved.
+Config is built in, not mounted, so an edit reaches Pi on the next fresh
+sandbox — which `md2okf` builds when the kit changes, or on `--fresh`.
 
-Config is copied in when the kit is built, not mounted, so an edit reaches Pi on
-the next fresh sandbox — which `md2okf` builds when the kit changes, or on
-`--fresh`.
+The base image starts an in-sandbox Docker engine through a v2 label. Nothing
+in md2okf uses Docker inside Pi, so the kit declares no `dockerd@1` and the
+recipe turns the label off.
 
 ## Bumping Pi
 
 Pi is not installed by a setup step. It comes with Docker's own Pi image,
 `docker.io/sbx/pi-image`
 ([`docker/sbx-kits-contrib`](https://github.com/docker/sbx-kits-contrib/tree/main/pi)),
-which `sandbox.image` pins by index digest. Since 1.0.1 Pi ships no lockfile, so
+which the recipe's `FROM` pins by index digest. Since 1.0.1 Pi ships no lockfile, so
 npm no longer pins its dependencies; the image resolved them when Docker built
 it, and the digest freezes that result, together with the `shell-docker`
 template beneath it, for both architectures at once. Template fixes therefore
@@ -43,7 +48,7 @@ done
 
 Pin the index digest only if both platforms print the version you want. Then:
 
-1. Put it in `sandbox.image` in `spec.yaml`.
+1. Put it in the `FROM` line of `md2okf-pi.dockerfile`.
 2. Set `EXPECTED_PI_VERSION` in `tests/test-sandbox-guest-pi.sh` to match.
 3. Read Pi's changelog for the versions in between, with an eye on
    `--mode json` (which `src/md2okf/protocols/pi.py` parses) and the session
@@ -95,10 +100,12 @@ Switching to it takes four steps.
 2. **Choose it.** In `files/home/.pi/agent/settings.json`, set
    `"defaultProvider": "litellm"` and `"defaultModel"` to the model id. Pi needs
    both, and both must match an entry in `models.json`.
-3. **Open the road.** Add the gateway's host to `permissions.network.allow` in
-   `spec.yaml`, and give it a `credentials` entry like the OpenRouter one:
-   `header: Authorization`, `format: "Bearer %s"`, which is how LiteLLM
-   authenticates too.
+3. **Open the road.** Add the gateway's host to the `runtime` allow list of the
+   `network-policy@1` entry in `md2okf-pi.yaml`, and give it a `credential@1`
+   entry like the OpenRouter one: `header: Authorization`,
+   `format: "Bearer %s"`, which is how LiteLLM authenticates too. Keep it
+   `optional: true` unless a missing key should stop the sandbox from being
+   created at all.
 4. **Hand over the key**, then run `md2okf md/`, which builds the kit and
    copies the config in.
 
@@ -115,10 +122,10 @@ exported variable, as above, at least keeps it out of your shell history.
 
 ## Context7 docs extension
 
-The kit installs `@upstash/context7-pi` (pinned in `setup.install` and listed
+The kit installs `@upstash/context7-pi` (pinned in an install hook and listed
 under `packages` in `settings.json`). That is a native Pi package — not MCP —
 and registers `resolve-library-id`, `query-docs`, and the `context7-docs` skill.
-Egress to `context7.com` is allowlisted in `spec.yaml`.
+Egress to `context7.com` is allowlisted in `md2okf-pi.yaml`.
 
 ### Why the litellm entry spells out its numbers
 
@@ -169,10 +176,12 @@ than a routing one. A hang or a DNS failure means it does not.
 
 ## GitHub MCP server
 
-The kit runs GitHub's MCP server, `github-mcp-server` (pinned in
-`setup.install` by version and SHA-256), locally over stdio. It is configured
-in `files/home/.pi/agent/mcp.json`, and authenticates through an optional
-`github` credential that `spec.yaml` declares.
+The kit runs GitHub's MCP server, `github-mcp-server` (pinned in the recipe by
+version and SHA-256), locally over stdio. It is configured in
+`files/home/.pi/agent/mcp.json`, and authenticates through an optional
+`github` credential that `md2okf-pi.yaml` declares. The credential's variable
+is `GITHUB_TOKEN`, which `gh` reads and `mcp.json` hands to the server as
+`GITHUB_PERSONAL_ACCESS_TOKEN`.
 
 ### What a bound token can reach
 
@@ -228,14 +237,12 @@ that file there yourself.
 ### Diagnosing it
 
 ```bash
-sbx exec md2okf-pi -- md2okf-agent pi mcp list
+sbx exec md2okf-pi -- pi mcp list
 ```
 
-Or run `/mcp` inside `md2okf --agent`. Never a bare `pi mcp list`: a plain
-`sbx exec` skips the entrypoint, and only the entrypoint and the `md2okf-agent`
-wrapper export `GITHUB_TOKEN`, which `mcp.json` expands. Without it the server
-starts with no token, and the listing reports a failure that a real session
-would not have.
+Or run `/mcp` inside `md2okf --agent`. sbx sets `GITHUB_TOKEN` in every
+process of the sandbox, a plain `sbx exec` included, so the listing sees what a
+real session sees.
 
 `make test-sandbox AGENT=pi` runs the authenticated checks (`gh auth status`,
 the server connected, one read-only `get_me` call) when a secret is bound, and

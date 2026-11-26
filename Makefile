@@ -7,7 +7,7 @@
 #   MARKDOWNLINT  markdownlint-cli2 launcher. Local: the brew-installed command.
 #                 CI: `npx --yes markdownlint-cli2` (no global install needed).
 #   RUFF          ruff launcher. Ephemeral and pinned, so it belongs to no
-#                 project; the pin matches the sandbox (kits/pi/spec.yaml).
+#                 project; the pin matches the sandbox (kits/*/md2okf-*.yaml).
 #   PYTEST        pytest launcher. Default: web2md. Prefer the per-project
 #                 targets (`test-web2md`, `test-clis`) which pass `-c`.
 #   YAMLLINT      yamllint launcher. Repo-wide (YAML lives outside the Python
@@ -34,7 +34,7 @@ export UV_PROJECT_ENVIRONMENT ?= .venv-linux
 endif
 
 .DEFAULT_GOAL := lint
-.PHONY: lint check-okf validate test test-shell test-web2md test-clis test-md2okf \
+.PHONY: lint check-okf validate test test-web2md test-clis test-md2okf \
 	install-clis install dist test-sandbox scrape
 
 # Lint tracked Markdown, JSON, YAML, and shell, spell-check owned Markdown, lint
@@ -109,21 +109,17 @@ lint:
 check-okf:
 	kits/pi/files/home/.pi/agent/skills/compile-okf/scripts/check-okf.sh ./okf
 
-# Validate every sandbox kit spec with an sbx version meeting SBX_VERSION.
+# Build every sandbox kit with docker buildx and check the artifact with
+# kit-tck (scripts/validate-spec.sh). Needs Docker and kit-tck; KIT_PLATFORMS
+# narrows the build to one platform for a quick local run, e.g.
+# `make validate KIT_PLATFORMS=linux/arm64`.
 validate:
 	./scripts/validate-spec.sh
 
 # Host pytest suites plus the sandbox check. Host-only for the sandbox half
 # (needs `sbx login`). CI runs each pytest job on its own and does not invoke
 # this target.
-test: test-shell test-web2md test-clis test-md2okf test-sandbox
-
-# Host-side shell test for the guest's session bind helper, which is POSIX sh
-# run inside the VM and so cannot be exercised from pytest. State-path
-# selection moved to tests/test_workbench.py with the driver. The real bind
-# cases skip on hosts without password-free mount capability.
-test-shell:
-	./tests/test-mount-state.sh
+test: test-web2md test-clis test-md2okf test-sandbox
 
 # Unit-test the web2md scraper (extras/web2md/tests/). Offline: HTTP is mocked with
 # httpx.MockTransport, so no test opens a socket. Config is in
@@ -146,8 +142,8 @@ test-clis:
 		scripts/merkleokf/tests
 
 # Unit-test the md2okf driver itself. pytest's default discovery already
-# collects only tests/test_*.py, leaving the tests/*.sh shell suites (run by
-# test-shell and test-sandbox) untouched. Offline: every sbx call goes
+# collects only tests/test_*.py, leaving the tests/*.sh shell suite (run by
+# test-sandbox) untouched. Offline: every sbx call goes
 # through the one seam in md2okf.sandbox, which these tests replace with a
 # fake.
 test-md2okf:
@@ -194,7 +190,7 @@ dist:
 	@echo "dist: built both artifacts; the sdist-built wheel runs outside the checkout."
 
 # Check that each agent's sandbox delivers the toolchain, agent config and
-# credential that kits/<agent>/spec.yaml promises. AGENTS lists the registered
+# credential that kits/<agent>/ promises. AGENTS lists the registered
 # agents (md2okf.agents.AGENTS); `make test-sandbox AGENT=pi` checks just one.
 # The agent is always passed explicitly: test-sandbox.sh has no default, so
 # nothing silently falls back to Pi.

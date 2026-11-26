@@ -27,24 +27,24 @@ The review steps:
 
 The second check matters because `lat check` validates the back-references that exist but does not require any. A deleted `# @lat:` comment leaves `lat check` green, and only `lat refs` shows it is gone.
 
-The kits carry no back-references, because any kit edit changes the sandbox fingerprint and the shared helpers must stay byte-identical. Option lists, credential setup and release commands stay in the user and contributor docs, and this graph links to them rather than copying them.
+The kits carry no back-references, because any kit edit changes the sandbox fingerprint and the shared shim hook must stay byte-identical. Option lists, credential setup and release commands stay in the user and contributor docs, and this graph links to them rather than copying them.
 
 ## Testing
 
-Every pytest suite runs offline, and each project has its own. Two shell suites cover what pytest cannot reach.
+Every pytest suite runs offline, and each project has its own. A shell suite and the kit build cover what pytest cannot reach.
 
 - **Driver suite** (`make test-md2okf`, [[tests]]): [[tests/conftest.py]] replaces the one sbx seam with a fake, so every module above it is exercised without a sandbox (see [[sandbox#The sbx seam]]).
 - **Kit contract**: [[tests/test_kits.py]] holds every kit to the shared authoring contract (see [[lat.md/kits#Shared contract]]).
 - **Package**: [[tests/test_package.py]] inspects the built wheel for the bundled kits, spec, sbx pin and CLI sources, and for the absence of virtual environments and caches. `make dist` builds the wheel from the sdist and runs it outside the checkout, so a file the sdist drops fails there rather than after a release.
 - **Live sandbox** (`make test-sandbox`, host only): [[tests/test-sandbox.sh]] asks the driver for each agent's sandbox, runs that agent's guest script inside it, then checks from the host what only the host can see.
-- **Mount and wrapper** (`make test-shell`): [[tests/test-mount-state.sh]] tests `mount-state.sh` and `md2okf-agent.sh`, POSIX shell that runs inside the VM.
+- **Kit build** (`make validate`): [[scripts/validate-spec.sh]] builds every kit with `docker buildx` and checks the artifact with kit-tck, because `sbx kit validate` cannot read a schema v3 source kit. It also fails a mixin that ships an entry owned by anyone but root and the agent. It sees each kit alone; composition shows only in the live sandbox suite.
 - **CLIs and web2md** (`make test-clis`, `make test-web2md`): one suite per project, run with that project's own config.
 
 ## Packaging
 
 The wheel carries the driver and everything it needs at runtime, so an installed md2okf compiles without a checkout. That makes the wheel's contents part of the design.
 
-[[pyproject.toml]] force-includes each registered kit, `SPEC.md`, `SBX_VERSION`, and the `pyproject.toml` and `src/` of each helper CLI. Naming a CLI's directory would pull in its venv and caches, since a force-included directory ignores `.gitignore`. The sdist excludes the agent-tool directories at the root that hold vendored third-party skills. Those patterns are anchored with a leading slash, so they never match a kit's own `files/home/.claude/`.
+[[pyproject.toml]] force-includes each registered kit, `SPEC.md`, `SBX_VERSION`, and the `pyproject.toml` and `src/` of each helper CLI. Naming a CLI's directory would pull in its venv and caches, since a force-included directory ignores `.gitignore`. The sdist excludes the agent-tool directories at the root that hold vendored third-party skills. Those patterns are anchored with a leading slash, so they never match a kit's own dot-directories, such as `files/home/.pi/`.
 
 ### Lookup order
 

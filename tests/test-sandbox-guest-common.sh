@@ -10,8 +10,10 @@
 # It provides:
 #   AGENT_NAME          the agent, as md2okf.agents names it (pi, claude, ...)
 #   AGENT_BINARY        the agent's CLI, checked like every other tool
-#   AGENT_TRACE_DIR     the agent's native trace directory, which the kit binds
-#                       onto $MD2OKF_STATE_DIR/sessions
+#   AGENT_TRACE_DIR     the agent's native trace directory, where md2okf mounts
+#                       the workbench's sessions/ (Agent.trace_target)
+#   AGENT_CONFIG_DIR    the agent's config directory, which holds the trace
+#                       directory and must stay the agent's to write
 #   AGENT_INSTRUCTIONS  the file that tells the agent the OKF contract; it must
 #                       sign pages as "$AGENT_NAME/"
 #   AGENT_RUNTIME_PATHS space-separated files and directories of agent config,
@@ -79,7 +81,7 @@ check_exec() {
 	fi
 }
 
-for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_INSTRUCTIONS AGENT_RUNTIME_PATHS; do
+for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_CONFIG_DIR AGENT_INSTRUCTIONS AGENT_RUNTIME_PATHS; do
 	eval "value=\${${required}-}"
 	if [ -z "${value}" ]; then
 		echo "BROKEN the agent file does not set ${required}"
@@ -87,18 +89,29 @@ for required in AGENT_NAME AGENT_BINARY AGENT_TRACE_DIR AGENT_INSTRUCTIONS AGENT
 	fi
 done
 
-# The tool list must match BOTH lists in kits/<agent>/spec.yaml: the
-# setup.install / setup.files steps AND the agentInstructions "Installed tools"
-# prose. That prose is the promise being tested here, so a tool installed but
-# not promised — or promised but not installed — is itself the bug.
+# The tool list must match BOTH what kits/<agent> installs (the descriptor's
+# install hooks and the recipe) AND the instructions' "Installed tools" prose.
+# That prose is the promise being tested here, so a tool installed but not
+# promised — or promised but not installed — is itself the bug.
 
 case "$(pwd -P)" in
 */okf) ok "sandbox workspace is the wiki root" ;;
 *) broken "sandbox workspace is not the wiki root: $(pwd -P)" ;;
 esac
 
-# apt. Ubuntu's `fd-find` package provides `fdfind`; `rg` is the command
-# provided by the `ripgrep` package.
+# The shims and the driver both assume each workspace sits at its host path,
+# which is what sbx reports as WORKSPACE_DIR. Informational when unset: the
+# shims bake the path at create and need nothing at run time.
+if [ -z "${WORKSPACE_DIR:-}" ]; then
+	echo "note WORKSPACE_DIR is not set in this shell"
+elif [ "$(cd "${WORKSPACE_DIR}" 2>/dev/null && pwd -P)" = "$(pwd -P)" ]; then
+	ok "WORKSPACE_DIR is the wiki root"
+else
+	broken "WORKSPACE_DIR (${WORKSPACE_DIR}) is not the wiki root $(pwd -P)"
+fi
+
+# apt. The `fd-find` package provides `fdfind`; `rg` is the command provided
+# by the `ripgrep` package.
 check curl
 check fdfind
 check jq
@@ -118,23 +131,36 @@ check cspell
 check ruff
 check yamllint
 
-# setup.files shims: workspace-backed CLIs on PATH.
+# Shims written at create: workspace-backed CLIs on PATH.
 check inspectmd
 check inspectokf
 check sizeokf
 check merkleokf
 
+# The shims on real input, not only --help. merkleokf runs from a cold uv
+# cache, so it also proves the runtime PyPI grant: the shim builds the
+# mounted project, and its build backend comes from PyPI.
+cold_cache="$(mktemp -d)"
+if UV_CACHE_DIR="${cold_cache}" timeout 300 merkleokf --nolog -L 0 "$(pwd -P)" >/dev/null 2>&1; then
+	ok "merkleokf hashes the wiki root from a cold uv cache"
+else
+	broken "merkleokf could not hash the wiki root from a cold uv cache (PyPI blocked?)"
+fi
+rm -rf "${cold_cache}"
+if timeout 120 inspectmd "$(dirname "$(pwd -P)")/SPEC.md" >/dev/null 2>&1; then
+	ok "inspectmd maps ../SPEC.md"
+else
+	broken "inspectmd could not map ../SPEC.md"
+fi
+if timeout 120 sizeokf "$(pwd -P)" >/dev/null 2>&1 && timeout 120 inspectokf "$(pwd -P)" >/dev/null 2>&1; then
+	ok "sizeokf and inspectokf read the wiki root"
+else
+	broken "sizeokf or inspectokf could not read the wiki root"
+fi
+
 # pinned release binaries: checksummed download, no package manager.
 check mq
 check okfctl
-
-# Shared by every kit, byte for byte.
-check_file "${HOME}/.local/lib/md2okf/mount-state.sh"
-check_file "${HOME}/.local/lib/md2okf/md2okf-agent.sh"
-# The shim is a setup.files entry with an explicit mode; its exec bit is what
-# lets `sbx exec … md2okf-agent` start at all. test-sandbox.sh runs it the way
-# the driver does, outside this login shell.
-check_exec "${HOME}/.local/bin/md2okf-agent"
 
 # Provenance: pages must be signed by the agent that wrote them.
 check_file "${AGENT_INSTRUCTIONS}"
@@ -151,48 +177,58 @@ else
 	ok "runtime instructions use the workspace root"
 fi
 
-# Persistent traces. The native path must remain a real directory and be the
-# same bind-mounted directory as the host-backed state target.
-if [ -z "${MD2OKF_STATE_DIR:-}" ]; then
-	echo "MISSING MD2OKF_STATE_DIR"
-	failures=$((failures + 1))
+# Ownership. A mount target's missing parents, or an overlay's directory
+# entries, can leave the agent's home or config directory owned by root, and
+# then the agent cannot write its own settings next to the trace mount.
+agent_uid="$(id -u)"
+if [ "$(stat -c '%u' /home)" = 0 ]; then
+	ok "/home is root's"
 else
-	trace_link="${AGENT_TRACE_DIR}"
-	trace_target="${MD2OKF_STATE_DIR}/sessions"
-	if [ -L "${trace_link}" ]; then
-		broken "${trace_link} is a symlink"
-	elif [ ! -d "${trace_link}" ] || [ ! -d "${trace_target}" ]; then
-		echo "MISSING persistent trace directories: ${trace_link} ${trace_target}"
-		failures=$((failures + 1))
-	elif [ "$(stat -c '%d:%i' "${trace_link}")" != \
-		"$(stat -c '%d:%i' "${trace_target}")" ]; then
-		broken "${trace_link} is not bind-mounted onto state"
-	else
-		probe=".md2okf-sandbox-test-$$"
-		if printf 'persistent\n' >"${trace_link}/${probe}" &&
-			grep -qx persistent "${trace_target}/${probe}"; then
-			ok "persistent ${AGENT_NAME} trace bind"
-		else
-			broken "write through ${trace_link} did not reach state"
-		fi
-		rm -f "${trace_link:?}/${probe}"
+	broken "/home is not owned by root"
+fi
+if [ "$(stat -c '%u' "${HOME}")" = "${agent_uid}" ]; then
+	ok "${HOME} is the agent's"
+else
+	broken "${HOME} is not owned by the agent"
+fi
+if [ "$(stat -c '%u' "${AGENT_CONFIG_DIR}" 2>/dev/null)" = "${agent_uid}" ] &&
+	dir_probe="${AGENT_CONFIG_DIR}/.md2okf-owner-probe-$$" &&
+	(: >"${dir_probe}") 2>/dev/null; then
+	rm -f "${dir_probe}"
+	ok "${AGENT_CONFIG_DIR} is the agent's and writable"
+else
+	broken "${AGENT_CONFIG_DIR} is not the agent's to write"
+fi
 
-		# Left in place for test-sandbox.sh to find on the host: proof that
-		# a write through the native path lands in host-backed state, not in
-		# a VM-local directory that merely looks right from in here.
-		host_probe_token="$$-$(date +%s)"
-		if printf '%s\n' "${host_probe_token}" >"${trace_link}/.md2okf-host-probe"; then
-			echo "trace-probe ${host_probe_token}"
-		else
-			broken "could not write the host trace probe"
-		fi
+# Persistent traces. The native path is a host mount (the workbench's
+# sessions/), so it must be a real, writable directory on a different
+# filesystem from the config directory around it.
+trace_dir="${AGENT_TRACE_DIR}"
+if [ -L "${trace_dir}" ]; then
+	broken "${trace_dir} is a symlink"
+elif [ ! -d "${trace_dir}" ]; then
+	echo "MISSING trace directory ${trace_dir}"
+	failures=$((failures + 1))
+elif [ "$(stat -c '%d' "${trace_dir}")" = "$(stat -c '%d' "$(dirname "${trace_dir}")")" ]; then
+	broken "${trace_dir} is not a mount; traces would stay on the VM's disk"
+else
+	# Left in place for test-sandbox.sh to find on the host: proof that a
+	# write through the native path lands in the workbench, not in a
+	# VM-local directory that merely looks right from in here.
+	host_probe_token="$$-$(date +%s)"
+	if printf '%s\n' "${host_probe_token}" >"${trace_dir}/.md2okf-host-probe"; then
+		ok "${trace_dir} is a writable mount"
+		echo "trace-probe ${host_probe_token}"
+	else
+		broken "could not write the host trace probe into ${trace_dir}"
 	fi
 fi
 
 # --- Workbench mount invariants ---------------------------------------------
 #
 # Five mounts: the wiki (rw, this shell's cwd) plus its ../md, ../scripts and
-# ../SPEC.md siblings (ro), and the state directory's sessions/ (rw). Read-only
+# ../SPEC.md siblings (ro), and the workbench's sessions/ (rw) at the agent's
+# trace directory. Read-only
 # has to mean read-only as a property of the filesystem, not of instructions:
 # the agent treats every source document as untrusted, so a prompt-injected
 # document must not be able to rewrite the spec the run is held to.
@@ -201,11 +237,14 @@ fi
 # whatever the guest does — but that survives only while nothing writable
 # *contains* it. A plain `mount --bind` does not replicate nested submounts, so
 # binding a writable parent elsewhere would expose the underlying writable view
-# of everything below it. sudo is passwordless here (kits/pi/spec.yaml), so
-# these checks try the escape rather than assuming it is impossible.
+# of everything below it. sudo is passwordless here, so these checks try the
+# escape rather than assuming it is impossible.
 
 wiki_root="$(pwd -P)"
 work_dir="$(dirname "${wiki_root}")"
+# The workbench root on the host, <state>/md2okf/<agent>: work/ is mounted at
+# its host path, so its parent's path is the host's too.
+state_root="$(dirname "${work_dir}")"
 
 # 0 when a write succeeded (and was cleaned up again), 1 otherwise.
 #
@@ -256,6 +295,14 @@ assert_readonly "../md" "${work_dir}/md"
 assert_readonly "../scripts" "${work_dir}/scripts"
 assert_readonly "../SPEC.md" "${work_dir}/SPEC.md"
 
+# The spec the run is held to was staged, not left as the empty placeholder
+# sbx needs to mount a path.
+if [ -s "${work_dir}/SPEC.md" ]; then
+	ok "../SPEC.md is the staged spec"
+else
+	broken "../SPEC.md is empty"
+fi
+
 # The wiki is the one place the agent may write.
 if dir_is_writable "${wiki_root}"; then
 	echo "ok the wiki root is writable"
@@ -265,9 +312,8 @@ else
 fi
 
 # No read-write mount may be an ancestor of a read-only one. This is a path
-# property, checked against the mounts themselves — note the state *root* is
-# deliberately not in this list, because only its sessions/ child is mounted.
-for rw in "${wiki_root}" "${MD2OKF_STATE_DIR:-/nonexistent}/sessions"; do
+# property, checked against the mounts themselves.
+for rw in "${wiki_root}" "${AGENT_TRACE_DIR}"; do
 	for ro in "${work_dir}/md" "${work_dir}/scripts" "${work_dir}/SPEC.md"; do
 		case "${ro}/" in
 		"${rw}/"*)
@@ -281,26 +327,25 @@ done
 echo "ok no read-write mount is an ancestor of a read-only one"
 
 # Host-side control files must be outside the VM's namespace entirely. The
-# state root exists in here only as the synthetic parent of the sessions/
-# mount, so its siblings — which the host really does write — prove the root
-# itself is not shared. An injected document that could reach these could
-# rewrite the ownership marker the host trusts.
-if [ -n "${MD2OKF_STATE_DIR:-}" ]; then
-	for host_only in sandbox-fingerprint sandbox-identity; do
-		if [ -e "${MD2OKF_STATE_DIR}/${host_only}" ]; then
-			echo "BROKEN host-only ${host_only} is visible inside the sandbox"
-			failures=$((failures + 1))
-		else
-			echo "ok host-only ${host_only} is not visible"
-		fi
-	done
-fi
+# workbench root exists in here only as the synthetic parent of work/, so the
+# files the host really does write beside it prove the root itself is not
+# shared. An injected document that could reach these could rewrite the
+# ownership marker the host trusts. sessions/ is mounted elsewhere, at the
+# trace directory, so it must not appear at its host path either.
+for host_only in sandbox-fingerprint sandbox-identity sessions; do
+	if [ -e "${state_root}/${host_only}" ]; then
+		echo "BROKEN host-only ${host_only} is visible inside the sandbox at ${state_root}"
+		failures=$((failures + 1))
+	else
+		echo "ok host-only ${host_only} is not visible"
+	fi
+done
 
 # Re-check the read-only mounts after bind-mounting every writable mount to a
 # scratch path — the plan's specific concern, since a bind of a writable
 # ancestor is what would flatten the nested read-only ones.
 if sudo -n true 2>/dev/null; then
-	for rw in "${wiki_root}" "${MD2OKF_STATE_DIR:-}/sessions"; do
+	for rw in "${wiki_root}" "${AGENT_TRACE_DIR}"; do
 		[ -d "${rw}" ] || continue
 		scratch="$(mktemp -d)"
 		if sudo -n mount --bind "${rw}" "${scratch}" 2>/dev/null; then

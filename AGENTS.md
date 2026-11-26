@@ -88,7 +88,7 @@ either directory; the suite is offline and needs no network.
 
 `scripts/inspectmd/` is a third independent uv project: an installable CLI that prints a
 Markdown heading map (line ranges, word counts, kebab-case slugs). The sandbox
-exposes the same `inspectmd` command via a `setup.files` shim. Own
+exposes the same `inspectmd` command via a shim its kit writes at create. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest — nothing shared with `extras/web2md/` or
 `extras/pdf2md/`.
 
@@ -103,7 +103,7 @@ Markdown content **word counts** per file and per folder (recursive), **excludin
 YAML frontmatter**. Same `-L`/`--level` depth cap as the inspect CLIs. It carries
 its own `strip_frontmatter` rather than importing `inspectmd`'s, under the
 zero-overlap rule; the two are pinned by tests on both sides. The sandbox
-exposes `sizeokf` through the same `setup.files` shim. Own `pyproject.toml`,
+exposes `sizeokf` through the same kind of shim. Own `pyproject.toml`,
 `uv.lock`, ruff and pytest.
 
 `scripts/merkleokf/` is a sixth independent uv project: an installable CLI that prints a
@@ -113,7 +113,7 @@ other CLIs; also accepts a single file. It hashes **raw bytes**, deliberately th
 opposite of `scripts/sizeokf/`, which strips frontmatter: `merkleokf` answers "did this
 change", `sizeokf` answers "how much prose is here", and they share no code.
 Digests display as 12 hex characters; full digests are computed internally. The
-sandbox exposes `merkleokf` through the same `setup.files` shim. Own
+sandbox exposes `merkleokf` through the same kind of shim. Own
 `pyproject.toml`, `uv.lock`, ruff and pytest.
 
 Host install for these four CLIs is `make install-clis`; run `make test-clis`
@@ -122,27 +122,36 @@ after touching any of them.
 The agent framework is selected by `MD2OKF_AGENT` (`src/md2okf/agents.py`);
 `pi` (the default), `claude` and `codex` are registered. Where each agent
 reads its instructions differs, and was measured, not assumed: Pi from
-`~/.pi/agent/AGENTS.md`, Claude Code from the kit's `agentInstructions` (sbx
-writes `../CLAUDE.md`), Codex from `~/.codex/AGENTS.md` (it ignores files
-outside a git project). Each kit's `README.md` says why. Each agent has its own kit
+`~/.pi/agent/AGENTS.md`, which its kit ships; Claude Code from
+`~/.claude/CLAUDE.md` and Codex from `~/.codex/AGENTS.md` (it ignores files
+outside a git project), both written by sbx from the kit's `agent-context@2`
+body. Each kit's `README.md` says why. Each agent has its own kit
 (`kits/<agent>/`), sandbox (`md2okf-<agent>`) and workbench
 (`$XDG_STATE_HOME/md2okf/<agent>/`); everything agent-specific — command lines,
 first-turn prompt, credential check, event-stream parser
 (`src/md2okf/protocols/<agent>.py`) — lives on its `Agent`, never in the
 generic modules. An agent is registered only once its kit ships.
 
-Pi runs in one runtime: the Docker Sandbox (sbx) kit rooted at `kits/pi/`.
-Its spec is `kits/pi/spec.yaml` and its Pi config (`AGENTS.md`,
-`settings.json`, `models.json`, `mcp.json`, `skills/`) lives in
-`kits/pi/files/home/.pi/agent/`. The agent has `bash`, so it lints
-its own output and dates its log entries, and the OpenRouter key stays outside
-the VM (proxy-managed by sbx). Config is copied in at kit build time, so edits
-only land in a fresh sandbox — which `md2okf` builds when the kit's hash stops
-matching the running sandbox's, or at once on `--fresh`. The `files/`
-level is fixed by the Sandbox Kit schema and cannot be renamed or removed. The
-kit uses the finalized kit-spec v2 grammar. Every agent uses the repository-wide
-sbx minimum in `SBX_VERSION`; CI validates the kits with exactly that release,
-while local runs accept newer versions.
+Every kit is a Sandbox Kit schema v3 source kit: a descriptor
+`kits/<agent>/md2okf-<agent>.yaml` (capabilities: network policy per phase,
+credentials, install hooks, skills, instructions) and a recipe
+`md2okf-<agent>.dockerfile` beside it, which builds the kit's content from
+`files/`. The stem is never the bare agent name, which would collide with the
+workload of that name. Pi's kit is a **workload**, the whole sandbox, built
+on Docker's Pi image pinned by digest. Claude Code's and Codex's are
+**mixins** composed onto Docker's published `claude` and `codex` workloads,
+which `agents.py` pins by index digest (`workload_ref`).
+
+Pi's config (`AGENTS.md`, `settings.json`, `models.json`, `mcp.json`,
+`skills/`) lives in `kits/pi/files/home/.pi/agent/`. The two mixins carry
+their skills in `files/skills/`, installed under `/usr/share` and exposed in
+the agent's skills directory through `agent-skill@1`, and their instructions
+inline in the descriptor. The agent has `bash`, so it lints its own output and
+dates its log entries, and every credential stays outside the VM
+(proxy-managed by sbx). Kit content is built in, so edits only land in a fresh
+sandbox — which `md2okf` builds when the kit's hash stops matching the running
+sandbox's, or at once on `--fresh`. Every agent uses the repository-wide sbx
+minimum in `SBX_VERSION`; local runs accept newer versions.
 
 Within the config, the split is: `AGENTS.md` holds what every task must respect
 (OKF conventions, the writable directories, `SPEC.md` outranking both), while
@@ -155,19 +164,17 @@ a new skill, not more rules in `AGENTS.md`.
 
 `tests/` holds the driver's pytest suite (offline: `conftest.py` fakes the one
 `sbx` seam; `test_kits.py` holds every `kits/*/` to the shared authoring
-contract, its own provenance and byte-identical helpers) and two shell suites
+contract, its own provenance and the shared shim hook) and one shell suite
 that pytest cannot replace — the paired live-sandbox check (`test-sandbox.sh`,
 which asks the driver for a sandbox, runs `test-sandbox-guest-<agent>.sh` inside
-the VM, then checks from the host what only the host can see) and
-`test-mount-state.sh` for the guest-side bind helper and the `md2okf-agent`
-wrapper.
+the VM, then checks from the host what only the host can see).
 
 Every agent process the driver starts — each compile turn and `md2okf --agent`
-— runs through the kit's `md2okf-agent` wrapper
-(`files/home/.local/lib/md2okf/md2okf-agent.sh`, identical in every kit, put on
-PATH by a per-kit `setup.files` shim naming the agent's native trace
-directory). `sbx exec` bypasses the kit entrypoint, so per-process setup goes in
-the wrapper, never the entrypoint. The agent's flags stay in `agents.py`.
+— is a plain `sbx exec` of the agent itself. `sbx exec` bypasses the kit
+entrypoint, so nothing per-process may live there. The agent's traces need no
+setup either: the driver mounts the workbench's `sessions/` at the agent's
+native trace directory (`Agent.trace_target`) as an additional workspace. The
+agent's flags stay in `agents.py`.
 
 ## Commands
 
@@ -175,8 +182,8 @@ the wrapper, never the entrypoint. The agent's flags stay in `agents.py`.
 make lint                # markdownlint, jq, yamllint, shellcheck, cspell, ruff,
                          # lat check; also VERSION ↔ CHANGELOG.md and VERSION ↔
                          # every subproject (scripts/sync-versions.sh --check)
-make validate            # validate every sandbox kit spec (runs scripts/validate-spec.sh)
-make test-shell          # host test for the session bind helper and md2okf-agent
+make validate            # build every sandbox kit and check it with kit-tck
+                         # (scripts/validate-spec.sh; needs Docker + kit-tck)
 make test-web2md         # pytest, the web2md scraper suite (offline)
 make test-clis           # pytest, the four host CLI suites (offline)
 make test-md2okf         # pytest, the md2okf driver suite (offline, fake sbx)
@@ -256,29 +263,32 @@ by trusted publishing, and then creates a GitHub Release whose notes are the
 matching `CHANGELOG.md` section and whose assets are those same artifacts. See
 [CONTRIBUTING.md](CONTRIBUTING.md#releasing).
 
-## Always validate the sandbox kit spec before finishing
+## Always validate the sandbox kits before finishing
 
 Whenever you change anything under `kits/` or `scripts/*.sh`, you MUST validate the
-Sandbox Kit specs before considering the task complete:
+Sandbox Kits before considering the task complete:
 
 ```bash
 ./scripts/validate-spec.sh   # or: make validate
 ```
 
-This checks every `kits/*/spec.yaml` against the installed Sandbox Kit schema
-after enforcing the minimum in `SBX_VERSION`. It runs `sbx kit validate
---offline`, which needs neither a daemon nor an `sbx login`
-([docker/sbx-releases#685](https://github.com/docker/sbx-releases/issues/685),
-fixed in sbx 0.49.2), so it works inside a sandbox, on the host and in CI,
-where the `validate-kit` job (`.github/workflows/ci.yml`) runs it. Do not
-finish a task until it passes. If the `sbx` CLI is
-not installed, install it with `brew install docker/tap/sbx`; upgrade an older
-installation through Homebrew or APT.
+This builds every `kits/*/md2okf-*.yaml` with `docker buildx` and checks the
+built artifact with `kit-tck` (3.0.0-m.12, the spec sbx 0.54.0 bundles).
+`sbx kit validate` cannot read a schema v3 source kit, so the build is the
+check: the kit frontend validates the descriptor first, then kit-tck judges
+annotations, layers, image config and overlay ownership. It needs Docker with
+Buildx and `kit-tck`, but no `sbx` daemon and no login, so it works inside a
+sandbox, on the host and in CI, where the `validate-kit` job
+(`.github/workflows/ci.yml`) runs it for both architectures. A cold build pulls
+the frontend and base images. `KIT_PLATFORMS=linux/arm64` (or `linux/amd64`)
+builds only your own platform when QEMU is absent. Do not finish a task until
+it passes.
 
-`make validate` only checks the spec against the schema. If you changed what the sandbox
-installs or what it carries in `kits/pi/files/`, also run `sbx rm --force md2okf-pi &&
-make test-sandbox AGENT=pi` — on its own `make test-sandbox` reuses whatever sandbox
-is running, which may predate your edit.
+`make validate` checks each kit alone; it cannot see how a mixin composes onto
+its workload. If you changed what a sandbox installs or carries, also run
+`sbx rm --force md2okf-<agent> && make test-sandbox AGENT=<agent>` — on its
+own `make test-sandbox` reuses whatever sandbox is running, which may predate
+your edit.
 
 ## Skills
 

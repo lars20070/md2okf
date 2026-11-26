@@ -14,19 +14,35 @@ That single boundary is what makes the driver testable offline. [[tests/conftest
 
 Every other function in the module assumes `sbx` exists, and a missing binary would surface as a bare `FileNotFoundError`. Preflight turns each of these conditions into a clean exit 2 with the fix. The floor is read from the bundled `SBX_VERSION` and must be exactly one `X.Y.Z`.
 
-Preflight admits any newer sbx, but that only means the driver will run it. Kit compatibility is a separate boundary: only the floor is tested against the kits, by the `validate-kit` job in [[.github/workflows/ci.yml]], which installs exactly that release (see [[development#Release]]). A newer sbx can reject a kit at build time. For example, sbx 0.54.0 no longer accepts the built-in `claude` and `codex` parents that the Claude Code and Codex kits extend, while the Pi kit, built on a plain image, still validates. When a sandbox fails to build on a newer sbx, run `make validate` first. Raising the floor follows "The sbx minimum" checklist in [[CONTRIBUTING.md]].
+Preflight admits any newer sbx, but that only means the driver will run it. Kit compatibility is a separate boundary: the kits are written against the kit spec the floor release bundles, and each descriptor pins that spec's frontend by digest (see [[lat.md/kits#Kits]]). A newer sbx can still reject a kit, as sbx 0.51 rejected the old v2 kits that extended its built-in agents. When a sandbox fails to build on a newer sbx, run `make validate` first. Raising the floor follows "The sbx minimum" checklist in [[CONTRIBUTING.md]].
 
 ## Fingerprint
 
-[[src/md2okf/workbench.py#fingerprint]] hashes the kit tree, the sbx version and the mount arguments. A change to any of them means the running sandbox no longer matches what would be built.
+[[src/md2okf/workbench.py#fingerprint]] hashes the kit tree, the sbx version, the mount arguments and the agent's pinned workload reference. A change to any of them means the running sandbox no longer matches what would be built.
 
-The kit is copied into the sandbox at build time, so an edit to any kit file only takes effect in a new sandbox. The tree hash therefore includes dotted paths: the agent's whole runtime config lives under `files/home/.pi` or `files/home/.claude`, and skipping dotfiles once left an edited skill without a rebuild. `_is_hash_noise` skips only named host clutter: `.DS_Store`, `._*` AppleDouble files and `__pycache__`.
+The kit is built into the sandbox, so an edit to any kit file only takes effect in a new sandbox. The tree hash therefore includes dotted paths: Pi's whole runtime config lives under `files/home/.pi`, and skipping dotfiles once left an edited skill without a rebuild. `_is_hash_noise` skips only named host clutter: `.DS_Store`, `._*` AppleDouble files and `__pycache__`.
 
-Because the sbx version is part of the hash, upgrading sbx rebuilds every sandbox once, on its next use.
+The workload a mixin composes onto is outside the kit tree, so its digest is hashed on its own. It is pinned by index digest rather than named, because a bare agent name resolves through the user's `kit.shortcuts` and floats with upstream, and hashing a name could never notice that. A deliberate bump of [[src/md2okf/agents.py#CLAUDE_WORKLOAD]] or [[src/md2okf/agents.py#CODEX_WORKLOAD]] rebuilds that agent's sandbox, and nothing else does. Tests: [[tests/test_workbench.py#test_fingerprint_changes_when_the_pinned_workload_changes]] and [[tests/test_workbench.py#test_fingerprint_changes_when_the_trace_target_changes]].
+
+Because the sbx version is part of the hash, upgrading sbx rebuilds every sandbox once, on its next use. That rebuild starts with `sbx rm --force`, so anything kept only inside the old sandbox is lost; transcripts are not, because they live on the host.
+
+## Launch
+
+[[src/md2okf/sandbox.py#run_argv]] builds the one `sbx run` command line that creates a sandbox. [[src/md2okf/sandbox.py#create]] runs it, and `--dry-run` prints it, so the two cannot drift.
+
+Pi's kit is itself the workload, so its directory is the positional argument. The Claude Code and Codex kits are mixins, passed with `--kit` before the pinned workload reference. Local kits are passed as absolute paths, because sbx reads a bare relative name as an agent or sandbox name. The five mounts follow as additional workspaces, `PATH[:TARGET][:ro]`: the four `work/` mounts at their host paths, which the prompt, `merkleokf` and the probe rely on, and `sessions/` at the agent's trace directory (see [[workbench#Layout and mounts]]).
+
+`--no-input` matters because `create` captures every stream and has no terminal. A question sbx would ask, such as a kit's permissions needing confirmation, fails instead with the command that answers it, and `create` passes sbx's own diagnostic on in its error. No environment is injected: the kits need none from the driver. Tests: [[tests/test_sandbox.py#test_create_runs_a_workload_kit_with_its_mounts]], [[tests/test_sandbox.py#test_create_composes_a_mixin_kit_onto_the_pinned_workload]], [[tests/test_sandbox.py#test_a_failed_create_carries_the_sbx_diagnostic]] and [[tests/test_cli.py#test_dry_run_prints_the_argv_create_runs]].
+
+## Sandbox name
+
+[[src/md2okf/workbench.py#sandbox_name]] names each agent's sandbox `md2okf-<agent>`. `MD2OKF_SANDBOX_NAME` replaces it, for maintainers piloting a kit change beside a working sandbox.
+
+The override must go with a temporary `XDG_STATE_HOME`. The workbench, and with it the ownership marker, is keyed by agent rather than by name: the usual name over new state is refused as unowned, and a new name over the usual state would reuse the real workbench. [[tests/test-sandbox.sh]] asks the driver for the name and every path, so it honours both.
 
 ## Create or reuse
 
-[[src/md2okf/workbench.py#resolve_sandbox_state]] decides what happens to the sandbox named `md2okf-<agent>`. Ownership is proven before anything is reused or destroyed.
+[[src/md2okf/workbench.py#resolve_sandbox_state]] decides what happens to the agent's sandbox (see [[sandbox#Sandbox name]]). Ownership is proven before anything is reused or destroyed.
 
 1. **No sandbox under the name**: create it. Test: [[tests/test_workbench.py#test_resolve_sandbox_state_creates_when_no_sandbox_exists]].
 2. **Ownership not proven**: there is no recorded marker, or the live owner token is missing or differs from the recorded one. This raises `UnownedSandboxError`, whose message gives the manual `sbx rm --force` command. The sandbox is never deleted, and `--fresh` does not change that. Tests: [[tests/test_workbench.py#test_resolve_sandbox_state_rejects_an_unowned_sandbox]], [[tests/test_workbench.py#test_resolve_sandbox_state_rejects_a_matching_fingerprint_with_wrong_identity]] and [[tests/test_workbench.py#test_resolve_sandbox_state_fresh_does_not_widen_deletion_authority]].

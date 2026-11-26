@@ -11,7 +11,8 @@ from md2okf import agents, resources
 def test_checkout_fallback_finds_every_registered_agents_kit(agent):
     """A registered agent without a kit would pass MD2OKF_AGENT and then fail late."""
     assert resources.kit_dir(agent) == resources._CHECKOUT_ROOT / "kits" / agent
-    assert (resources.kit_dir(agent) / "spec.yaml").is_file()
+    assert (resources.kit_dir(agent) / f"md2okf-{agent}.yaml").is_file()
+    assert (resources.kit_dir(agent) / f"md2okf-{agent}.dockerfile").is_file()
 
 
 def test_checkout_fallback_finds_the_spec_and_clis():

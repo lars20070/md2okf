@@ -29,9 +29,21 @@ if TYPE_CHECKING:
 LOCK_PATH_TEMPLATE = "/tmp/md2okf-{uid}.lock"  # noqa: S108 -- deliberately outside XDG_STATE_HOME
 
 
+# Maintainer-only: a different sandbox name, so a kit change can be piloted
+# beside a working sandbox. Pair it with a temporary XDG_STATE_HOME -- the
+# workbench, and with it the ownership marker, is keyed by agent, not by this
+# name, so a new name over the usual state would meet a marker for the other
+# sandbox, and the usual name over new state would be refused as unowned.
+SANDBOX_NAME_ENV_VAR = "MD2OKF_SANDBOX_NAME"
+
+
+# @lat: [[sandbox#Sandbox name]]
 def sandbox_name(agent: str) -> str:
-    """The sandbox that serves `agent`: one per agent, so all of them can coexist."""
-    return f"md2okf-{agent}"
+    """The sandbox that serves `agent`: one per agent, so all of them can coexist.
+
+    MD2OKF_SANDBOX_NAME, when set, replaces the name for every agent.
+    """
+    return os.environ.get(SANDBOX_NAME_ENV_VAR) or f"md2okf-{agent}"
 
 
 class WorkbenchError(Exception):
@@ -190,8 +202,8 @@ class Workbench:
     def sessions(self) -> Path:
         """Read-write mount: the agent's persistent transcripts. The only mounted state path.
 
-        Named `sessions` for every agent. Each kit binds its agent's own trace
-        directory, whatever that is called, onto this one host mount.
+        Named `sessions` for every agent, and mounted at the agent's own trace
+        directory in the guest (Agent.trace_target), whatever that is called.
         """
         return self.root / "sessions"
 
@@ -205,14 +217,21 @@ class Workbench:
         """Host-only: the last successful create's recorded sandbox identity."""
         return self.root / "sandbox-identity"
 
-    def mounts(self) -> list[sandbox.Mount]:
-        """The five `sbx run` workspace arguments, in the fixed order."""
+    def mounts(self, trace_target: str) -> list[sandbox.Mount]:
+        """The five `sbx run` workspace arguments, in the fixed order.
+
+        The four work/ mounts sit at their host paths, so a path the driver
+        names on the host -- the staged document in the prompt, work/okf for
+        merkleokf and the probe -- means the same in the guest. sessions/ is
+        the exception: it is mounted at `trace_target`, the agent's native
+        trace directory, so traces land on the host with no in-guest bind.
+        """
         return [
             sandbox.Mount(self.work_okf),
             sandbox.Mount(self.work_md, readonly=True),
             sandbox.Mount(self.work_scripts, readonly=True),
             sandbox.Mount(self.work_spec, readonly=True),
-            sandbox.Mount(self.sessions),
+            sandbox.Mount(self.sessions, target=trace_target),
         ]
 
     def ensure_roots(self) -> None:
@@ -454,9 +473,9 @@ def _is_hash_noise(relative: Path) -> bool:
     Only named noise: Finder's .DS_Store, the ._name AppleDouble sidecars it
     writes on non-native disks, and __pycache__ bytecode left by running the
     kit's own frontmatter-guard.py locally. Deliberately *not* every dotted
-    name: the agent's whole runtime config lives under files/home/.pi and
+    name: Pi's whole runtime config lives under files/home/.pi and
     files/home/.local, and skipping those once left only README.md and
-    spec.yaml in the hash -- so an edited skill never triggered a rebuild.
+    the descriptor in the hash -- so an edited skill never triggered a rebuild.
     """
     if any(part == "__pycache__" for part in relative.parts):
         return True
@@ -481,12 +500,18 @@ def _hash_tree(root: Path) -> str:
 
 
 # @lat: [[sandbox#Fingerprint]]
-def fingerprint(kit_dir: Path, sbx_version: tuple[int, int, int] | None, mounts: Iterable[sandbox.Mount]) -> str:
-    """A configuration fingerprint: kit tree hash + tool version + mount set."""
+def fingerprint(
+    kit_dir: Path,
+    sbx_version: tuple[int, int, int] | None,
+    mounts: Iterable[sandbox.Mount],
+    workload_ref: str | None = None,
+) -> str:
+    """A configuration fingerprint: kit tree hash + tool version + mount set + pinned workload."""
     parts = [
         _hash_tree(kit_dir),
         ".".join(str(part) for part in (sbx_version or (0, 0, 0))),
         "\n".join(mount.as_arg() for mount in mounts),
+        workload_ref or "",
     ]
     return hashlib.sha256("\x00".join(parts).encode("utf-8")).hexdigest()
 
@@ -568,7 +593,7 @@ def stage_tooling(wb: Workbench) -> None:
     A sandbox whose work/scripts is empty still starts, and its mounts are
     still correct — but every inspectmd/inspectokf/sizeokf/merkleokf shim in
     it fails, because each one is `uv tool run --from
-    $(dirname $WORKDIR)/scripts/<cli>` (kits/pi/spec.yaml). That makes
+    <workspace parent>/scripts/<cli>` (see each kit's descriptor). That makes
     this part of "the sandbox is usable", which is why ensure_sandbox() does
     it for every caller rather than leaving each one to remember.
 
@@ -611,7 +636,8 @@ def ensure_sandbox(wb: Workbench, agent: Agent, *, fresh: bool = False) -> str:
     """
     name = sandbox_name(agent.name)
     kit_dir = resources.kit_dir(agent.name)
-    fingerprint_value = fingerprint(kit_dir, sandbox.version(), wb.mounts())
+    mounts = wb.mounts(agent.trace_target)
+    fingerprint_value = fingerprint(kit_dir, sandbox.version(), mounts, agent.workload_ref)
 
     # Before the sandbox exists, so it never observes an empty scripts mount.
     # Unconditional rather than create-only: a reused sandbox whose staged
@@ -621,7 +647,7 @@ def ensure_sandbox(wb: Workbench, agent: Agent, *, fresh: bool = False) -> str:
     state = resolve_sandbox_state(wb, name, fingerprint_value, fresh=fresh)
     if state == "create":
         _clear_ownership_marker(wb)
-        token = sandbox.create(name, kit_dir, wb.mounts(), {"MD2OKF_STATE_DIR": str(wb.root)})
+        token = sandbox.create(name, kit_dir, agent.workload_ref, mounts)
         write_ownership_marker(wb, fingerprint_value, token)
         state = "created"
 

@@ -8,7 +8,8 @@ anyway -- so this builds the wheel for real and reads it back.
 
 It builds the way a release does: the sdist first, then the wheel *from the
 sdist*. That second hop is where an over-broad sdist exclude bites -- an
-unanchored ".claude" pattern also strips a kit's own files/home/.claude/.
+unanchored ".pi" or ".claude" pattern would also strip a kit's own
+files/home/.pi/.
 """
 
 from __future__ import annotations
@@ -25,14 +26,17 @@ from md2okf import agents
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # What an installed md2okf needs in order to work with no checkout: the driver
-# itself, the kit (spec plus the agent config it carries), the OKF spec, and
-# one helper CLI project standing in for all four.
+# itself, the kits (each a descriptor, its recipe and the files the recipe
+# copies), the OKF spec, and one helper CLI project standing in for all four.
 _REQUIRED = (
     "md2okf/cli.py",
     "md2okf/workbench.py",
-    "md2okf/kits/pi/spec.yaml",
+    "md2okf/kits/pi/md2okf-pi.yaml",
+    "md2okf/kits/pi/md2okf-pi.dockerfile",
     "md2okf/kits/pi/files/home/.pi/agent/AGENTS.md",
-    "md2okf/kits/pi/files/home/.local/lib/md2okf/mount-state.sh",
+    "md2okf/kits/claude/md2okf-claude.yaml",
+    "md2okf/kits/claude/md2okf-claude.dockerfile",
+    "md2okf/kits/codex/files/skills/compile-okf/scripts/check-okf.sh",
     "md2okf/SPEC.md",
     "md2okf/SBX_VERSION",
     "md2okf/clis/merkleokf/pyproject.toml",
@@ -75,7 +79,7 @@ def _is_host_clutter(path: Path) -> bool:
 
 @pytest.mark.parametrize("agent", sorted(agents.AGENTS))
 def test_wheel_carries_every_file_of_every_registered_kit(wheel_names, agent):
-    """Hidden directories included: an agent's whole runtime config lives under files/home/.<agent>."""
+    """Every tracked file, hidden ones included: Pi's whole runtime config lives under files/home/.pi."""
     tracked = subprocess.run(  # noqa: S603
         ["git", "ls-files", "-z", "--", f"kits/{agent}"],  # noqa: S607
         cwd=_REPO_ROOT,
@@ -88,7 +92,9 @@ def test_wheel_carries_every_file_of_every_registered_kit(wheel_names, agent):
         for name in tracked
         if name and not _is_host_clutter(Path(name))
     ]
-    assert any("/." in name for name in expected), "the kit has no hidden files; this test proves nothing"
+    assert expected, f"kits/{agent} tracks no files; this test proves nothing"
+    if agent == "pi":
+        assert any("/." in name for name in expected), "the Pi kit has no hidden files; this test proves nothing"
     missing = [name for name in expected if name not in wheel_names]
     assert not missing, f"the wheel is missing kit files: {missing}"
 

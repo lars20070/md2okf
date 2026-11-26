@@ -37,8 +37,8 @@ Instead, `md2okf` stages each run through a fixed *workbench* under
 
 Because the mount paths never change, one sandbox serves any input and output
 folder. `md2okf` rebuilds a sandbox only when the kit it was built from, the
-`sbx` version or the mount paths change, when a quick check inside the VM
-fails, or when you pass `--fresh`.
+pinned workload it builds on, the `sbx` version or the mount paths change,
+when a quick check inside the VM fails, or when you pass `--fresh`.
 
 For each document, `md2okf` runs the agent repeatedly — a *Ralph loop* — until
 the wiki stops changing. Each turn is a separate agent session, started with
@@ -82,8 +82,8 @@ The sandbox gets neither your repository nor your own folders. `sbx` mounts
 five host paths into it, all inside the workbench, and two of them are
 writable. Nothing else from your machine
 is visible inside the microVM: not `.git`, not the `Makefile`, not the kit
-directory. (The kit's configuration is copied into the sandbox when it is
-built; the kit directory itself is never mounted.)
+directory. (The kit's configuration is built into the sandbox when it is
+created; the kit directory itself is never mounted.)
 
 Paths are relative to the workbench, `$XDG_STATE_HOME/md2okf/<agent>/`:
 
@@ -93,7 +93,7 @@ Paths are relative to the workbench, `$XDG_STATE_HOME/md2okf/<agent>/`:
 | `work/md` | read-only | the staged source documents |
 | `work/scripts` | read-only | the source of the four helper CLIs the agent runs |
 | `work/SPEC.md` | read-only | the OKF specification, which outranks every other instruction |
-| `sessions` | read-write | the agent's transcripts |
+| `sessions` | read-write | the agent's transcripts, mounted at the agent's own transcript directory |
 
 The agent therefore never sees your input or output paths: it edits the
 staged wiki in `work/okf`, and `md2okf` copies the result to your `-o`
@@ -129,9 +129,9 @@ you set or change a credential, remove the sandbox with
 
 Each agent writes transcripts to its usual place inside the sandbox: Pi to
 `~/.pi/agent/sessions`, Claude Code to `~/.claude/projects` and Codex to
-`~/.codex/sessions`. That directory is bind-mounted onto
-`$XDG_STATE_HOME/md2okf/<agent>/sessions` on the host, so transcripts survive
-`sbx rm` and keep the agent's own layout.
+`~/.codex/sessions`. `md2okf` mounts
+`$XDG_STATE_HOME/md2okf/<agent>/sessions` from the host at that directory, so
+transcripts survive `sbx rm` and keep the agent's own layout.
 
 Transcripts are kept apart per agent, not per project. Each agent has one
 workbench and one sessions directory for all your projects, so compiling two
@@ -147,8 +147,9 @@ The state home and the mounts are fixed when a sandbox is created. `md2okf`
 records what it built — the sandbox's identity and a fingerprint of its
 configuration — in the workbench root. It reuses the sandbox only when both
 match and a quick check inside the VM succeeds. The fingerprint covers the
-kit's files, the `sbx` version and the mount paths, so editing the kit or
-upgrading `sbx` rebuilds the sandbox on the next run.
+kit's files, the `sbx` version, the mount paths and, for Claude Code and
+Codex, the pinned Docker workload their kit builds on, so editing the kit,
+moving the pin or upgrading `sbx` rebuilds the sandbox on the next run.
 
 Changing `XDG_STATE_HOME` is the exception. The new state home holds no
 record, so `md2okf` cannot prove that the existing `md2okf-<agent>` sandbox is
@@ -182,7 +183,7 @@ looking around, not for editing the wiki:
 | `okf/` | the generated wiki, and the default for `-o`; not tracked by git |
 | `src/md2okf/` | the `md2okf` command: the CLI, the agent definitions, the workbench, the calls to `sbx` and the Ralph loop |
 | `scripts/` | the four helper CLIs the agent runs (`inspectmd`, `inspectokf`, `sizeokf`, `merkleokf`), plus scripts for repository chores |
-| `kits/<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): the sandbox definition and the configuration it copies in |
+| `kits/<agent>/` | one Docker Sandbox kit per agent (`pi`, `claude`, `codex`): a schema v3 descriptor, the recipe that builds its content, and the configuration it carries |
 | `tests/` | the driver's pytest suite and the shell tests for the sandbox |
 | `Makefile` | developer tasks: lint, validate, tests and installs |
 | `docs/` | reference pages: [usage](usage.md), [configuration](configuration.md) and this page |

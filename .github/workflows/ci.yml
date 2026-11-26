@@ -16,20 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Host-side shell tests for state mount selection and relocation. The Linux
-  # runner must exercise the real bind-mount and idempotency cases.
-  test-shell:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Test state mounts
-        run: make test-shell MD2OKF_REQUIRE_BIND=1
-
   # Lint Markdown, JSON, YAML, shell, spelling, and Python. Reuses `make lint`
   # so the lint definition lives in one place (the Makefile). markdownlint runs
   # via npx; yamllint and ruff run ephemerally at a pinned version via
@@ -151,13 +137,14 @@ jobs:
       - name: Build and smoke-test the distribution
         run: make dist
 
-  # Validate every kits/*/spec.yaml against the schema in the pinned sbx CLI.
-  # `make validate` runs `sbx kit validate --offline` (sbx 0.49.2 and newer),
-  # which needs neither a daemon nor `sbx login`, so a CI runner can do it
-  # (https://github.com/docker/sbx-releases/issues/685).
+  # Build every kit (kits/*/md2okf-*.yaml, schema v3) for both architectures
+  # and check each artifact with kit-tck. `sbx kit validate` cannot read a v3
+  # source kit, so `make validate` builds with docker buildx instead: the kit
+  # frontend validates the descriptor, then kit-tck judges what came out. No
+  # daemon-backed sbx and no `sbx login` are needed. arm64 builds under QEMU.
   validate-kit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -166,16 +153,17 @@ jobs:
           # disk where a later third-party step could read it.
           persist-credentials: false
 
-      # Install exactly SBX_VERSION, verified by checksum, so CI checks the kits
-      # against one known bundled schema. The trade-off: newer sbx releases,
-      # which Homebrew users run, are not tested here. When SBX_VERSION is
-      # raised, update expected_sha256 to the new archive's checksum as well.
+      # Install exactly SBX_VERSION, verified by checksum, so the floor
+      # validate-spec.sh enforces is the release the kits were written for. The
+      # trade-off: newer sbx releases, which Homebrew users run, are not tested
+      # here. When SBX_VERSION is raised, update expected_sha256 to the new
+      # archive's checksum, and kit-tck below to the spec version it bundles.
       - name: Install sbx CLI
         run: |
           set -euo pipefail
           sbx_version="$(<SBX_VERSION)"
           archive=/tmp/DockerSandboxes-linux.tar.gz
-          expected_sha256=bca9f2ff2bd9cab845d05d057964905da93990e68661efb6c46267e96c794949
+          expected_sha256=eded29017121a857c98d4a91cad593f6a9e00f4010e830679bd385f4a5edba4d
           curl -fsSL \
             "https://github.com/docker/sbx-releases/releases/download/v${sbx_version}/DockerSandboxes-linux.tar.gz" \
             -o "${archive}"
@@ -190,5 +178,29 @@ jobs:
           actual="$(sbx version | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+')"
           test "${actual}" = "${expected}"
 
-      - name: Validate kit specs
+      # kit-tck from the spec release sbx 0.54.0 bundles (v3.0.0-m.12),
+      # verified by checksum.
+      - name: Install kit-tck
+        run: |
+          set -euo pipefail
+          tck_version=3.0.0-m.12
+          archive=/tmp/kit-tck.tar.gz
+          expected_sha256=473b72d7bb48b11987250493e9b47fb2c616de601777e139191a86fc5e962f21
+          base="https://github.com/docker/sandbox-kit-spec/releases/download/v${tck_version}"
+          curl -fsSL "${base}/kit-tck_${tck_version}_linux_amd64.tar.gz" -o "${archive}"
+          echo "${expected_sha256}  ${archive}" | sha256sum --check -
+          mkdir -p "${HOME}/.local/bin"
+          tar xzf "${archive}" -C "${HOME}/.local/bin" kit-tck
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.4.0
+        with:
+          platforms: arm64
+
+      # A docker-container builder: exporting an OCI layout needs one.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Build and check the kits
         run: make validate

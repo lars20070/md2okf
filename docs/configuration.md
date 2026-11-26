@@ -23,9 +23,10 @@ reads the third.
 | `XDG_STATE_HOME` | Where session state and the workbench live. It must be an absolute path; a relative value counts as unset. The default is `~/.local/state`. See [Session state](architecture.md#session-state). |
 | `OPENROUTER_API_KEY` | Pi's key. `md2okf` never reads it from your shell: you store it with `sbx secret`, and `md2okf` checks inside the sandbox that it arrived. See [Set up the OpenRouter key](../README.md#set-up-the-openrouter-key). |
 
-Two more variables exist inside the sandbox, and neither is yours to set:
-`md2okf` sets `MD2OKF_STATE_DIR` when it creates the sandbox, and `sbx` sets
-`WORKDIR` to the wiki workspace.
+Inside the sandbox, `sbx` sets `WORKSPACE_DIR` to the wiki workspace; it is
+not yours to set. `MD2OKF_SANDBOX_NAME` is for maintainers piloting a kit
+change, and is described in
+[CONTRIBUTING.md](../CONTRIBUTING.md#piloting-a-kit-change).
 
 ## Choosing an agent
 
